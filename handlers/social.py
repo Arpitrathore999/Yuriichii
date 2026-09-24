@@ -26,6 +26,6 @@ async def social(_, message):
 
     try:
         text = await action(message, command, target)
-        await message.reply(text, parse_mode="html")
+        await message.reply(text, parse_mode="html", disable_web_page_preview=True)
     except Exception as e:
         await message.reply(f"❌ Social command error: `{e}`")
