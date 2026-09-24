@@ -1,333 +1,572 @@
 # --------------------------------------------------------------------------------
 #  Elara AI Bot © 2026
-#  Rich Message Start — EXACT OUTLAW X MUSIC style
+#  Developed by AN NarissX ❤️
+#
+#  handlers/start.py  —  EXTENDED VERSION
+#  ---------------------------------------------------------------
+#  Yeh file /start, /help, aur saare start-menu callbacks ko handle karti hai.
+#  Features:
+#   • Rich HTML welcome (blockquote boxes, bold, emoji)
+#   • Photo support (single ya comma-separated rotation)
+#   • Kurigram colored buttons (PRIMARY/SUCCESS/DANGER)
+#   • Safe URL fallback (invalid URL se crash nahi)
+#   • FloodWait handling
+#   • Photo↔Text edit fallback
+#   • Group vs Private detection
+#   • New user logger
 # --------------------------------------------------------------------------------
 
+# ─── Standard library imports ───────────────────────────────────────────────────
 import asyncio
-import json
-from urllib.request import Request, urlopen
-from urllib.error import URLError
+import random
+from typing import Optional
 
-from pyrogram import filters
-from pyrogram.enums import ParseMode
+# ─── Pyrogram / Kurigram imports ────────────────────────────────────────────────
+from pyrogram import enums, filters
+from pyrogram.enums import ChatType, ParseMode
 from pyrogram.errors import FloodWait
 from pyrogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    LinkPreviewOptions,
     Message,
+    User,
 )
 
+# ─── Project imports ────────────────────────────────────────────────────────────
 import config
 from core.bot import app
 from database.users import ensure_user
 
+# ✅ Alias so `bot.` works everywhere (fixes NameError)
 bot = app
 
 
-# ─── Config ──────────────────────────────────────────────────────────────────
-BOT_NAME = getattr(config, "BOT_NAME", "Elara")
-BOT_USERNAME = (getattr(config, "BOT_USERNAME", "") or "").lstrip("@")
-BOT_TOKEN = getattr(config, "BOT_TOKEN", "")
-SUPPORT_URL = getattr(config, "SUPPORT_URL", "")
-UPDATES_URL = getattr(config, "UPDATES_URL", "")
-OWNER_URL = getattr(config, "OWNER_URL", "")
-OWNER_ID = getattr(config, "OWNER_ID", 0)
+# ═══════════════════════════════════════════════════════════════════════════════
+#  CONFIG SHORTCUTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+BOT_NAME        = getattr(config, "BOT_NAME", "Elara")
+BOT_USERNAME    = (getattr(config, "BOT_USERNAME", "") or "").lstrip("@")
+SUPPORT_URL     = getattr(config, "SUPPORT_URL", "")
+UPDATES_URL     = getattr(config, "UPDATES_URL", "")
+OWNER_URL       = getattr(config, "OWNER_URL", "")
+OWNER_ID        = getattr(config, "OWNER_ID", 0)
+LOGGER_ID       = getattr(config, "LOGGER_ID", 0)
 START_IMAGE_URL = (getattr(config, "START_IMAGE_URL", "") or "").strip()
 
 
-# ─── Safe URL helpers ────────────────────────────────────────────────────────
-_FALLBACK = "https://t.me/telegram"
+# ═══════════════════════════════════════════════════════════════════════════════
+#  SAFE URL HELPERS
+#  ---------------------------------------------------------------
+#  Telegram rejects invalid URLs in inline buttons with
+#  [400 BUTTON_URL_INVALID]. Yeh helpers us crash ko rok dete hain.
+# ═══════════════════════════════════════════════════════════════════════════════
 
-def _safe_url(u, fb=_FALLBACK):
-    if not u or not isinstance(u, str):
-        return fb
-    u = u.strip()
-    if not (u.startswith("https://") or u.startswith("tg://")):
-        return fb
-    if u in ("https://t.me/", "https://t.me"):
-        return fb
-    return u
+_FALLBACK_URL = "https://t.me/telegram"
 
-def _safe_user_url(uid):
+
+def _safe_url(url: str, fallback: str = _FALLBACK_URL) -> str:
+    """
+    Return a valid https:// or tg:// URL, else fallback.
+
+    Rules:
+      • empty/None → fallback
+      • not starting with https:// or tg:// → fallback
+      • exactly "https://t.me/" → fallback (Telegram rejects)
+    """
+    if not url or not isinstance(url, str):
+        return fallback
+    url = url.strip()
+    if not (url.startswith("https://") or url.startswith("tg://")):
+        return fallback
+    if url in ("https://t.me/", "https://t.me"):
+        return fallback
+    return url
+
+
+def _safe_user_url(user_id) -> str:
+    """
+    Build tg://user?id=<id> URL, only if ID is a valid positive integer.
+    """
     try:
-        uid = int(uid)
-        return f"tg://user?id={uid}" if uid > 0 else _FALLBACK
-    except Exception:
-        return _FALLBACK
-
-def _safe_startgroup_url():
-    return f"https://t.me/{BOT_USERNAME}?startgroup=true" if BOT_USERNAME else _FALLBACK
-
-def _owner_link():
-    return _safe_url(OWNER_URL) if OWNER_URL else _safe_user_url(OWNER_ID)
-
-def _esc(v):
-    return str(v or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        uid = int(user_id)
+        if uid <= 0:
+            return _FALLBACK_URL
+        return f"tg://user?id={uid}"
+    except (TypeError, ValueError):
+        return _FALLBACK_URL
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  RAW BOT API CALL
-# ══════════════════════════════════════════════════════════════════════════════
+def _safe_startgroup_url() -> str:
+    """
+    Build ?startgroup=true URL — only if BOT_USERNAME is set.
+    """
+    if not BOT_USERNAME:
+        return _FALLBACK_URL
+    return f"https://t.me/{BOT_USERNAME}?startgroup=true"
 
-async def _bot_api(method: str, payload: dict) -> dict:
-    if not BOT_TOKEN:
-        return {"ok": False, "description": "BOT_TOKEN missing"}
 
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
-    data = json.dumps(payload).encode("utf-8")
-    req = Request(
-        url,
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
+def _owner_link() -> str:
+    """
+    Prefer explicit OWNER_URL, else fall back to tg://user?id=<OWNER_ID>.
+    """
+    if OWNER_URL:
+        return _safe_url(OWNER_URL)
+    return _safe_user_url(OWNER_ID)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  ESCAPE / SANITIZE HELPERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _esc(value) -> str:
+    """
+    Escape HTML special chars so user-supplied names don't break the message.
+    """
+    return (
+        str(value or "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
     )
 
-    def _do():
-        try:
-            with urlopen(req, timeout=20) as r:
-                return json.loads(r.read().decode("utf-8"))
-        except Exception as e:
-            return {"ok": False, "description": str(e)}
 
-    return await asyncio.to_thread(_do)
+def _sanitize_name(name: Optional[str]) -> str:
+    """
+    Sanitize a display name: strip, escape HTML, truncate long names.
+    """
+    if not name:
+        return "there"
+    name = str(name).strip()
+    if len(name) > 40:
+        name = name[:37] + "..."
+    return _esc(name)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  RICH HTML — OUTLAW X MUSIC EXACT
-# ══════════════════════════════════════════════════════════════════════════════
-
-def _rich_welcome(user) -> str:
+def _mention(user: User) -> str:
+    """
+    Build a clickable HTML mention for a user.
+    """
+    name = _sanitize_name(getattr(user, "first_name", None))
     uid = getattr(user, "id", 0)
-    name = _esc(getattr(user, "first_name", None) or "there")
-    bot = _esc(BOT_NAME)
-    sup = _safe_url(SUPPORT_URL)
-    upd = _safe_url(UPDATES_URL)
+    return f'<a href="tg://user?id={uid}">{name}</a>'
 
-    # ✅ OUTLAW X MUSIC style — collapsible + bordered table + pills
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  IMAGE PICKER
+#  ---------------------------------------------------------------
+#  START_IMAGE_URL can be a single URL or comma-separated list.
+#  Each /start picks a random one.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _pick_image() -> str:
+    """
+    Return a random image URL from START_IMAGE_URL (comma-separated), or "".
+    """
+    if not START_IMAGE_URL:
+        return ""
+    parts = [u.strip() for u in START_IMAGE_URL.split(",") if u.strip()]
+    if not parts:
+        return ""
+    return random.choice(parts)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  CAPTION BUILDERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _welcome_caption(user: User) -> str:
+    """
+    Rich HTML welcome caption — blockquote boxes, bold, emoji, no raw links.
+    """
+    uid = getattr(user, "id", 0)
+    name = _sanitize_name(getattr(user, "first_name", None))
+    bot = _esc(BOT_NAME)
+
     return f"""❍ ʜᴇʏ <a href="tg://user?id={uid}">{name}</a>, ᴡᴇʟᴄᴏᴍᴇ ᴀʙᴏᴀʀᴅ! 🎶
 
 ɪ ᴀᴍ <b>「 {bot} 」</b> — ᴀ ғᴀsᴛ &amp; ᴘᴏᴡᴇʀғᴜʟ ᴛᴇʟᴇɢʀᴀᴍ <b>ᴀɪ ᴄᴏᴍᴘᴀɴɪᴏɴ ʙᴏᴛ</b> ᴡɪᴛʜ sᴏᴍᴇ ᴀᴡᴇsᴏᴍᴇ ғᴇᴀᴛᴜʀᴇs.
 
-<details open>
-<summary>✦ ᴋᴇʏ ғᴇᴀᴛᴜʀᴇs ✦</summary>
+<b>✦ ᴋᴇʏ ғᴇᴀᴛᴜʀᴇs ✦</b>
 
-<table>
-<tr><th>ғᴇᴀᴛᴜʀᴇ</th><th>ᴅᴇᴛᴀɪʟs</th></tr>
-<tr><td>🤖 <b>ᴀɪ ᴄʜᴀᴛ</b></td><td>ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴs ɪɴ ᴅᴍ &amp; ɢʀᴏᴜᴘs</td></tr>
-<tr><td>🧠 <b>ᴍᴇᴍᴏʀʏ</b></td><td>ᴋᴇᴇᴘs ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ ғᴏʀ ʙᴇᴛᴛᴇʀ ʀᴇᴘʟɪᴇs</td></tr>
-<tr><td>💕 <b>sᴏᴄɪᴀʟ</b></td><td>ғᴜɴ ɢʀᴏᴜᴘ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs — ʜᴜɢ, ᴋɪss, ᴍᴀʀʀɪᴀɢᴇ &amp; ᴍᴏʀᴇ</td></tr>
-<tr><td>⚡ <b>ғᴀsᴛ</b></td><td>ǫᴜɪᴄᴋ ᴀɪ ʀᴇsᴘᴏɴsᴇs ᴘᴏᴡᴇʀᴇᴅ ʙʏ ɢʀᴏǫ</td></tr>
-</table>
-</details>
+<blockquote>🤖 <b>ᴀɪ ᴄʜᴀᴛ</b>
+ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴs ɪɴ ᴅᴍ &amp; ɢʀᴏᴜᴘs</blockquote>
 
-<details open>
-<summary>✧ ᴡʜʏ ᴄʜᴏᴏsᴇ ɪᴛ? ✧</summary>
+<blockquote>🧠 <b>ᴍᴇᴍᴏʀʏ</b>
+ᴋᴇᴇᴘs ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ ғᴏʀ ʙᴇᴛᴛᴇʀ ʀᴇᴘʟɪᴇs</blockquote>
+
+<blockquote>💕 <b>sᴏᴄɪᴀʟ</b>
+ғᴜɴ ɢʀᴏᴜᴘ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs — ʜᴜɢ, ᴋɪss, ᴍᴀʀʀɪᴀɢᴇ &amp; ᴍᴏʀᴇ</blockquote>
+
+<blockquote>⚡ <b>ғᴀsᴛ</b>
+ǫᴜɪᴄᴋ ᴀɪ ʀᴇsᴘᴏɴsᴇs ᴘᴏᴡᴇʀᴇᴅ ʙʏ ɢʀᴏǫ</blockquote>
+
+<b>✧ ᴡʜʏ ᴄʜᴏᴏsᴇ ɪᴛ? ✧</b>
 
 ⭐ sɪᴍᴘʟᴇ sʟᴀsʜ ᴄᴏᴍᴍᴀɴᴅs, ɴᴏ sᴇᴛᴜᴘ ɴᴇᴇᴅᴇᴅ.
 🧠 sᴍᴀʀᴛ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴ ᴍᴇᴍᴏʀʏ.
 ❍ ᴄʟɪᴄᴋ ʜᴇʟᴘ ʙᴇʟᴏᴡ ғᴏʀ ᴀʟʟ ᴄᴏᴍᴍᴀɴᴅs.
-</details>
 
 <blockquote>ᴘᴏᴡᴇʀᴇᴅ ʙʏ » <b>{bot}</b></blockquote>
 
-[🍬 sᴜᴘᴘᴏʀᴛ]({sup}) · [🍹 ᴜᴘᴅᴀᴛᴇs]({upd})
+🍬 <b>sᴜᴘᴘᴏʀᴛ</b>   ·   🍹 <b>ᴜᴘᴅᴀᴛᴇs</b>
 """
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  HELP MENUS — Rich HTML
-# ══════════════════════════════════════════════════════════════════════════════
+def _group_welcome_caption(user: User, chat_title: str) -> str:
+    """
+    Short group-friendly welcome caption.
+    """
+    uid = getattr(user, "id", 0)
+    name = _sanitize_name(getattr(user, "first_name", None))
+    bot = _esc(BOT_NAME)
+    title = _esc(chat_title or "this chat")
 
-def _rich_help_menu() -> str:
-    return f"""📜 <b>ᴇʟᴀʀᴀ ʜᴇʟᴘ &amp; ᴄᴏᴍᴍᴀɴᴅs</b>
+    return f"""❍ ʜᴇʏ <a href="tg://user?id={uid}">{name}</a>, ᴛʜᴀɴᴋs ғᴏʀ ᴀᴅᴅɪɴɢ ᴍᴇ! 🎶
 
-❍ ᴄʜᴏᴏsᴇ ᴀ ᴄᴀᴛᴇɢᴏʀʏ ʙᴇʟᴏᴡ ᴛᴏ ᴠɪᴇᴡ ɪᴛs ᴄᴏᴍᴍᴀɴᴅs ᴀɴᴅ ғᴇᴀᴛᴜʀᴇs.
+ɪ ᴀᴍ <b>「 {bot} 」</b> — ᴀ ғᴀsᴛ &amp; ғʀɪᴇɴᴅʟʏ ᴛᴇʟᴇɢʀᴀᴍ <b>ᴀɪ ᴄᴏᴍᴘᴀɴɪᴏɴ ʙᴏᴛ</b>.
 
-<table>
-<tr><th>ᴄᴀᴛᴇɢᴏʀʏ</th><th>ᴅᴇsᴄʀɪᴘᴛɪᴏɴ</th></tr>
-<tr><td>🤖 <b>ᴀɪ</b></td><td>ᴄʜᴀᴛ, ᴍᴇᴍᴏʀʏ &amp; ɢʀᴏᴜᴘ ᴀɪ ғᴇᴀᴛᴜʀᴇs</td></tr>
-<tr><td>💕 <b>sᴏᴄɪᴀʟ</b></td><td>ғᴜɴ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs ғᴏʀ ʏᴏᴜʀ ɢʀᴏᴜᴘ</td></tr>
-</table>
+<blockquote>ᴛʜᴀɴᴋs ғᴏʀ ᴀᴅᴅɪɴɢ ᴍᴇ ɪɴ <b>{title}</b>.
+{name} ᴄᴀɴ ɴᴏᴡ ᴛᴀʟᴋ ᴡɪᴛʜ ᴍᴇ ʜᴇʀᴇ. 🌙</blockquote>
 
-<blockquote>ᴛᴀᴘ ᴀ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ ᴛᴏ ᴄᴏɴᴛɪɴᴜᴇ 👇</blockquote>
+🍬 <b>sᴜᴘᴘᴏʀᴛ</b>   ·   🍹 <b>ᴜᴘᴅᴀᴛᴇs</b>
 """
 
 
-def _rich_ai_help() -> str:
-    return """🤖 <b>ᴇʟᴀʀᴀ ᴀɪ ᴄᴏᴍᴍᴀɴᴅs</b>
+# ═══════════════════════════════════════════════════════════════════════════════
+#  HELP MENUS
+# ═══════════════════════════════════════════════════════════════════════════════
 
-<table>
-<tr><th>ᴄᴏᴍᴍᴀɴᴅ</th><th>ᴅᴇsᴄʀɪᴘᴛɪᴏɴ</th></tr>
-<tr><td><code>/ai &lt;msg&gt;</code></td><td>ᴄʜᴀᴛ ᴡɪᴛʜ ᴇʟᴀʀᴀ ᴀɪ</td></tr>
-<tr><td>ᴅᴍ ᴀɴʏ ᴍᴇssᴀɢᴇ</td><td>ᴀɪ ʀᴇᴘʟɪᴇs ᴀᴜᴛᴏᴍᴀᴛɪᴄᴀʟʟʏ</td></tr>
-<tr><td><code>ᴇʟᴀʀᴀ ʜᴇʟʟᴏ</code></td><td>ɢʀᴏᴜᴘ ᴛʀɪɢɢᴇʀ</td></tr>
-<tr><td><code>@BotUsername ʜɪ</code></td><td>ᴍᴇɴᴛɪᴏɴ ᴛʀɪɢɢᴇʀ</td></tr>
-<tr><td>ʀᴇᴘʟʏ ᴛᴏ ᴇʟᴀʀᴀ</td><td>ᴄᴏɴᴛᴇxᴛ ᴄʜᴀᴛ</td></tr>
-</table>
+HELP_MENU = """📜 <b>ᴇʟᴀʀᴀ ʜᴇʟᴘ &amp; ᴄᴏᴍᴍᴀɴᴅs</b>
 
-<blockquote>🧠 ʀᴇᴄᴇɴᴛ ᴄᴏɴᴛᴇxᴛ ᴜsᴇᴅ ғᴏʀ ɴᴀᴛᴜʀᴀʟ ʀᴇᴘʟɪᴇs.</blockquote>
+❍ ᴄʜᴏᴏsᴇ ᴀ ᴄᴀᴛᴇɢᴏʀʏ ʙᴇʟᴏᴡ:
+
+<blockquote>🤖 <b>ᴀɪ</b>
+ᴄʜᴀᴛ, ᴍᴇᴍᴏʀʏ &amp; ɢʀᴏᴜᴘ ᴀɪ ғᴇᴀᴛᴜʀᴇs</blockquote>
+
+<blockquote>💕 <b>sᴏᴄɪᴀʟ</b>
+ғᴜɴ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs ғᴏʀ ɢʀᴏᴜᴘs</blockquote>
+
+<i>ᴛᴀᴘ ᴀ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ ᴛᴏ ᴄᴏɴᴛɪɴᴜᴇ</i> 👇
 """
 
 
-def _rich_social_help() -> str:
-    return """💕 <b>ᴇʟᴀʀᴀ sᴏᴄɪᴀʟ</b>
+AI_HELP = """🤖 <b>ᴇʟᴀʀᴀ ᴀɪ ᴄᴏᴍᴍᴀɴᴅs</b>
 
-ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜsᴇʀ's ᴍᴇssᴀɢᴇ ᴛʜᴇɴ ᴜsᴇ ᴛʜᴇsᴇ:
+<blockquote>💬 <b>ᴄʜᴀᴛ</b>
+• <code>/ai &lt;msg&gt;</code> — ᴄʜᴀᴛ ᴡɪᴛʜ ᴀɪ
+• ᴅᴍ ᴀɴʏ ᴍᴇssᴀɢᴇ — ᴀᴜᴛᴏ ʀᴇᴘʟʏ</blockquote>
 
-<table>
-<tr><th>ᴄᴏᴍᴍᴀɴᴅ</th><th>ᴀᴄᴛɪᴏɴ</th></tr>
-<tr><td>🫂 <code>/hug</code></td><td>ʜᴜɢ ᴀ ᴜsᴇʀ</td></tr>
-<tr><td>💋 <code>/kiss</code></td><td>ᴋɪss ᴀ ᴜsᴇʀ</td></tr>
-<tr><td>🧛 <code>/bite</code></td><td>ʙɪᴛᴇ ᴀ ᴜsᴇʀ</td></tr>
-<tr><td>👋 <code>/slap</code></td><td>sʟᴀᴘ ᴀ ᴜsᴇʀ</td></tr>
-<tr><td>🦵 <code>/kick</code></td><td>ᴋɪᴄᴋ ᴀ ᴜsᴇʀ</td></tr>
-<tr><td>🫶 <code>/cuddle</code></td><td>ᴄᴜᴅᴅʟᴇ ᴀ ᴜsᴇʀ</td></tr>
-<tr><td>🫳 <code>/pat</code></td><td>ᴘᴀᴛ ᴀ ᴜsᴇʀ</td></tr>
-<tr><td>✋ <code>/highfive</code></td><td>ʜɪɢʜ ғɪᴠᴇ</td></tr>
-<tr><td>😏 <code>/flirt</code></td><td>ғʟɪʀᴛ</td></tr>
-<tr><td>❤️ <code>/love</code></td><td>ʟᴏᴠᴇ ᴘᴇʀᴄᴇɴᴛᴀɢᴇ</td></tr>
-<tr><td>💘 <code>/crush</code></td><td>ᴄʀᴜsʜ</td></tr>
-<tr><td>💞 <code>/couple</code></td><td>ʀᴀɴᴅᴏᴍ ᴄᴏᴜᴘʟᴇ</td></tr>
-<tr><td>💍 <code>/propose</code></td><td>ᴘʀᴏᴘᴏsᴇ</td></tr>
-<tr><td>💒 <code>/marriage</code></td><td>ᴍᴀʀʀʏ</td></tr>
-<tr><td>💔 <code>/divorce</code></td><td>ᴅɪᴠᴏʀᴄᴇ</td></tr>
-</table>
+<blockquote>👥 <b>ɢʀᴏᴜᴘ</b>
+• <code>ᴇʟᴀʀᴀ ʜᴇʟʟᴏ</code> — ᴛʀɪɢɢᴇʀ
+• <code>@BotUsername ʜɪ</code> — ᴍᴇɴᴛɪᴏɴ
+• ʀᴇᴘʟʏ ᴛᴏ ᴇʟᴀʀᴀ — ᴄᴏɴᴛᴇxᴛ</blockquote>
+
+<blockquote>🧠 <b>ᴍᴇᴍᴏʀʏ</b>
+ʀᴇᴄᴇɴᴛ ᴄᴏɴᴛᴇxᴛ ᴜsᴇᴅ ғᴏʀ ɴᴀᴛᴜʀᴀʟ ʀᴇᴘʟɪᴇs.</blockquote>
 """
 
 
-def _rich_about() -> str:
-    return f"""📖 <b>ᴀʙᴏᴜᴛ ᴇʟᴀʀᴀ</b>
+SOCIAL_HELP = """💕 <b>ᴇʟᴀʀᴀ sᴏᴄɪᴀʟ</b>
+
+<blockquote>ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜsᴇʀ's ᴍᴇssᴀɢᴇ ᴛʜᴇɴ ᴜsᴇ ᴛʜᴇsᴇ:</blockquote>
+
+🫂 <code>/hug</code>          💋 <code>/kiss</code>
+🧛 <code>/bite</code>         👋 <code>/slap</code>
+🦵 <code>/kick</code>         🫶 <code>/cuddle</code>
+🫳 <code>/pat</code>          ✋ <code>/highfive</code>
+😏 <code>/flirt</code>        ❤️ <code>/love</code>
+💘 <code>/crush</code>        💞 <code>/couple</code>
+💍 <code>/propose</code>      💒 <code>/marriage</code>
+💔 <code>/divorce</code>
+"""
+
+
+ABOUT = """📖 <b>ᴀʙᴏᴜᴛ ᴇʟᴀʀᴀ</b>
 
 ᴇʟᴀʀᴀ ɪs ʏᴏᴜʀ ᴀɪ ᴄᴏᴍᴘᴀɴɪᴏɴ ғᴏʀ ᴇᴠᴇʀʏᴅᴀʏ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴs, ʀᴀɴᴅᴏᴍ ᴛʜᴏᴜɢʜᴛs ᴀɴᴅ ʟᴀᴛᴇ-ɴɪɢʜᴛ ᴄʜᴀᴛs. 🌙
 
-<table>
-<tr><th>ғᴇᴀᴛᴜʀᴇ</th><th>ᴅᴇᴛᴀɪʟs</th></tr>
-<tr><td>💬 ᴛᴀʟᴋ</td><td>ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴ</td></tr>
-<tr><td>🧠 ᴍᴇᴍᴏʀʏ</td><td>ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ</td></tr>
-<tr><td>💕 sᴏᴄɪᴀʟ</td><td>ғᴜɴ ɢʀᴏᴜᴘ ᴄᴏᴍᴍᴀɴᴅs</td></tr>
-<tr><td>⚡ sᴘᴇᴇᴅ</td><td>ғᴀsᴛ ɢʀᴏǫ ᴀɪ ʀᴇsᴘᴏɴsᴇs</td></tr>
-</table>
+<blockquote>💬 ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴ
+🧠 ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴ ᴍᴇᴍᴏʀʏ
+💕 sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅs
+⚡ ғᴀsᴛ ʀᴇsᴘᴏɴsᴇs</blockquote>
 
-<blockquote><i>ᴊᴜsᴛ ᴛᴀʟᴋ ᴛᴏ ᴇʟᴀʀᴀ. ɴᴏ sᴇᴛᴜᴘ.</i></blockquote>
+<i>ᴊᴜsᴛ ᴛᴀʟᴋ ᴛᴏ ᴇʟᴀʀᴀ. ɴᴏ sᴇᴛᴜᴘ.</i>
 """
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  KEYBOARDS
-# ══════════════════════════════════════════════════════════════════════════════
+CHAT_MODE = """💬 <b>ᴄʜᴀᴛ ᴍᴏᴅᴇ</b>
 
-def _welcome_kb():
+<blockquote>ᴊᴜsᴛ sᴇɴᴅ ᴍᴇ ᴀ ᴍᴇssᴀɢᴇ ᴀɴᴅ ɪ'ʟʟ ʀᴇᴘʟʏ. 🌙
+
+ʏᴏᴜ ᴄᴀɴ ᴛᴀʟᴋ ɴᴏʀᴍᴀʟʟʏ —
+ɴᴏ ᴄᴏᴍᴍᴀɴᴅ ɴᴇᴇᴅᴇᴅ.</blockquote>
+
+<i>ᴛʀʏ ɪᴛ ɴᴏᴡ → sᴇɴᴅ ᴀ ʜᴇʟʟᴏ 👋</i>
+"""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  KEYBOARDS  (colored buttons via Kurigram)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _welcome_kb() -> InlineKeyboardMarkup:
+    """
+    7-button welcome keyboard:
+      Row 1: Add Me (blue)
+      Row 2: Support (green), Updates (green)
+      Row 3: Help & Commands (blue)
+      Row 4: Owner, Source (default)
+    """
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⛩️ ᴀᴅᴅ ᴍᴇ ʙᴀʙʏ ⛩️", url=_safe_startgroup_url())],
+        [InlineKeyboardButton(
+            "⛩️ ᴀᴅᴅ ᴍᴇ ʙᴀʙʏ ⛩️",
+            url=_safe_startgroup_url(),
+            style=enums.ButtonStyle.PRIMARY,
+        )],
         [
-            InlineKeyboardButton("🍬 sᴜᴘᴘᴏʀᴛ 🍬", url=_safe_url(SUPPORT_URL)),
-            InlineKeyboardButton("🍹 ᴜᴘᴅᴀᴛᴇs 🍹", url=_safe_url(UPDATES_URL)),
+            InlineKeyboardButton(
+                "🍬 sᴜᴘᴘᴏʀᴛ 🍬",
+                url=_safe_url(SUPPORT_URL),
+                style=enums.ButtonStyle.SUCCESS,
+            ),
+            InlineKeyboardButton(
+                "🍹 ᴜᴘᴅᴀᴛᴇs 🍹",
+                url=_safe_url(UPDATES_URL),
+                style=enums.ButtonStyle.SUCCESS,
+            ),
         ],
-        [InlineKeyboardButton("🏩 ʜᴇʟᴘ & ᴄᴏᴍᴍᴀɴᴅs 🏩", callback_data="elara:help")],
+        [InlineKeyboardButton(
+            "🏩 ʜᴇʟᴘ & ᴄᴏᴍᴍᴀɴᴅs 🏩",
+            callback_data="elara:help",
+            style=enums.ButtonStyle.PRIMARY,
+        )],
         [
-            InlineKeyboardButton("🫧 ᴏᴡɴᴇʀ 🫧", url=_owner_link()),
-            InlineKeyboardButton("🍡 sᴏᴜʀᴄᴇ 🍡", callback_data="elara:about"),
+            InlineKeyboardButton(
+                "🫧 ᴏᴡɴᴇʀ 🫧",
+                url=_owner_link(),
+                style=enums.ButtonStyle.DEFAULT,
+            ),
+            InlineKeyboardButton(
+                "🍡 sᴏᴜʀᴄᴇ 🍡",
+                callback_data="elara:about",
+                style=enums.ButtonStyle.DEFAULT,
+            ),
         ],
+    ])
+
+
+def _group_kb() -> InlineKeyboardMarkup:
+    """
+    Group welcome keyboard (shorter than private).
+    """
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "⛩️ ᴀᴅᴅ ᴍᴇ ʙᴀʙʏ ⛩️",
+                url=_safe_startgroup_url(),
+                style=enums.ButtonStyle.PRIMARY,
+            ),
+            InlineKeyboardButton(
+                "🍬 sᴜᴘᴘᴏʀᴛ 🍬",
+                url=_safe_url(SUPPORT_URL),
+                style=enums.ButtonStyle.SUCCESS,
+            ),
+        ],
+        [InlineKeyboardButton(
+            "🏩 ʜᴇʟᴘ & ᴄᴏᴍᴍᴀɴᴅs 🏩",
+            callback_data="elara:help",
+            style=enums.ButtonStyle.PRIMARY,
+        )],
     ])
 
 
 _HELP_KB = InlineKeyboardMarkup([
     [
-        InlineKeyboardButton("🤖 ᴀɪ", callback_data="elara:ai"),
-        InlineKeyboardButton("💕 sᴏᴄɪᴀʟ", callback_data="elara:social"),
+        InlineKeyboardButton("🤖 ᴀɪ", callback_data="elara:ai",
+                             style=enums.ButtonStyle.PRIMARY),
+        InlineKeyboardButton("💕 sᴏᴄɪᴀʟ", callback_data="elara:social",
+                             style=enums.ButtonStyle.SUCCESS),
     ],
-    [InlineKeyboardButton("⌯ ʜᴏᴍᴇ ⌯", callback_data="elara:home")],
+    [InlineKeyboardButton("⌯ ʜᴏᴍᴇ ⌯", callback_data="elara:home",
+                          style=enums.ButtonStyle.PRIMARY)],
 ])
+
 
 _BACK_KB = InlineKeyboardMarkup([
-    [InlineKeyboardButton("⬅️ ʙᴀᴄᴋ", callback_data="elara:help")],
-    [InlineKeyboardButton("⌯ ᴄʟᴏsᴇ ⌯", callback_data="elara:close")],
+    [InlineKeyboardButton("⬅️ ʙᴀᴄᴋ", callback_data="elara:help",
+                          style=enums.ButtonStyle.PRIMARY)],
+    [InlineKeyboardButton("⌯ ᴄʟᴏsᴇ ⌯", callback_data="elara:close",
+                          style=enums.ButtonStyle.DANGER)],
 ])
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  SEND HELPERS
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+#  LINK PREVIEW OPTIONS  (fixes deprecation warning)
+# ═══════════════════════════════════════════════════════════════════════════════
 
-def _kb_to_dict(kb):
-    return {
-        "inline_keyboard": [
-            [
-                {
-                    "text": b.text,
-                    **({"url": b.url} if b.url else {}),
-                    **({"callback_data": b.callback_data} if b.callback_data else {}),
-                }
-                for b in row
-            ]
-            for row in kb.inline_keyboard
-        ]
-    }
+_LPO = LinkPreviewOptions(is_disabled=True)
 
 
-async def _send_rich(chat_id, html, kb, image=None):
-    """Send rich message, fallback to photo/text."""
-    payload = {
-        "chat_id": chat_id,
-        "rich_message": {"html": html},
-        "reply_markup": _kb_to_dict(kb),
-    }
-    if image:
-        payload["rich_message"]["photo_url"] = image
+# ═══════════════════════════════════════════════════════════════════════════════
+#  SEND / EDIT HELPERS
+# ═══════════════════════════════════════════════════════════════════════════════
 
-    result = await _bot_api("sendRichMessage", payload)
-    if result.get("ok"):
-        return result
+async def _send_welcome(chat_id: int, caption: str, kb: InlineKeyboardMarkup) -> None:
+    """
+    Send the welcome message — with photo if configured, else plain text.
+    Also handles FloodWait retries.
+    """
+    image = _pick_image()
 
-    print(f"[rich] failed: {result.get('description')}")
-
-    # Fallback
     if image:
         try:
-            return await bot.send_photo(
-                chat_id, photo=image, caption=html,
-                reply_markup=kb, parse_mode=ParseMode.HTML,
+            await bot.send_photo(
+                chat_id,
+                photo=image,
+                caption=caption,
+                reply_markup=kb,
+                parse_mode=ParseMode.HTML,
             )
-        except Exception:
-            pass
+            return
+        except FloodWait as fw:
+            await asyncio.sleep(fw.value + 1)
+            return await _send_welcome(chat_id, caption, kb)
+        except Exception as e:
+            print(f"[start] photo failed, falling back to text: {e}")
 
-    return await bot.send_message(
-        chat_id, html, reply_markup=kb, parse_mode=ParseMode.HTML,
+    try:
+        await bot.send_message(
+            chat_id,
+            caption,
+            reply_markup=kb,
+            parse_mode=ParseMode.HTML,
+            link_preview_options=_LPO,
+        )
+    except FloodWait as fw:
+        await asyncio.sleep(fw.value + 1)
+        await bot.send_message(
+            chat_id,
+            caption,
+            reply_markup=kb,
+            parse_mode=ParseMode.HTML,
+            link_preview_options=_LPO,
+        )
+
+
+async def _send_text(chat_id: int, text: str, kb: InlineKeyboardMarkup = None) -> None:
+    """
+    Send a plain text message with optional keyboard.
+    """
+    await bot.send_message(
+        chat_id,
+        text,
+        reply_markup=kb,
+        parse_mode=ParseMode.HTML,
+        link_preview_options=_LPO,
     )
 
 
-async def _edit_rich(msg, html, kb):
-    """Edit current message to rich (if possible), else plain edit."""
+async def _edit_safely(msg: Message, text: str, kb: InlineKeyboardMarkup = None) -> None:
+    """
+    Edit current message. If old message was a photo, delete it and send new text.
+    """
     try:
-        # Try editMessageText with rich formatting
-        payload = {
-            "chat_id": msg.chat.id,
-            "message_id": msg.id,
-            "rich_message": {"html": html},
-            "reply_markup": _kb_to_dict(kb),
-        }
-        result = await _bot_api("editMessageText", payload)
-        if result.get("ok"):
+        if getattr(msg, "photo", None):
+            try:
+                await msg.delete()
+            except Exception:
+                pass
+            await _send_text(msg.chat.id, text, kb)
             return
-    except Exception:
-        pass
-
-    # Fallback plain edit
-    try:
         await msg.edit_text(
-            html, reply_markup=kb, parse_mode=ParseMode.HTML,
+            text,
+            reply_markup=kb,
+            parse_mode=ParseMode.HTML,
+            link_preview_options=_LPO,
         )
-    except Exception:
-        pass
+    except FloodWait as fw:
+        await asyncio.sleep(fw.value + 1)
+        await _edit_safely(msg, text, kb)
+    except Exception as e:
+        print(f"[edit] failed: {e}")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  HANDLERS
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+#  LOGGER HELPER
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def _log_new_user(user: User) -> None:
+    """
+    Log a new /start user to LOGGER_ID (if configured).
+    Silent failure — never blocks the actual /start.
+    """
+    if not LOGGER_ID:
+        return
+    try:
+        uid = getattr(user, "id", 0)
+        name = _sanitize_name(getattr(user, "first_name", None))
+        username = getattr(user, "username", None)
+        uname_display = f"@{_esc(username)}" if username else "N/A"
+
+        await _send_text(
+            LOGGER_ID,
+            (
+                "<b>#ɴᴇᴡᴜsᴇʀ sᴛᴀʀᴛᴇᴅ</b>\n\n"
+                f"• <b>ɴᴀᴍᴇ:</b> <a href='tg://user?id={uid}'>{name}</a>\n"
+                f"• <b>ɪᴅ:</b> <code>{uid}</code>\n"
+                f"• <b>ᴜsᴇʀɴᴀᴍᴇ:</b> {uname_display}"
+            ),
+        )
+    except Exception as e:
+        print(f"[_log_new_user] failed: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  HANDLER —  /start
+# ═══════════════════════════════════════════════════════════════════════════════
 
 @bot.on_message(filters.command("start"))
-async def start_handler(_, message: Message):
+async def start_handler(_, message: Message) -> None:
+    """
+    Handle /start in private and group chats.
+    """
+    # ── Delete the user's /start command ────────────────────────────────────
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    # ── Save user to DB (silent fail) ───────────────────────────────────────
+    try:
+        await ensure_user(message.from_user)
+    except Exception:
+        pass
+
+    # ── Private chat: full welcome ──────────────────────────────────────────
+    if message.chat.type == ChatType.PRIVATE:
+        caption = _welcome_caption(message.from_user)
+        await _send_welcome(message.chat.id, caption, _welcome_kb())
+        await _log_new_user(message.from_user)
+        return
+
+    # ── Group chat: short welcome ───────────────────────────────────────────
+    chat_title = message.chat.title or "this chat"
+    caption = _group_welcome_caption(message.from_user, chat_title)
+    await _send_welcome(message.chat.id, caption, _group_kb())
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  HANDLER —  /help
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@bot.on_message(filters.command("help"))
+async def help_handler(_, message: Message) -> None:
+    """
+    Handle /help — shows the help menu with AI/Social buttons.
+    """
     try:
         await message.delete()
     except Exception:
@@ -338,69 +577,68 @@ async def start_handler(_, message: Message):
     except Exception:
         pass
 
-    image = START_IMAGE_URL.split(",")[0].strip() if START_IMAGE_URL else None
-    html = _rich_welcome(message.from_user)
-
-    try:
-        await _send_rich(message.chat.id, html, _welcome_kb(), image)
-    except FloodWait as fw:
-        await asyncio.sleep(fw.value + 1)
-        await _send_rich(message.chat.id, html, _welcome_kb(), image)
+    await _send_text(message.chat.id, HELP_MENU, _HELP_KB)
 
 
-@bot.on_message(filters.command("help"))
-async def help_handler(_, message: Message):
-    try:
-        await message.delete()
-    except Exception:
-        pass
+# ═══════════════════════════════════════════════════════════════════════════════
+#  CALLBACK HANDLER
+# ═══════════════════════════════════════════════════════════════════════════════
 
-    await _send_rich(message.chat.id, _rich_help_menu(), _HELP_KB)
+@bot.on_callback_query(
+    filters.regex(r"^elara:(home|help|about|social|ai|chat|close)$")
+)
+async def start_callbacks(_, query: CallbackQuery) -> None:
+    """
+    Handle all start-menu button callbacks.
+    """
+    data = query.data.split(":", 1)[1]
 
-
-@bot.on_callback_query(filters.regex(r"^elara:(home|help|about|social|ai|close)$"))
-async def cb_handler(_, q: CallbackQuery):
-    d = q.data.split(":", 1)[1]
-
-    if d == "close":
-        await q.answer()
+    # ── CLOSE ───────────────────────────────────────────────────────────────
+    if data == "close":
+        await query.answer()
         try:
-            await q.message.delete()
+            await query.message.delete()
         except Exception:
             pass
         return
 
-    if d == "home":
-        await q.answer()
+    # ── HOME ────────────────────────────────────────────────────────────────
+    if data == "home":
+        await query.answer()
         try:
-            await q.message.delete()
+            await query.message.delete()
         except Exception:
             pass
-        image = START_IMAGE_URL.split(",")[0].strip() if START_IMAGE_URL else None
-        await _send_rich(
-            q.message.chat.id,
-            _rich_welcome(q.from_user),
-            _welcome_kb(),
-            image,
-        )
+        caption = _welcome_caption(query.from_user)
+        await _send_welcome(query.message.chat.id, caption, _welcome_kb())
         return
 
-    if d == "help":
-        await q.answer()
-        await _edit_rich(q.message, _rich_help_menu(), _HELP_KB)
+    # ── HELP ────────────────────────────────────────────────────────────────
+    if data == "help":
+        await query.answer()
+        await _edit_safely(query.message, HELP_MENU, _HELP_KB)
         return
 
-    if d == "ai":
-        await q.answer()
-        await _edit_rich(q.message, _rich_ai_help(), _BACK_KB)
+    # ── AI ──────────────────────────────────────────────────────────────────
+    if data == "ai":
+        await query.answer()
+        await _edit_safely(query.message, AI_HELP, _BACK_KB)
         return
 
-    if d == "social":
-        await q.answer()
-        await _edit_rich(q.message, _rich_social_help(), _BACK_KB)
+    # ── SOCIAL ──────────────────────────────────────────────────────────────
+    if data == "social":
+        await query.answer()
+        await _edit_safely(query.message, SOCIAL_HELP, _BACK_KB)
         return
 
-    if d == "about":
-        await q.answer()
-        await _edit_rich(q.message, _rich_about(), _BACK_KB)
+    # ── ABOUT ───────────────────────────────────────────────────────────────
+    if data == "about":
+        await query.answer()
+        await _edit_safely(query.message, ABOUT, _BACK_KB)
+        return
+
+    # ── CHAT MODE ───────────────────────────────────────────────────────────
+    if data == "chat":
+        await query.answer("Just send me a message 💬")
+        await _edit_safely(query.message, CHAT_MODE, _BACK_KB)
         return
