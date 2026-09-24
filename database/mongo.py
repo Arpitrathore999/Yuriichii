@@ -24,3 +24,7 @@ def relationships():
 
 def warnings():
     return db["warnings"] if db is not None else None
+
+
+def social_settings():
+    return db["social_settings"] if db is not None else None
