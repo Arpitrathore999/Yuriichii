@@ -6,21 +6,54 @@ from modules.social.settings import COMMANDS, add_gif, add_caption, get_social_d
 
 
 def owner_only(message):
-    return bool(message.from_user and message.from_user.id == config.OWNER_ID)
+    return bool(
+        message.from_user
+        and config.OWNER_ID
+        and message.from_user.id == config.OWNER_ID
+    )
 
 
-async def can_manage_social(message):
+async def is_manager(message):
+    """Owner can manage anywhere; Telegram group admins can manage in groups."""
     if owner_only(message):
         return True
     if not message.from_user or not message.chat:
         return False
-    if message.chat.type.value == "private":
-        return False
     try:
+        if str(message.chat.type).lower() in {"private", "chattype.private"}:
+            return False
         member = await app.get_chat_member(message.chat.id, message.from_user.id)
-        return member.status in {ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR}
-    except Exception:
+        status = getattr(member, "status", None)
+        return status in {
+            ChatMemberStatus.OWNER,
+            ChatMemberStatus.ADMINISTRATOR,
+            "owner",
+            "administrator",
+        }
+    except Exception as e:
+        print(f"[ADMIN PERMISSION ERROR] {type(e).__name__}: {e}", flush=True)
         return False
+
+
+async def can_manage_social(message):
+    return await is_manager(message)
+
+
+@app.on_message(filters.command("adminhelp"))
+async def admin_help(_, message):
+    if not await is_manager(message):
+        return
+    await message.reply(
+        "🛠️ **Social Admin Panel**\n\n"
+        "🎞️ `/addgif <command>` — reply to a GIF/animation to save it\n"
+        "📝 `/addcaption <command> <caption>` — save a caption\n"
+        "📊 `/socialgifs <command>` — show GIF/caption counts\n"
+        "🗑️ `/clearsocialgifs <command>` — remove all GIFs\n"
+        "🗑️ `/clearsocialcaptions <command>` — remove custom captions\n\n"
+        "Example: reply to a GIF with `/addgif hug`\n"
+        "Example: `/addcaption hug {a} hugged {b}! 🫂❤️`",
+        parse_mode="html",
+    )
 
 
 @app.on_message(filters.command("stats"))
