@@ -8,7 +8,9 @@ def mention(user):
     user_id = getattr(user, "id", None)
     name = getattr(user, "first_name", None) or getattr(user, "username", None) or "Someone"
     name = str(name).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    return f'<a href="tg://user?id={user_id}">{name}</a>' if user_id else name
+    if user_id:
+        return f'<a href="tg://user?id={int(user_id)}">{name}</a>'
+    return name
 
 
 def render_caption(template, a, b):
@@ -23,6 +25,17 @@ def render_caption(template, a, b):
 
 
 async def get_gif_file_id(command):
+    # Manual GIFs: assets/social/<command>/*.gif
+    try:
+        from pathlib import Path
+        base = Path(__file__).resolve().parents[2] / "assets" / "social" / command
+        files = [p for p in base.glob("*") if p.is_file() and p.suffix.lower() == ".gif"] if base.exists() else []
+        if files:
+            return str(random.choice(files))
+    except Exception as e:
+        print(f"[SOCIAL LOCAL GIF ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
+
+    # Backward-compatible MongoDB file_id fallback.
     try:
         data = await get_social_data(command)
         gifs = data.get("gifs") or []
