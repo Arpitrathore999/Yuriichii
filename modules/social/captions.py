@@ -1,0 +1,17 @@
+CAPTIONS = {
+    "hug": ["🫂 **{a} just hugged {b} tightly!** ❤️"],
+    "kiss": ["💋 **{a} just stole a kiss from {b}!** 😘"],
+    "bite": ["🧛 **{a} just bit {b}!** 😭"],
+    "slap": ["👋 **{a} gave {b} a reality check!** 💀"],
+    "kick": ["🦵 **{a} kicked {b} into another dimension!** 😭"],
+    "cuddle": ["🫂 **{a} cuddled with {b}.** 🥰"],
+    "pat": ["🫳 **{a} patted {b}'s head.** 🥹"],
+    "highfive": ["✋ **{a} high-fived {b}!** 🔥"],
+    "flirt": ["😏 **{a} is flirting with {b}.** 👀❤️"],
+    "love": ["❤️ **{a} × {b} — Love Match: {pct}%** 💕"],
+    "crush": ["💘 **{a}'s secret crush is {b}!** 👀"],
+    "couple": ["💞 **Today's couple: {a} × {b} — {pct}%**"],
+    "propose": ["💍 **{a} proposed to {b}!** Will you say yes? 🥹"],
+    "marriage": ["💒 **{a} ❤️ {b} — Officially married!**"],
+    "divorce": ["💔 **{a} × {b} — Marriage ended.** 😭"],
+}
