@@ -5,21 +5,20 @@ from .relationship import get_status, set_status, clear_status
 
 
 def mention(user):
-    name = (getattr(user, "first_name", None) or "Someone")
-    name = (
-        name.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
-    return f'<a href="tg://user?id={user.id}">{name}</a>'
+    user_id = getattr(user, "id", None)
+    name = getattr(user, "first_name", None) or getattr(user, "username", None) or "Someone"
+    name = str(name).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return f'<a href="tg://user?id={user_id}">{name}</a>' if user_id else name
 
 
 def render_caption(template, a, b):
-    """Render an admin caption safely. A bad custom caption must never break a social command."""
+    fallback = "{a} interacted with {b} ❤️"
     try:
+        if not isinstance(template, str) or not template.strip():
+            template = fallback
         return template.format(a=a, b=b, pct=random.randint(1, 100))
-    except (KeyError, IndexError, ValueError):
-        fallback = "{a} interacted with {b} ❤️"
+    except Exception as e:
+        print(f"[SOCIAL CAPTION ERROR] {type(e).__name__}: {e}", flush=True)
         return fallback.format(a=a, b=b)
 
 
@@ -44,7 +43,11 @@ async def action(message, command, target):
         data = {"captions": []}
 
     captions = data.get("captions") or DEFAULT_CAPTIONS.get(command) or ["{a} interacted with {b} ❤️"]
-    text = render_caption(random.choice(captions), a, b)
+    try:
+        template = random.choice(captions)
+    except Exception:
+        template = "{a} interacted with {b} ❤️"
+    text = render_caption(template, a, b)
 
     if command == "propose":
         try:
