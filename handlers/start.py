@@ -1,6 +1,6 @@
 # --------------------------------------------------------------------------------
 #  Elara AI Bot © 2026
-#  Rich Message Start (OUTLAW X MUSIC style)
+#  Rich Message Start — EXACT OUTLAW X MUSIC style
 # --------------------------------------------------------------------------------
 
 import asyncio
@@ -9,8 +9,14 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError
 
 from pyrogram import filters
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from pyrogram.enums import ParseMode
+from pyrogram.errors import FloodWait
+from pyrogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 
 import config
 from core.bot import app
@@ -61,37 +67,158 @@ def _esc(v):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  START MESSAGE
+#  RAW BOT API CALL
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _rich_html(user) -> str:
+async def _bot_api(method: str, payload: dict) -> dict:
+    if not BOT_TOKEN:
+        return {"ok": False, "description": "BOT_TOKEN missing"}
+
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
+    data = json.dumps(payload).encode("utf-8")
+    req = Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    def _do():
+        try:
+            with urlopen(req, timeout=20) as r:
+                return json.loads(r.read().decode("utf-8"))
+        except Exception as e:
+            return {"ok": False, "description": str(e)}
+
+    return await asyncio.to_thread(_do)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  RICH HTML — OUTLAW X MUSIC EXACT
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _rich_welcome(user) -> str:
     uid = getattr(user, "id", 0)
     name = _esc(getattr(user, "first_name", None) or "there")
-    bot_name = _esc(BOT_NAME)
+    bot = _esc(BOT_NAME)
+    sup = _safe_url(SUPPORT_URL)
+    upd = _safe_url(UPDATES_URL)
 
-    return f"""❍ <b>ʜᴇʏ <a href="tg://user?id={uid}">{name}</a>, ᴡᴇʟᴄᴏᴍᴇ ᴀʙᴏᴀʀᴅ! 🎶</b>
+    # ✅ OUTLAW X MUSIC style — collapsible + bordered table + pills
+    return f"""❍ ʜᴇʏ <a href="tg://user?id={uid}">{name}</a>, ᴡᴇʟᴄᴏᴍᴇ ᴀʙᴏᴀʀᴅ! 🎶
 
-ɪ ᴀᴍ <b>「 {bot_name} 」</b> — ᴀ ғᴀsᴛ &amp; ᴘᴏᴡᴇʀғᴜʟ
-<b>ᴀɪ ᴄᴏᴍᴘᴀɴɪᴏɴ ʙᴏᴛ</b> ᴡɪᴛʜ sᴏᴍᴇ ᴀᴡᴇsᴏᴍᴇ ғᴇᴀᴛᴜʀᴇs.
+ɪ ᴀᴍ <b>「 {bot} 」</b> — ᴀ ғᴀsᴛ &amp; ᴘᴏᴡᴇʀғᴜʟ ᴛᴇʟᴇɢʀᴀᴍ <b>ᴀɪ ᴄᴏᴍᴘᴀɴɪᴏɴ ʙᴏᴛ</b> ᴡɪᴛʜ sᴏᴍᴇ ᴀᴡᴇsᴏᴍᴇ ғᴇᴀᴛᴜʀᴇs.
 
-<b>✦ ᴋᴇʏ ғᴇᴀᴛᴜʀᴇs ✦</b>
+<details open>
+<summary>✦ ᴋᴇʏ ғᴇᴀᴛᴜʀᴇs ✦</summary>
 
-🤖 <b>ᴀɪ ᴄʜᴀᴛ</b> — ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴs
-🧠 <b>ᴍᴇᴍᴏʀʏ</b> — ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ ғᴏʀ ʙᴇᴛᴛᴇʀ ʀᴇᴘʟɪᴇs
-💕 <b>sᴏᴄɪᴀʟ</b> — ғᴜɴ ɢʀᴏᴜᴘ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs
-⚡ <b>ғᴀsᴛ</b> — ǫᴜɪᴄᴋ ᴀɪ ʀᴇsᴘᴏɴsᴇs
+<table>
+<tr><th>ғᴇᴀᴛᴜʀᴇ</th><th>ᴅᴇᴛᴀɪʟs</th></tr>
+<tr><td>🤖 <b>ᴀɪ ᴄʜᴀᴛ</b></td><td>ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴs ɪɴ ᴅᴍ &amp; ɢʀᴏᴜᴘs</td></tr>
+<tr><td>🧠 <b>ᴍᴇᴍᴏʀʏ</b></td><td>ᴋᴇᴇᴘs ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ ғᴏʀ ʙᴇᴛᴛᴇʀ ʀᴇᴘʟɪᴇs</td></tr>
+<tr><td>💕 <b>sᴏᴄɪᴀʟ</b></td><td>ғᴜɴ ɢʀᴏᴜᴘ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs — ʜᴜɢ, ᴋɪss, ᴍᴀʀʀɪᴀɢᴇ &amp; ᴍᴏʀᴇ</td></tr>
+<tr><td>⚡ <b>ғᴀsᴛ</b></td><td>ǫᴜɪᴄᴋ ᴀɪ ʀᴇsᴘᴏɴsᴇs ᴘᴏᴡᴇʀᴇᴅ ʙʏ ɢʀᴏǫ</td></tr>
+</table>
+</details>
 
-<b>✧ ᴡʜʏ ᴄʜᴏᴏsᴇ ᴇʟᴀʀᴀ? ✧</b>
+<details open>
+<summary>✧ ᴡʜʏ ᴄʜᴏᴏsᴇ ɪᴛ? ✧</summary>
 
-⭐ sɪᴍᴘʟᴇ sʟᴀsʜ ᴄᴏᴍᴍᴀɴᴅs
-🧠 sᴍᴀʀᴛ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴ
-❍ ᴄʟɪᴄᴋ <b>ʜᴇʟᴘ &amp; ᴄᴏᴍᴍᴀɴᴅs</b> ғᴏʀ ᴍᴏʀᴇ
+⭐ sɪᴍᴘʟᴇ sʟᴀsʜ ᴄᴏᴍᴍᴀɴᴅs, ɴᴏ sᴇᴛᴜᴘ ɴᴇᴇᴅᴇᴅ.
+🧠 sᴍᴀʀᴛ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴ ᴍᴇᴍᴏʀʏ.
+❍ ᴄʟɪᴄᴋ ʜᴇʟᴘ ʙᴇʟᴏᴡ ғᴏʀ ᴀʟʟ ᴄᴏᴍᴍᴀɴᴅs.
+</details>
 
-<blockquote>ᴘᴏᴡᴇʀᴇᴅ ʙʏ » <b>{bot_name}</b></blockquote>"""
+<blockquote>ᴘᴏᴡᴇʀᴇᴅ ʙʏ » <b>{bot}</b></blockquote>
 
+[🍬 sᴜᴘᴘᴏʀᴛ]({sup}) · [🍹 ᴜᴘᴅᴀᴛᴇs]({upd})
+"""
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  HELP MENUS — Rich HTML
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _rich_help_menu() -> str:
+    return f"""📜 <b>ᴇʟᴀʀᴀ ʜᴇʟᴘ &amp; ᴄᴏᴍᴍᴀɴᴅs</b>
+
+❍ ᴄʜᴏᴏsᴇ ᴀ ᴄᴀᴛᴇɢᴏʀʏ ʙᴇʟᴏᴡ ᴛᴏ ᴠɪᴇᴡ ɪᴛs ᴄᴏᴍᴍᴀɴᴅs ᴀɴᴅ ғᴇᴀᴛᴜʀᴇs.
+
+<table>
+<tr><th>ᴄᴀᴛᴇɢᴏʀʏ</th><th>ᴅᴇsᴄʀɪᴘᴛɪᴏɴ</th></tr>
+<tr><td>🤖 <b>ᴀɪ</b></td><td>ᴄʜᴀᴛ, ᴍᴇᴍᴏʀʏ &amp; ɢʀᴏᴜᴘ ᴀɪ ғᴇᴀᴛᴜʀᴇs</td></tr>
+<tr><td>💕 <b>sᴏᴄɪᴀʟ</b></td><td>ғᴜɴ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs ғᴏʀ ʏᴏᴜʀ ɢʀᴏᴜᴘ</td></tr>
+</table>
+
+<blockquote>ᴛᴀᴘ ᴀ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ ᴛᴏ ᴄᴏɴᴛɪɴᴜᴇ 👇</blockquote>
+"""
+
+
+def _rich_ai_help() -> str:
+    return """🤖 <b>ᴇʟᴀʀᴀ ᴀɪ ᴄᴏᴍᴍᴀɴᴅs</b>
+
+<table>
+<tr><th>ᴄᴏᴍᴍᴀɴᴅ</th><th>ᴅᴇsᴄʀɪᴘᴛɪᴏɴ</th></tr>
+<tr><td><code>/ai &lt;msg&gt;</code></td><td>ᴄʜᴀᴛ ᴡɪᴛʜ ᴇʟᴀʀᴀ ᴀɪ</td></tr>
+<tr><td>ᴅᴍ ᴀɴʏ ᴍᴇssᴀɢᴇ</td><td>ᴀɪ ʀᴇᴘʟɪᴇs ᴀᴜᴛᴏᴍᴀᴛɪᴄᴀʟʟʏ</td></tr>
+<tr><td><code>ᴇʟᴀʀᴀ ʜᴇʟʟᴏ</code></td><td>ɢʀᴏᴜᴘ ᴛʀɪɢɢᴇʀ</td></tr>
+<tr><td><code>@BotUsername ʜɪ</code></td><td>ᴍᴇɴᴛɪᴏɴ ᴛʀɪɢɢᴇʀ</td></tr>
+<tr><td>ʀᴇᴘʟʏ ᴛᴏ ᴇʟᴀʀᴀ</td><td>ᴄᴏɴᴛᴇxᴛ ᴄʜᴀᴛ</td></tr>
+</table>
+
+<blockquote>🧠 ʀᴇᴄᴇɴᴛ ᴄᴏɴᴛᴇxᴛ ᴜsᴇᴅ ғᴏʀ ɴᴀᴛᴜʀᴀʟ ʀᴇᴘʟɪᴇs.</blockquote>
+"""
+
+
+def _rich_social_help() -> str:
+    return """💕 <b>ᴇʟᴀʀᴀ sᴏᴄɪᴀʟ</b>
+
+ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜsᴇʀ's ᴍᴇssᴀɢᴇ ᴛʜᴇɴ ᴜsᴇ ᴛʜᴇsᴇ:
+
+<table>
+<tr><th>ᴄᴏᴍᴍᴀɴᴅ</th><th>ᴀᴄᴛɪᴏɴ</th></tr>
+<tr><td>🫂 <code>/hug</code></td><td>ʜᴜɢ ᴀ ᴜsᴇʀ</td></tr>
+<tr><td>💋 <code>/kiss</code></td><td>ᴋɪss ᴀ ᴜsᴇʀ</td></tr>
+<tr><td>🧛 <code>/bite</code></td><td>ʙɪᴛᴇ ᴀ ᴜsᴇʀ</td></tr>
+<tr><td>👋 <code>/slap</code></td><td>sʟᴀᴘ ᴀ ᴜsᴇʀ</td></tr>
+<tr><td>🦵 <code>/kick</code></td><td>ᴋɪᴄᴋ ᴀ ᴜsᴇʀ</td></tr>
+<tr><td>🫶 <code>/cuddle</code></td><td>ᴄᴜᴅᴅʟᴇ ᴀ ᴜsᴇʀ</td></tr>
+<tr><td>🫳 <code>/pat</code></td><td>ᴘᴀᴛ ᴀ ᴜsᴇʀ</td></tr>
+<tr><td>✋ <code>/highfive</code></td><td>ʜɪɢʜ ғɪᴠᴇ</td></tr>
+<tr><td>😏 <code>/flirt</code></td><td>ғʟɪʀᴛ</td></tr>
+<tr><td>❤️ <code>/love</code></td><td>ʟᴏᴠᴇ ᴘᴇʀᴄᴇɴᴛᴀɢᴇ</td></tr>
+<tr><td>💘 <code>/crush</code></td><td>ᴄʀᴜsʜ</td></tr>
+<tr><td>💞 <code>/couple</code></td><td>ʀᴀɴᴅᴏᴍ ᴄᴏᴜᴘʟᴇ</td></tr>
+<tr><td>💍 <code>/propose</code></td><td>ᴘʀᴏᴘᴏsᴇ</td></tr>
+<tr><td>💒 <code>/marriage</code></td><td>ᴍᴀʀʀʏ</td></tr>
+<tr><td>💔 <code>/divorce</code></td><td>ᴅɪᴠᴏʀᴄᴇ</td></tr>
+</table>
+"""
+
+
+def _rich_about() -> str:
+    return f"""📖 <b>ᴀʙᴏᴜᴛ ᴇʟᴀʀᴀ</b>
+
+ᴇʟᴀʀᴀ ɪs ʏᴏᴜʀ ᴀɪ ᴄᴏᴍᴘᴀɴɪᴏɴ ғᴏʀ ᴇᴠᴇʀʏᴅᴀʏ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴs, ʀᴀɴᴅᴏᴍ ᴛʜᴏᴜɢʜᴛs ᴀɴᴅ ʟᴀᴛᴇ-ɴɪɢʜᴛ ᴄʜᴀᴛs. 🌙
+
+<table>
+<tr><th>ғᴇᴀᴛᴜʀᴇ</th><th>ᴅᴇᴛᴀɪʟs</th></tr>
+<tr><td>💬 ᴛᴀʟᴋ</td><td>ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴ</td></tr>
+<tr><td>🧠 ᴍᴇᴍᴏʀʏ</td><td>ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ</td></tr>
+<tr><td>💕 sᴏᴄɪᴀʟ</td><td>ғᴜɴ ɢʀᴏᴜᴘ ᴄᴏᴍᴍᴀɴᴅs</td></tr>
+<tr><td>⚡ sᴘᴇᴇᴅ</td><td>ғᴀsᴛ ɢʀᴏǫ ᴀɪ ʀᴇsᴘᴏɴsᴇs</td></tr>
+</table>
+
+<blockquote><i>ᴊᴜsᴛ ᴛᴀʟᴋ ᴛᴏ ᴇʟᴀʀᴀ. ɴᴏ sᴇᴛᴜᴘ.</i></blockquote>
+"""
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  KEYBOARDS
+# ══════════════════════════════════════════════════════════════════════════════
 
 def _welcome_kb():
-    rows = [
+    return InlineKeyboardMarkup([
         [InlineKeyboardButton("⛩️ ᴀᴅᴅ ᴍᴇ ʙᴀʙʏ ⛩️", url=_safe_startgroup_url())],
         [
             InlineKeyboardButton("🍬 sᴜᴘᴘᴏʀᴛ 🍬", url=_safe_url(SUPPORT_URL)),
@@ -102,36 +229,97 @@ def _welcome_kb():
             InlineKeyboardButton("🫧 ᴏᴡɴᴇʀ 🫧", url=_owner_link()),
             InlineKeyboardButton("🍡 sᴏᴜʀᴄᴇ 🍡", callback_data="elara:about"),
         ],
-    ]
-    return InlineKeyboardMarkup(rows)
+    ])
 
 
-async def _send_start(chat_id: int, user):
-    html = _rich_html(user)
-    kb = _welcome_kb()
-    image = START_IMAGE_URL.split(",")[0].strip() if START_IMAGE_URL else ""
+_HELP_KB = InlineKeyboardMarkup([
+    [
+        InlineKeyboardButton("🤖 ᴀɪ", callback_data="elara:ai"),
+        InlineKeyboardButton("💕 sᴏᴄɪᴀʟ", callback_data="elara:social"),
+    ],
+    [InlineKeyboardButton("⌯ ʜᴏᴍᴇ ⌯", callback_data="elara:home")],
+])
 
-    # Use Pyrogram directly. The old code called "sendRichMessage", which
-    # is not a standard Telegram Bot API method and caused /start to fail.
+_BACK_KB = InlineKeyboardMarkup([
+    [InlineKeyboardButton("⬅️ ʙᴀᴄᴋ", callback_data="elara:help")],
+    [InlineKeyboardButton("⌯ ᴄʟᴏsᴇ ⌯", callback_data="elara:close")],
+])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SEND HELPERS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _kb_to_dict(kb):
+    return {
+        "inline_keyboard": [
+            [
+                {
+                    "text": b.text,
+                    **({"url": b.url} if b.url else {}),
+                    **({"callback_data": b.callback_data} if b.callback_data else {}),
+                }
+                for b in row
+            ]
+            for row in kb.inline_keyboard
+        ]
+    }
+
+
+async def _send_rich(chat_id, html, kb, image=None):
+    """Send rich message, fallback to photo/text."""
+    payload = {
+        "chat_id": chat_id,
+        "rich_message": {"html": html},
+        "reply_markup": _kb_to_dict(kb),
+    }
+    if image:
+        payload["rich_message"]["photo_url"] = image
+
+    result = await _bot_api("sendRichMessage", payload)
+    if result.get("ok"):
+        return result
+
+    print(f"[rich] failed: {result.get('description')}")
+
+    # Fallback
     if image:
         try:
             return await bot.send_photo(
-                chat_id=chat_id,
-                photo=image,
-                caption=html,
-                reply_markup=kb,
-                parse_mode=ParseMode.HTML,
+                chat_id, photo=image, caption=html,
+                reply_markup=kb, parse_mode=ParseMode.HTML,
             )
-        except Exception as e:
-            print(f"[start] send_photo failed, falling back to text: {e}")
+        except Exception:
+            pass
 
     return await bot.send_message(
-        chat_id=chat_id,
-        text=html,
-        reply_markup=kb,
-        parse_mode=ParseMode.HTML,
-        disable_web_page_preview=True,
+        chat_id, html, reply_markup=kb, parse_mode=ParseMode.HTML,
     )
+
+
+async def _edit_rich(msg, html, kb):
+    """Edit current message to rich (if possible), else plain edit."""
+    try:
+        # Try editMessageText with rich formatting
+        payload = {
+            "chat_id": msg.chat.id,
+            "message_id": msg.id,
+            "rich_message": {"html": html},
+            "reply_markup": _kb_to_dict(kb),
+        }
+        result = await _bot_api("editMessageText", payload)
+        if result.get("ok"):
+            return
+    except Exception:
+        pass
+
+    # Fallback plain edit
+    try:
+        await msg.edit_text(
+            html, reply_markup=kb, parse_mode=ParseMode.HTML,
+        )
+    except Exception:
+        pass
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -139,7 +327,7 @@ async def _send_start(chat_id: int, user):
 # ══════════════════════════════════════════════════════════════════════════════
 
 @bot.on_message(filters.command("start"))
-async def start_handler(_, message):
+async def start_handler(_, message: Message):
     try:
         await message.delete()
     except Exception:
@@ -147,29 +335,72 @@ async def start_handler(_, message):
 
     try:
         await ensure_user(message.from_user)
-    except Exception as e:
-        print(f"[start] ensure_user failed: {e}")
+    except Exception:
+        pass
+
+    image = START_IMAGE_URL.split(",")[0].strip() if START_IMAGE_URL else None
+    html = _rich_welcome(message.from_user)
 
     try:
-        await _send_start(message.chat.id, message.from_user)
-    except Exception as e:
-        print(f"[start] send failed: {e}")
+        await _send_rich(message.chat.id, html, _welcome_kb(), image)
+    except FloodWait as fw:
+        await asyncio.sleep(fw.value + 1)
+        await _send_rich(message.chat.id, html, _welcome_kb(), image)
+
+
+@bot.on_message(filters.command("help"))
+async def help_handler(_, message: Message):
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    await _send_rich(message.chat.id, _rich_help_menu(), _HELP_KB)
+
+
+@bot.on_callback_query(filters.regex(r"^elara:(home|help|about|social|ai|close)$"))
+async def cb_handler(_, q: CallbackQuery):
+    d = q.data.split(":", 1)[1]
+
+    if d == "close":
+        await q.answer()
         try:
-            await bot.send_message(
-                message.chat.id,
-                f"ʜᴇʏ <a href="tg://user?id={message.from_user.id}">{_esc(message.from_user.first_name or 'there')}</a>! 🌙\n\n"
-                f"「 <b>{_esc(BOT_NAME)}</b> 」 ɪs ᴏɴʟɪɴᴇ.\n\nᴛʀʏ /help",
-                parse_mode=ParseMode.HTML,
-            )
-        except Exception as fallback_error:
-            print(f"[start] final fallback failed: {fallback_error}")
+            await q.message.delete()
+        except Exception:
+            pass
+        return
 
+    if d == "home":
+        await q.answer()
+        try:
+            await q.message.delete()
+        except Exception:
+            pass
+        image = START_IMAGE_URL.split(",")[0].strip() if START_IMAGE_URL else None
+        await _send_rich(
+            q.message.chat.id,
+            _rich_welcome(q.from_user),
+            _welcome_kb(),
+            image,
+        )
+        return
 
-@bot.on_callback_query(filters.regex(r"^elara:help$"))
-async def help_cb(_, q: CallbackQuery):
-    await q.answer("Help coming soon!")
+    if d == "help":
+        await q.answer()
+        await _edit_rich(q.message, _rich_help_menu(), _HELP_KB)
+        return
 
+    if d == "ai":
+        await q.answer()
+        await _edit_rich(q.message, _rich_ai_help(), _BACK_KB)
+        return
 
-@bot.on_callback_query(filters.regex(r"^elara:about$"))
-async def about_cb(_, q: CallbackQuery):
-    await q.answer("Elara AI Bot 🌙")
+    if d == "social":
+        await q.answer()
+        await _edit_rich(q.message, _rich_social_help(), _BACK_KB)
+        return
+
+    if d == "about":
+        await q.answer()
+        await _edit_rich(q.message, _rich_about(), _BACK_KB)
+        return
