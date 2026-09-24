@@ -15,3 +15,6 @@ START_IMAGE_URL = os.getenv("START_IMAGE_URL", "")
 SUPPORT_URL = os.getenv("SUPPORT_URL", "")
 UPDATES_URL = os.getenv("UPDATES_URL", "")
 OWNER_URL = os.getenv("OWNER_URL", "")
+
+BOT_USERNAME = os.getenv("BOT_USERNAME", "")
+SOURCE_URL = os.getenv("SOURCE_URL", "")
