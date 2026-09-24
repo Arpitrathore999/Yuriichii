@@ -26,51 +26,64 @@ def _col():
 
 
 async def get_social_data(command):
+    fallback = {"gifs": [], "captions": DEFAULT_CAPTIONS.get(command, [])}
     col = _col()
     if col is None:
-        return {"gifs": [], "captions": DEFAULT_CAPTIONS.get(command, [])}
-    doc = await col.find_one({"_id": command})
-    return {
-        "gifs": list((doc or {}).get("gifs", [])),
-        "captions": list((doc or {}).get("captions", [])) or DEFAULT_CAPTIONS.get(command, []),
-    }
+        return fallback
+
+    try:
+        doc = await col.find_one({"_id": command})
+        if not doc:
+            return fallback
+        captions = list(doc.get("captions") or []) or fallback["captions"]
+        gifs = list(doc.get("gifs") or [])
+        return {"gifs": gifs, "captions": captions}
+    except Exception as e:
+        print(f"[SOCIAL SETTINGS ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
+        return fallback
 
 
 async def add_gif(command, file_id):
     col = _col()
     if col is None:
         return False
-    await col.update_one(
-        {"_id": command},
-        {"$addToSet": {"gifs": file_id}},
-        upsert=True,
-    )
-    return True
+    try:
+        await col.update_one({"_id": command}, {"$addToSet": {"gifs": file_id}}, upsert=True)
+        return True
+    except Exception as e:
+        print(f"[ADD GIF ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
+        return False
 
 
 async def add_caption(command, caption):
     col = _col()
     if col is None:
         return False
-    await col.update_one(
-        {"_id": command},
-        {"$addToSet": {"captions": caption}},
-        upsert=True,
-    )
-    return True
+    try:
+        await col.update_one({"_id": command}, {"$addToSet": {"captions": caption}}, upsert=True)
+        return True
+    except Exception as e:
+        print(f"[ADD CAPTION ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
+        return False
 
 
 async def clear_gifs(command):
     col = _col()
     if col is None:
         return False
-    await col.update_one({"_id": command}, {"$set": {"gifs": []}}, upsert=True)
-    return True
+    try:
+        await col.update_one({"_id": command}, {"$set": {"gifs": []}}, upsert=True)
+        return True
+    except Exception:
+        return False
 
 
 async def clear_captions(command):
     col = _col()
     if col is None:
         return False
-    await col.update_one({"_id": command}, {"$set": {"captions": []}}, upsert=True)
-    return True
+    try:
+        await col.update_one({"_id": command}, {"$set": {"captions": []}}, upsert=True)
+        return True
+    except Exception:
+        return False
