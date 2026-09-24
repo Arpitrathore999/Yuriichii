@@ -1,16 +1,13 @@
-import asyncio
 from core.bot import app
 from core.loader import load_handlers
 
 
-async def main():
+def main():
     load_handlers()
-
-    await app.start()
-    print("Elara Bot started.")
-
-    await asyncio.Event().wait()
+    print("Elara Bot starting...", flush=True)
+    app.run()
+    print("Elara Bot stopped.", flush=True)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
