@@ -11,7 +11,8 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 OWNER_ID = int(os.getenv("OWNER_ID", "0"))
 
-# ✅ NEW — Bot username (without @) for "Add Me" startgroup URL
+# ✅ NEW
+BOT_NAME = os.getenv("BOT_NAME", "Elara")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "")
 
 START_IMAGE_URL = os.getenv("START_IMAGE_URL", "")
