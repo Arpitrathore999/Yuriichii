@@ -2,21 +2,32 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 import config
 
 def start_keyboard():
-    rows = [
-        [InlineKeyboardButton("💬 CHAT WITH ELARA ›", callback_data="elara:chat")],
+    bot_username = getattr(config, "BOT_USERNAME", "")
+    add_url = f"https://t.me/{bot_username}?startgroup=true" if bot_username else "https://t.me/"
+
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⛩️ ADD ME TO A GROUP ⛩️", url=add_url)],
         [
-            InlineKeyboardButton("📖 ABOUT ›", callback_data="elara:about"),
-            InlineKeyboardButton("💕 SOCIAL ›", callback_data="elara:social"),
+            InlineKeyboardButton("🍬 SUPPORT 🍬", url=getattr(config, "SUPPORT_URL", "") or "https://t.me/"),
+            InlineKeyboardButton("🍹 UPDATES 🍹", url=getattr(config, "UPDATES_URL", "") or "https://t.me/"),
         ],
-        [InlineKeyboardButton("❓ HELP & COMMANDS ›", callback_data="elara:help")],
+        [InlineKeyboardButton("🏩 HELP & COMMANDS 🏩", callback_data="elara_help")],
         [
-            InlineKeyboardButton("📢 UPDATES ›", url=config.UPDATES_URL or "https://t.me/"),
-            InlineKeyboardButton("👑 OWNER ›", url=config.OWNER_URL or "https://t.me/"),
+            InlineKeyboardButton("👑 OWNER", url=getattr(config, "OWNER_URL", "") or "https://t.me/"),
+            InlineKeyboardButton("🍡 SOURCE", url=getattr(config, "SOURCE_URL", "") or "https://t.me/"),
         ],
-    ]
-    return InlineKeyboardMarkup(rows)
+    ])
+
+def help_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🤖 AI", callback_data="elara_help_ai"),
+            InlineKeyboardButton("💕 SOCIAL", callback_data="elara_help_social"),
+        ],
+        [InlineKeyboardButton("✦ CLOSE ✦", callback_data="elara_help_close")],
+    ])
 
 def back_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⬅️ BACK", callback_data="elara:home")]
+        [InlineKeyboardButton("⬅️ BACK TO HELP", callback_data="elara_help")]
     ])
