@@ -1,16 +1,19 @@
 import random
+from pathlib import Path
 
 from .settings import get_social_data, DEFAULT_CAPTIONS
 from .relationship import get_status, set_status, clear_status
+
+
+# Local social media is stored in: <project root>/assets/social/<command>/
+SUPPORTED_MEDIA = {".gif", ".mp4", ".webm", ".jpg", ".jpeg", ".png", ".webp"}
 
 
 def mention(user):
     user_id = getattr(user, "id", None)
     name = getattr(user, "first_name", None) or getattr(user, "username", None) or "Someone"
     name = str(name).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    if user_id:
-        return f'<a href="tg://user?id={int(user_id)}">{name}</a>'
-    return name
+    return f'<a href="tg://user?id={user_id}">{name}</a>' if user_id else name
 
 
 def render_caption(template, a, b):
@@ -24,18 +27,41 @@ def render_caption(template, a, b):
         return fallback.format(a=a, b=b)
 
 
-async def get_gif_file_id(command):
-    # Manual GIFs: assets/social/<command>/*.gif
+def get_local_media(command):
+    """Return a random real media file from assets/social/<command>."""
     try:
-        from pathlib import Path
-        base = Path(__file__).resolve().parents[2] / "assets" / "social" / command
-        files = [p for p in base.glob("*") if p.is_file() and p.suffix.lower() == ".gif"] if base.exists() else []
-        if files:
-            return str(random.choice(files))
-    except Exception as e:
-        print(f"[SOCIAL LOCAL GIF ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
+        # actions.py -> social -> modules -> project root
+        project_root = Path(__file__).resolve().parents[2]
+        folder = project_root / "assets" / "social" / command
 
-    # Backward-compatible MongoDB file_id fallback.
+        if not folder.is_dir():
+            print(f"[SOCIAL MEDIA] folder not found: {folder}", flush=True)
+            return None
+
+        files = sorted(
+            p for p in folder.iterdir()
+            if p.is_file() and p.suffix.lower() in SUPPORTED_MEDIA
+        )
+
+        if not files:
+            print(f"[SOCIAL MEDIA] no supported media in: {folder}", flush=True)
+            return None
+
+        selected = random.choice(files)
+        print(f"[SOCIAL MEDIA] /{command} -> {selected}", flush=True)
+        return str(selected)
+    except Exception as e:
+        print(f"[SOCIAL MEDIA ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
+        return None
+
+
+async def get_gif_file_id(command):
+    # Keep the old function name so existing imports continue to work.
+    local_media = get_local_media(command)
+    if local_media:
+        return local_media
+
+    # Backward-compatible DB/file-id fallback.
     try:
         data = await get_social_data(command)
         gifs = data.get("gifs") or []
