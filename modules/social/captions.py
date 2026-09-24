@@ -1,17 +1,3 @@
-CAPTIONS = {
-    "hug": ["🫂 <b>{a} just hugged {b} tightly!</b> ❤️"],
-    "kiss": ["💋 <b>{a} just stole a kiss from {b}!</b> 😘"],
-    "bite": ["🧛 <b>{a} just bit {b}!</b> 😭"],
-    "slap": ["👋 <b>{a} gave {b} a reality check!</b> 💀"],
-    "kick": ["🦵 <b>{a} kicked {b} into another dimension!</b> 😭"],
-    "cuddle": ["🫂 <b>{a} cuddled with {b}.</b> 🥰"],
-    "pat": ["🫳 <b>{a} patted {b}'s head.</b> 🥹"],
-    "highfive": ["✋ <b>{a} high-fived {b}!</b> 🔥"],
-    "flirt": ["😏 <b>{a} is flirting with {b}.</b> 👀❤️"],
-    "love": ["❤️ <b>{a} × {b} — Love Match: {pct}%</b> 💕"],
-    "crush": ["💘 <b>{a}'s secret crush is {b}!</b> 👀"],
-    "couple": ["💞 <b>Today's couple: {a} × {b} — {pct}%</b>"],
-    "propose": ["💍 <b>{a} proposed to {b}!</b> Will you say yes? 🥹"],
-    "marriage": ["💒 <b>{a} ❤️ {b} — Officially married!</b>"],
-    "divorce": ["💔 <b>{a} × {b} — Marriage ended.</b> 😭"],
-}
+from .settings import DEFAULT_CAPTIONS
+
+CAPTIONS = DEFAULT_CAPTIONS
