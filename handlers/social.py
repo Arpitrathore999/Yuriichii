@@ -1,6 +1,5 @@
 from pyrogram import filters
 from core.bot import app
-from utils.helpers import get_reply_target
 from modules.social.actions import action
 
 COMMANDS = [
@@ -8,30 +7,56 @@ COMMANDS = [
     "flirt", "love", "crush", "couple", "propose", "marriage", "divorce"
 ]
 
-# Explicitly register social commands. These are processed before any generic
-# AI/text handler can consume them.
-@app.on_message(filters.command(COMMANDS))
-async def social(_, message):
-    command = (message.command or [""])[0].split("@")[0].lower()
 
-    target = get_reply_target(message)
-    if not target:
-        return await message.reply(
-            "❌ Kisi user ke message par **reply** karke command use karo."
-        )
+def _target_from_reply(message):
+    reply = message.reply_to_message
+    return reply.from_user if reply and reply.from_user else None
 
-    if target.is_bot:
-        return await message.reply("🤖 Bot ko target mat karo 😭")
-    if not message.from_user:
-        return await message.reply("❌ User information nahi mili.")
-    if target.id == message.from_user.id:
-        return await message.reply("❌ Khud par ye command nahi chalegi 😭")
 
+async def _target_from_argument(message):
+    if not message.command or len(message.command) < 2:
+        return None
+    raw = message.command[1].strip()
+    if raw.startswith("@"):
+        raw = raw[1:]
     try:
+        return await app.get_users(raw)
+    except Exception:
+        return None
+
+
+@app.on_message(filters.group & filters.command(COMMANDS))
+async def social(_, message):
+    try:
+        command = (message.command[0] if message.command else "").lower()
+
+        if command == "couple":
+            return await message.reply(
+                "💞 Use /couple in a group to run the random couple feature."
+            )
+
+        target = _target_from_reply(message)
+        if target is None:
+            target = await _target_from_argument(message)
+
+        if target is None:
+            return await message.reply(
+                "❌ Reply to a user's message or use a username, for example: /hug @username"
+            )
+
+        if target.is_bot:
+            return await message.reply("🤖 You cannot target a bot.")
+
+        if not message.from_user:
+            return await message.reply("❌ I could not identify the sender of this command.")
+
+        if target.id == message.from_user.id:
+            return await message.reply("❌ You cannot use this command on yourself.")
+
         text = await action(message, command, target)
-        await message.reply(text, parse_mode="html")
-    except Exception as e:
-        # Keep the bot alive and return a useful error instead of silently
-        # making the command appear broken.
-        print(f"[SOCIAL ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
-        await message.reply("❌ Social command abhi process nahi ho paya. Dobara try karo.")
+        return await message.reply(text, parse_mode="html")
+
+    except Exception:
+        return await message.reply(
+            "❌ I couldn't process that social command right now. Please try again."
+        )
