@@ -24,4 +24,3 @@ psutil
 
 # ─── Optional (Agar future mein music features add karo) ───────────────────
 yt-dlp
-pytgcalls
