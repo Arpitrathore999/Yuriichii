@@ -1,15 +1,14 @@
 # --------------------------------------------------------------------------------
 #  Elara AI Bot © 2026
-#  handlers/start.py  —  Rich Message Final (colored pills + collapse + table)
+#  handlers/start.py  —  Rich HTML + Proper table + Colored pill links
 # --------------------------------------------------------------------------------
 
 import asyncio
 import json
 from urllib.request import Request, urlopen
-from urllib.error import URLError
 
 from pyrogram import enums, filters
-from pyrogram.enums import ChatType, ParseMode
+from pyrogram.enums import ParseMode
 from pyrogram.errors import FloodWait
 from pyrogram.types import (
     CallbackQuery,
@@ -26,7 +25,7 @@ from database.users import ensure_user
 bot = app
 
 
-# ─── Config shortcuts ────────────────────────────────────────────────────────
+# ─── Config ──────────────────────────────────────────────────────────────────
 BOT_NAME        = getattr(config, "BOT_NAME", "Elara")
 BOT_USERNAME    = (getattr(config, "BOT_USERNAME", "") or "").lstrip("@")
 BOT_TOKEN       = getattr(config, "BOT_TOKEN", "")
@@ -37,12 +36,8 @@ OWNER_ID        = getattr(config, "OWNER_ID", 0)
 START_IMAGE_URL = (getattr(config, "START_IMAGE_URL", "") or "").strip()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  SAFE URL HELPERS
-# ══════════════════════════════════════════════════════════════════════════════
-
+# ─── Safe URL helpers ────────────────────────────────────────────────────────
 _FALLBACK = "https://t.me/telegram"
-
 
 def _safe_url(u, fb=_FALLBACK):
     if not u or not isinstance(u, str):
@@ -54,7 +49,6 @@ def _safe_url(u, fb=_FALLBACK):
         return fb
     return u
 
-
 def _safe_user_url(uid):
     try:
         uid = int(uid)
@@ -62,55 +56,46 @@ def _safe_user_url(uid):
     except Exception:
         return _FALLBACK
 
-
 def _safe_startgroup_url():
     return f"https://t.me/{BOT_USERNAME}?startgroup=true" if BOT_USERNAME else _FALLBACK
-
 
 def _owner_link():
     return _safe_url(OWNER_URL) if OWNER_URL else _safe_user_url(OWNER_ID)
 
-
 def _esc(v):
     return str(v or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-
 def _pick_image():
     if not START_IMAGE_URL:
-        return ""
+        return None
     parts = [u.strip() for u in START_IMAGE_URL.split(",") if u.strip()]
-    return parts[0] if parts else ""
+    return parts[0] if parts else None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  RAW BOT API CALLER (for sendRichMessage)
+#  BOT API CALLER
 # ══════════════════════════════════════════════════════════════════════════════
 
 async def _bot_api(method: str, payload: dict) -> dict:
     if not BOT_TOKEN:
         return {"ok": False, "description": "BOT_TOKEN missing"}
-
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
     data = json.dumps(payload).encode("utf-8")
-    req = Request(
-        url,
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-
+    req = Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
     def _do():
         try:
             with urlopen(req, timeout=20) as r:
                 return json.loads(r.read().decode("utf-8"))
         except Exception as e:
             return {"ok": False, "description": str(e)}
-
     return await asyncio.to_thread(_do)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  RICH HTML — Welcome (OUTLAW X MUSIC style)
+#  RICH HTML — PROPER TABLE with borders
+#  ---------------------------------------------------------------
+#  Telegram Rich Message supports real HTML <table> with <tr>/<td>/<th>
+#  Renders exactly like OUTLAW X MUSIC.
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _rich_welcome(user) -> str:
@@ -120,6 +105,7 @@ def _rich_welcome(user) -> str:
     sup = _safe_url(SUPPORT_URL)
     upd = _safe_url(UPDATES_URL)
 
+    # ✅ PROPER TABLE: <table><tr><th>...</th></tr><tr><td>...</td></tr></table>
     return f"""❍ ʜᴇʏ <a href="tg://user?id={uid}">{name}</a>, ᴡᴇʟᴄᴏᴍᴇ ᴀʙᴏᴀʀᴅ! 🎶
 
 ɪ ᴀᴍ <b>「 {bot} 」</b> — ᴀ ғᴀsᴛ &amp; ᴘᴏᴡᴇʀғᴜʟ ᴛᴇʟᴇɢʀᴀᴍ <b>ᴀɪ ᴄᴏᴍᴘᴀɴɪᴏɴ ʙᴏᴛ</b> ᴡɪᴛʜ sᴏᴍᴇ ᴀᴡᴇsᴏᴍᴇ ғᴇᴀᴛᴜʀᴇs.
@@ -127,13 +113,13 @@ def _rich_welcome(user) -> str:
 <details open>
 <summary>✦ ᴋᴇʏ ғᴇᴀᴛᴜʀᴇs ✦</summary>
 
-| ғᴇᴀᴛᴜʀᴇ | ᴅᴇᴛᴀɪʟs |
-|---------|---------|
-| 🤖 **ᴀɪ ᴄʜᴀᴛ** | ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴs ɪɴ ᴅᴍ &amp; ɢʀᴏᴜᴘs |
-| 🧠 **ᴍᴇᴍᴏʀʏ** | ᴋᴇᴇᴘs ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ ғᴏʀ ʙᴇᴛᴛᴇʀ ʀᴇᴘʟɪᴇs |
-| 💕 **sᴏᴄɪᴀʟ** | ʜᴜɢ, ᴋɪss, ᴍᴀʀʀɪᴀɢᴇ &amp; ᴍᴏʀᴇ ɢʀᴏᴜᴘ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs |
-| ⚡ **ғᴀsᴛ** | ǫᴜɪᴄᴋ ᴀɪ ʀᴇsᴘᴏɴsᴇs ᴘᴏᴡᴇʀᴇᴅ ʙʏ ɢʀᴏǫ |
-
+<table>
+<tr><th>ғᴇᴀᴛᴜʀᴇ</th><th>ᴅᴇᴛᴀɪʟs</th></tr>
+<tr><td>🤖 <b>ᴀɪ ᴄʜᴀᴛ</b></td><td>ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴs ɪɴ ᴅᴍ &amp; ɢʀᴏᴜᴘs</td></tr>
+<tr><td>🧠 <b>ᴍᴇᴍᴏʀʏ</b></td><td>ᴋᴇᴇᴘs ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ ғᴏʀ ʙᴇᴛᴛᴇʀ ʀᴇᴘʟɪᴇs</td></tr>
+<tr><td>💕 <b>sᴏᴄɪᴀʟ</b></td><td>ʜᴜɢ, ᴋɪss, ᴍᴀʀʀɪᴀɢᴇ &amp; ᴍᴏʀᴇ ɢʀᴏᴜᴘ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs</td></tr>
+<tr><td>⚡ <b>ғᴀsᴛ</b></td><td>ǫᴜɪᴄᴋ ᴀɪ ʀᴇsᴘᴏɴsᴇs ᴘᴏᴡᴇʀᴇᴅ ʙʏ ɢʀᴏǫ</td></tr>
+</table>
 </details>
 
 <details open>
@@ -147,13 +133,9 @@ def _rich_welcome(user) -> str:
 
 <blockquote>ᴘᴏᴡᴇʀᴇᴅ ʙʏ » <b>{bot}</b></blockquote>
 
-[🍬 sᴜᴘᴘᴏʀᴛ]({sup}) · [🍹 ᴜᴘᴅᴀᴛᴇs]({upd})
+🍬 <a href="{sup}"><b>sᴜᴘᴘᴏʀᴛ</b></a>   ·   🍹 <a href="{upd}"><b>ᴜᴘᴅᴀᴛᴇs</b></a>
 """
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  RICH HTML — Help Menu (with image support in caller)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def _rich_help() -> str:
     return """📜 <b>ᴇʟᴀʀᴀ ʜᴇʟᴘ &amp; ᴄᴏᴍᴍᴀɴᴅs</b>
@@ -163,11 +145,11 @@ def _rich_help() -> str:
 <details open>
 <summary>✦ ᴄᴀᴛᴇɢᴏʀɪᴇs ✦</summary>
 
-| ᴄᴀᴛᴇɢᴏʀʏ | ᴅᴇsᴄʀɪᴘᴛɪᴏɴ |
-|----------|-------------|
-| 🤖 **ᴀɪ** | ᴄʜᴀᴛ, ᴍᴇᴍᴏʀʏ &amp; ɢʀᴏᴜᴘ ᴀɪ ғᴇᴀᴛᴜʀᴇs |
-| 💕 **sᴏᴄɪᴀʟ** | ғᴜɴ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs ғᴏʀ ɢʀᴏᴜᴘs |
-
+<table>
+<tr><th>ᴄᴀᴛᴇɢᴏʀʏ</th><th>ᴅᴇsᴄʀɪᴘᴛɪᴏɴ</th></tr>
+<tr><td>🤖 <b>ᴀɪ</b></td><td>ᴄʜᴀᴛ, ᴍᴇᴍᴏʀʏ &amp; ɢʀᴏᴜᴘ ᴀɪ ғᴇᴀᴛᴜʀᴇs</td></tr>
+<tr><td>💕 <b>sᴏᴄɪᴀʟ</b></td><td>ғᴜɴ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs ғᴏʀ ɢʀᴏᴜᴘs</td></tr>
+</table>
 </details>
 
 <i>ᴛᴀᴘ ᴀ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ ᴛᴏ ᴄᴏɴᴛɪɴᴜᴇ</i> 👇
@@ -180,14 +162,14 @@ def _rich_ai() -> str:
 <details open>
 <summary>💬 ᴄʜᴀᴛ ᴄᴏᴍᴍᴀɴᴅs</summary>
 
-| ᴄᴏᴍᴍᴀɴᴅ | ᴅᴇsᴄʀɪᴘᴛɪᴏɴ |
-|---------|-------------|
-| `/ai <msg>` | ᴄʜᴀᴛ ᴡɪᴛʜ ᴇʟᴀʀᴀ ᴀɪ |
-| ᴅᴍ ᴀɴʏ ᴍᴇssᴀɢᴇ | ᴀɪ ʀᴇᴘʟɪᴇs ᴀᴜᴛᴏᴍᴀᴛɪᴄᴀʟʟʏ |
-| `ᴇʟᴀʀᴀ ʜᴇʟʟᴏ` | ɢʀᴏᴜᴘ ᴛʀɪɢɢᴇʀ |
-| `@BotUsername ʜɪ` | ᴍᴇɴᴛɪᴏɴ ᴛʀɪɢɢᴇʀ |
-| ʀᴇᴘʟʏ ᴛᴏ ᴇʟᴀʀᴀ | ᴄᴏɴᴛᴇxᴛ ᴄʜᴀᴛ |
-
+<table>
+<tr><th>ᴄᴏᴍᴍᴀɴᴅ</th><th>ᴅᴇsᴄʀɪᴘᴛɪᴏɴ</th></tr>
+<tr><td><code>/ai &lt;msg&gt;</code></td><td>ᴄʜᴀᴛ ᴡɪᴛʜ ᴇʟᴀʀᴀ ᴀɪ</td></tr>
+<tr><td>ᴅᴍ ᴀɴʏ ᴍᴇssᴀɢᴇ</td><td>ᴀɪ ʀᴇᴘʟɪᴇs ᴀᴜᴛᴏᴍᴀᴛɪᴄᴀʟʟʏ</td></tr>
+<tr><td><code>ᴇʟᴀʀᴀ ʜᴇʟʟᴏ</code></td><td>ɢʀᴏᴜᴘ ᴛʀɪɢɢᴇʀ</td></tr>
+<tr><td><code>@BotUsername ʜɪ</code></td><td>ᴍᴇɴᴛɪᴏɴ ᴛʀɪɢɢᴇʀ</td></tr>
+<tr><td>ʀᴇᴘʟʏ ᴛᴏ ᴇʟᴀʀᴀ</td><td>ᴄᴏɴᴛᴇxᴛ ᴄʜᴀᴛ</td></tr>
+</table>
 </details>
 
 <blockquote>🧠 ʀᴇᴄᴇɴᴛ ᴄᴏɴᴛᴇxᴛ ᴜsᴇᴅ ғᴏʀ ɴᴀᴛᴜʀᴀʟ ʀᴇᴘʟɪᴇs.</blockquote>
@@ -202,24 +184,24 @@ def _rich_social() -> str:
 <details open>
 <summary>💕 ᴀʟʟ sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅs</summary>
 
-| ᴄᴏᴍᴍᴀɴᴅ | ᴀᴄᴛɪᴏɴ |
-|---------|--------|
-| `/hug` | 🫂 ʜᴜɢ ᴀ ᴜsᴇʀ |
-| `/kiss` | 💋 ᴋɪss ᴀ ᴜsᴇʀ |
-| `/bite` | 🧛 ʙɪᴛᴇ ᴀ ᴜsᴇʀ |
-| `/slap` | 👋 sʟᴀᴘ ᴀ ᴜsᴇʀ |
-| `/kick` | 🦵 ᴋɪᴄᴋ ᴀ ᴜsᴇʀ |
-| `/cuddle` | 🫶 ᴄᴜᴅᴅʟᴇ ᴀ ᴜsᴇʀ |
-| `/pat` | 🫳 ᴘᴀᴛ ᴀ ᴜsᴇʀ |
-| `/highfive` | ✋ ʜɪɢʜ ғɪᴠᴇ |
-| `/flirt` | 😏 ғʟɪʀᴛ |
-| `/love` | ❤️ ʟᴏᴠᴇ % |
-| `/crush` | 💘 ᴄʀᴜsʜ |
-| `/couple` | 💞 ᴄᴏᴜᴘʟᴇ |
-| `/propose` | 💍 ᴘʀᴏᴘᴏsᴇ |
-| `/marriage` | 💒 ᴍᴀʀʀʏ |
-| `/divorce` | 💔 ᴅɪᴠᴏʀᴄᴇ |
-
+<table>
+<tr><th>ᴄᴏᴍᴍᴀɴᴅ</th><th>ᴀᴄᴛɪᴏɴ</th></tr>
+<tr><td>🫂 <code>/hug</code></td><td>ʜᴜɢ ᴀ ᴜsᴇʀ</td></tr>
+<tr><td>💋 <code>/kiss</code></td><td>ᴋɪss ᴀ ᴜsᴇʀ</td></tr>
+<tr><td>🧛 <code>/bite</code></td><td>ʙɪᴛᴇ ᴀ ᴜsᴇʀ</td></tr>
+<tr><td>👋 <code>/slap</code></td><td>sʟᴀᴘ ᴀ ᴜsᴇʀ</td></tr>
+<tr><td>🦵 <code>/kick</code></td><td>ᴋɪᴄᴋ ᴀ ᴜsᴇʀ</td></tr>
+<tr><td>🫶 <code>/cuddle</code></td><td>ᴄᴜᴅᴅʟᴇ ᴀ ᴜsᴇʀ</td></tr>
+<tr><td>🫳 <code>/pat</code></td><td>ᴘᴀᴛ ᴀ ᴜsᴇʀ</td></tr>
+<tr><td>✋ <code>/highfive</code></td><td>ʜɪɢʜ ғɪᴠᴇ</td></tr>
+<tr><td>😏 <code>/flirt</code></td><td>ғʟɪʀᴛ</td></tr>
+<tr><td>❤️ <code>/love</code></td><td>ʟᴏᴠᴇ ᴘᴇʀᴄᴇɴᴛᴀɢᴇ</td></tr>
+<tr><td>💘 <code>/crush</code></td><td>ᴄʀᴜsʜ</td></tr>
+<tr><td>💞 <code>/couple</code></td><td>ʀᴀɴᴅᴏᴍ ᴄᴏᴜᴘʟᴇ</td></tr>
+<tr><td>💍 <code>/propose</code></td><td>ᴘʀᴏᴘᴏsᴇ</td></tr>
+<tr><td>💒 <code>/marriage</code></td><td>ᴍᴀʀʀʏ</td></tr>
+<tr><td>💔 <code>/divorce</code></td><td>ᴅɪᴠᴏʀᴄᴇ</td></tr>
+</table>
 </details>
 """
 
@@ -232,13 +214,13 @@ def _rich_about() -> str:
 <details open>
 <summary>✦ ᴀʙᴏᴜᴛ ғᴇᴀᴛᴜʀᴇs ✦</summary>
 
-| ғᴇᴀᴛᴜʀᴇ | ᴅᴇᴛᴀɪʟs |
-|---------|---------|
-| 💬 ᴛᴀʟᴋ | ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴ |
-| 🧠 ᴍᴇᴍᴏʀʏ | ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ |
-| 💕 sᴏᴄɪᴀʟ | ғᴜɴ ɢʀᴏᴜᴘ ᴄᴏᴍᴍᴀɴᴅs |
-| ⚡ sᴘᴇᴇᴅ | ғᴀsᴛ ɢʀᴏǫ ᴀɪ ʀᴇsᴘᴏɴsᴇs |
-
+<table>
+<tr><th>ғᴇᴀᴛᴜʀᴇ</th><th>ᴅᴇᴛᴀɪʟs</th></tr>
+<tr><td>💬 ᴛᴀʟᴋ</td><td>ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴ</td></tr>
+<tr><td>🧠 ᴍᴇᴍᴏʀʏ</td><td>ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ</td></tr>
+<tr><td>💕 sᴏᴄɪᴀʟ</td><td>ғᴜɴ ɢʀᴏᴜᴘ ᴄᴏᴍᴍᴀɴᴅs</td></tr>
+<tr><td>⚡ sᴘᴇᴇᴅ</td><td>ғᴀsᴛ ɢʀᴏǫ ᴀɪ ʀᴇsᴘᴏɴsᴇs</td></tr>
+</table>
 </details>
 
 <blockquote><i>ᴊᴜsᴛ ᴛᴀʟᴋ ᴛᴏ ᴇʟᴀʀᴀ. ɴᴏ sᴇᴛᴜᴘ.</i></blockquote>
@@ -246,7 +228,7 @@ def _rich_about() -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  KEYBOARDS
+#  KEYBOARDS — Colored buttons (Kurigram)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _welcome_kb() -> InlineKeyboardMarkup:
@@ -309,7 +291,7 @@ _BACK_KB = InlineKeyboardMarkup([
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  SEND HELPERS — Rich API with fallbacks
+#  SEND HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _kb_to_dict(kb):
@@ -329,7 +311,7 @@ def _kb_to_dict(kb):
 
 
 async def _send_rich(chat_id, html, kb, image=None):
-    """Try Rich Message API, fallback to photo/text."""
+    """Send via Rich Message API. Fallback to photo/text."""
     payload = {
         "chat_id": chat_id,
         "rich_message": {"html": html},
@@ -344,7 +326,6 @@ async def _send_rich(chat_id, html, kb, image=None):
 
     print(f"[rich] failed: {result.get('description')}")
 
-    # Fallback: photo + HTML caption
     if image:
         try:
             return await bot.send_photo(
@@ -361,7 +342,6 @@ async def _send_rich(chat_id, html, kb, image=None):
 
 
 async def _edit_rich(msg, html, kb):
-    """Edit message to rich; fallback to plain edit."""
     try:
         payload = {
             "chat_id": msg.chat.id,
@@ -411,14 +391,12 @@ async def start_handler(_, message: Message):
     except Exception:
         pass
 
-    image = _pick_image() or None
-
     try:
         await _send_rich(
             message.chat.id,
             _rich_welcome(message.from_user),
             _welcome_kb(),
-            image,
+            _pick_image(),
         )
     except FloodWait as fw:
         await asyncio.sleep(fw.value + 1)
@@ -426,7 +404,7 @@ async def start_handler(_, message: Message):
             message.chat.id,
             _rich_welcome(message.from_user),
             _welcome_kb(),
-            image,
+            _pick_image(),
         )
 
 
@@ -437,8 +415,7 @@ async def help_handler(_, message: Message):
     except Exception:
         pass
 
-    image = _pick_image() or None
-    await _send_rich(message.chat.id, _rich_help(), _HELP_KB, image)
+    await _send_rich(message.chat.id, _rich_help(), _HELP_KB, _pick_image())
 
 
 @bot.on_callback_query(filters.regex(r"^elara:(home|help|about|social|ai|close)$"))
@@ -459,12 +436,11 @@ async def cb(_, q: CallbackQuery):
             await q.message.delete()
         except Exception:
             pass
-        image = _pick_image() or None
         await _send_rich(
             q.message.chat.id,
             _rich_welcome(q.from_user),
             _welcome_kb(),
-            image,
+            _pick_image(),
         )
         return
 
