@@ -1,4 +1,6 @@
-from pyrogram import filters, enums
+from pathlib import Path
+
+from pyrogram import filters
 from core.bot import app
 from utils.helpers import get_reply_target
 from modules.social.actions import action, get_gif_file_id
@@ -10,16 +12,31 @@ COMMANDS = [
 
 
 def _plain(text):
-    # Last-resort fallback if a custom caption contains broken HTML.
     import re
     return re.sub(r"<[^>]+>", "", str(text or "")).strip()
+
+
+async def _send_media(message, media_path, caption):
+    """Send local media using the correct Telegram method for its extension."""
+    ext = Path(str(media_path)).suffix.lower()
+
+    if ext == ".gif":
+        await message.reply_animation(animation=str(media_path), caption=caption, parse_mode="html")
+    elif ext == ".mp4":
+        await message.reply_video(video=str(media_path), caption=caption, parse_mode="html", supports_streaming=True)
+    elif ext in {".jpg", ".jpeg", ".png", ".webp"}:
+        await message.reply_photo(photo=str(media_path), caption=caption, parse_mode="html")
+    elif ext == ".webm":
+        # Telegram/Pyrogram may not accept WebM as a normal video in every setup.
+        await message.reply_document(document=str(media_path), caption=caption, parse_mode="html")
+    else:
+        raise ValueError(f"Unsupported social media extension: {ext}")
 
 
 @app.on_message(filters.command(COMMANDS))
 async def social(_, message):
     command = (message.command[0] if message.command else "").lower().lstrip("/")
 
-    # Target resolution is kept separate so one bad username/reply cannot kill the handler.
     try:
         target = get_reply_target(message)
     except Exception as e:
@@ -35,9 +52,7 @@ async def social(_, message):
                 print(f"[SOCIAL USER ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
 
     if target is None:
-        return await message.reply(
-            f"❌ Reply to a user's message or use /{command} @username."
-        )
+        return await message.reply(f"❌ Reply to a user's message or use /{command} @username.")
 
     if not getattr(target, "id", None):
         return await message.reply("❌ I couldn't identify that user. Please try again.")
@@ -46,39 +61,34 @@ async def social(_, message):
     if message.from_user and target.id == message.from_user.id:
         return await message.reply("❌ You can't use this command on yourself.")
 
-    # Caption generation has its own fallbacks, so a custom DB entry cannot stop the command.
     try:
         text = await action(message, command, target)
     except Exception as e:
         print(f"[SOCIAL ACTION ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
         text = f"❤️ {getattr(message.from_user, 'first_name', 'Someone')} interacted with {getattr(target, 'first_name', 'someone')}!"
 
-    # Pick one of the admin-added GIFs at random. No GIF = normal text response.
+    # Local assets/social/<command> is checked first. DB file IDs remain a fallback.
     try:
-        gif_file_id = await get_gif_file_id(command)
+        media = await get_gif_file_id(command)
     except Exception as e:
-        print(f"[SOCIAL GIF LOOKUP ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
-        gif_file_id = None
+        print(f"[SOCIAL MEDIA LOOKUP ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
+        media = None
 
-    if gif_file_id:
+    if media:
         try:
-            await message.reply_animation(animation=gif_file_id, caption=text, parse_mode=enums.ParseMode.HTML)
+            await _send_media(message, media, text)
             return
         except Exception as e:
-            print(f"[SOCIAL GIF SEND ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
-            # Broken HTML in a custom caption should not make the whole command fail.
+            print(f"[SOCIAL MEDIA SEND ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
+            # Retry without HTML if a caption formatting issue caused the failure.
             try:
-                await message.reply_animation(animation=gif_file_id, caption=_plain(text))
+                await _send_media(message, media, _plain(text))
                 return
             except Exception as e2:
-                print(f"[SOCIAL GIF PLAIN ERROR] /{command}: {type(e2).__name__}: {e2}", flush=True)
+                print(f"[SOCIAL MEDIA PLAIN ERROR] /{command}: {type(e2).__name__}: {e2}", flush=True)
 
-    # Final text fallback.
     try:
-        await message.reply(text, parse_mode=enums.ParseMode.HTML)
+        await message.reply(text, parse_mode="html")
     except Exception as e:
         print(f"[SOCIAL TEXT HTML ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
-        try:
-            await message.reply(_plain(text))
-        except Exception as e2:
-            print(f"[SOCIAL TEXT ERROR] /{command}: {type(e2).__name__}: {e2}", flush=True)
+        await message.reply(_plain(text))
