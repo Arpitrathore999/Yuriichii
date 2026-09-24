@@ -61,83 +61,37 @@ def _esc(v):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  RAW BOT API CALL — sendRichMessage
-# ══════════════════════════════════════════════════════════════════════════════
-
-async def _bot_api(method: str, payload: dict) -> dict:
-    """Call Telegram Bot API raw HTTP (for sendRichMessage etc.)."""
-    if not BOT_TOKEN:
-        return {"ok": False, "description": "BOT_TOKEN missing"}
-
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
-    data = json.dumps(payload).encode("utf-8")
-    req = Request(
-        url,
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-
-    def _do():
-        try:
-            with urlopen(req, timeout=20) as r:
-                return json.loads(r.read().decode("utf-8"))
-        except URLError as e:
-            return {"ok": False, "description": str(e)}
-        except Exception as e:
-            return {"ok": False, "description": str(e)}
-
-    return await asyncio.to_thread(_do)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  RICH MESSAGE HTML — OUTLAW X MUSIC EXACT STYLE
+#  START MESSAGE
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _rich_html(user) -> str:
     uid = getattr(user, "id", 0)
     name = _esc(getattr(user, "first_name", None) or "there")
-    bot = _esc(BOT_NAME)
+    bot_name = _esc(BOT_NAME)
 
-    support = _safe_url(SUPPORT_URL)
-    updates = _safe_url(UPDATES_URL)
+    return f"""❍ <b>ʜᴇʏ <a href="tg://user?id={uid}">{name}</a>, ᴡᴇʟᴄᴏᴍᴇ ᴀʙᴏᴀʀᴅ! 🎶</b>
 
-    # Rich message HTML — Telegram renders tables, collapsibles, pills
-    return f"""❍ ʜᴇʏ <a href="tg://user?id={uid}">{name}</a>, ᴡᴇʟᴄᴏᴍᴇ ᴀʙᴏᴀʀᴅ! 🎶
+ɪ ᴀᴍ <b>「 {bot_name} 」</b> — ᴀ ғᴀsᴛ &amp; ᴘᴏᴡᴇʀғᴜʟ
+<b>ᴀɪ ᴄᴏᴍᴘᴀɴɪᴏɴ ʙᴏᴛ</b> ᴡɪᴛʜ sᴏᴍᴇ ᴀᴡᴇsᴏᴍᴇ ғᴇᴀᴛᴜʀᴇs.
 
-ɪ ᴀᴍ <b>「 {bot} 」</b> — ᴀ ғᴀsᴛ &amp; ᴘᴏᴡᴇʀғᴜʟ ᴛᴇʟᴇɢʀᴀᴍ
-<b>ᴀɪ ᴄᴏᴍᴘᴀɴɪᴏɴ ʙᴏᴛ</b> ᴡɪᴛʜ sᴏᴍᴇ ᴀᴡᴇsᴏᴍᴇ
-ғᴇᴀᴛᴜʀᴇs.
+<b>✦ ᴋᴇʏ ғᴇᴀᴛᴜʀᴇs ✦</b>
 
-<details open><summary>✦ ᴋᴇʏ ғᴇᴀᴛᴜʀᴇs ✦</summary>
+🤖 <b>ᴀɪ ᴄʜᴀᴛ</b> — ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴs
+🧠 <b>ᴍᴇᴍᴏʀʏ</b> — ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ ғᴏʀ ʙᴇᴛᴛᴇʀ ʀᴇᴘʟɪᴇs
+💕 <b>sᴏᴄɪᴀʟ</b> — ғᴜɴ ɢʀᴏᴜᴘ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs
+⚡ <b>ғᴀsᴛ</b> — ǫᴜɪᴄᴋ ᴀɪ ʀᴇsᴘᴏɴsᴇs
 
-| ғᴇᴀᴛᴜʀᴇ | ᴅᴇᴛᴀɪʟs |
-|---|---|
-| 🤖 **ᴀɪ ᴄʜᴀᴛ** | ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴs ɪɴ ᴅᴍ &amp; ɢʀᴏᴜᴘs |
-| 🧠 **ᴍᴇᴍᴏʀʏ** | ᴋᴇᴇᴘs ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ ғᴏʀ ʙᴇᴛᴛᴇʀ ʀᴇᴘʟɪᴇs |
-| 💕 **sᴏᴄɪᴀʟ** | ғᴜɴ ɢʀᴏᴜᴘ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs ᴡɪᴛʜ ᴜsᴇʀs |
-| ⚡ **ғᴀsᴛ** | ǫᴜɪᴄᴋ ᴀɪ ʀᴇsᴘᴏɴsᴇs ᴘᴏᴡᴇʀᴇᴅ ʙʏ ɢʀᴏǫ |
-</details>
+<b>✧ ᴡʜʏ ᴄʜᴏᴏsᴇ ᴇʟᴀʀᴀ? ✧</b>
 
-<details open><summary>✧ ᴡʜʏ ᴄʜᴏᴏsᴇ ɪᴛ? ✧</summary>
+⭐ sɪᴍᴘʟᴇ sʟᴀsʜ ᴄᴏᴍᴍᴀɴᴅs
+🧠 sᴍᴀʀᴛ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴ
+❍ ᴄʟɪᴄᴋ <b>ʜᴇʟᴘ &amp; ᴄᴏᴍᴍᴀɴᴅs</b> ғᴏʀ ᴍᴏʀᴇ
 
-⭐ sɪᴍᴘʟᴇ sʟᴀsʜ ᴄᴏᴍᴍᴀɴᴅs, ɴᴏ sᴇᴛᴜᴘ ɴᴇᴇᴅᴇᴅ.
-🧠 sᴍᴀʀᴛ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴ ᴍᴇᴍᴏʀʏ.
-❍ ᴄʟɪᴄᴋ ʜᴇʟᴘ ʙᴇʟᴏᴡ ғᴏʀ ᴀʟʟ ᴄᴏᴍᴍᴀɴᴅs.
-</details>
+<blockquote>ᴘᴏᴡᴇʀᴇᴅ ʙʏ » <b>{bot_name}</b></blockquote>"""
 
-<blockquote>ᴘᴏᴡᴇʀᴇᴅ ʙʏ » <b>{bot}</b></blockquote>
-
-[🍬 sᴜᴘᴘᴏʀᴛ]({support}) · [🍹 ᴜᴘᴅᴀᴛᴇs]({updates})
-"""
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  KEYBOARD
-# ══════════════════════════════════════════════════════════════════════════════
 
 def _welcome_kb():
-    return InlineKeyboardMarkup([
+    rows = [
         [InlineKeyboardButton("⛩️ ᴀᴅᴅ ᴍᴇ ʙᴀʙʏ ⛩️", url=_safe_startgroup_url())],
         [
             InlineKeyboardButton("🍬 sᴜᴘᴘᴏʀᴛ 🍬", url=_safe_url(SUPPORT_URL)),
@@ -148,68 +102,35 @@ def _welcome_kb():
             InlineKeyboardButton("🫧 ᴏᴡɴᴇʀ 🫧", url=_owner_link()),
             InlineKeyboardButton("🍡 sᴏᴜʀᴄᴇ 🍡", callback_data="elara:about"),
         ],
-    ])
+    ]
+    return InlineKeyboardMarkup(rows)
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  SEND START MESSAGE
-# ══════════════════════════════════════════════════════════════════════════════
 
 async def _send_start(chat_id: int, user):
-    kb = _welcome_kb()
     html = _rich_html(user)
-
-    # Convert InlineKeyboardMarkup to dict for raw API
-    kb_dict = {
-        "inline_keyboard": [
-            [
-                {
-                    "text": b.text,
-                    **({"url": b.url} if b.url else {}),
-                    **({"callback_data": b.callback_data} if b.callback_data else {}),
-                }
-                for b in row
-            ]
-            for row in kb.inline_keyboard
-        ]
-    }
-
+    kb = _welcome_kb()
     image = START_IMAGE_URL.split(",")[0].strip() if START_IMAGE_URL else ""
 
-    # Try sendRichMessage first
-    payload = {
-        "chat_id": chat_id,
-        "rich_message": {"html": html},
-        "reply_markup": kb_dict,
-    }
-    if image:
-        payload["rich_message"]["photo_url"] = image
-
-    result = await _bot_api("sendRichMessage", payload)
-    if result.get("ok"):
-        return
-
-    print(f"[start] sendRichMessage failed: {result.get('description')}")
-
-    # Fallback: sendPhoto with caption
+    # Use Pyrogram directly. The old code called "sendRichMessage", which
+    # is not a standard Telegram Bot API method and caused /start to fail.
     if image:
         try:
             return await bot.send_photo(
-                chat_id,
+                chat_id=chat_id,
                 photo=image,
                 caption=html,
                 reply_markup=kb,
                 parse_mode=ParseMode.HTML,
             )
         except Exception as e:
-            print(f"[start] sendPhoto failed: {e}")
+            print(f"[start] send_photo failed, falling back to text: {e}")
 
-    # Last fallback: sendMessage
     return await bot.send_message(
-        chat_id,
-        html,
+        chat_id=chat_id,
+        text=html,
         reply_markup=kb,
         parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True,
     )
 
 
@@ -226,10 +147,22 @@ async def start_handler(_, message):
 
     try:
         await ensure_user(message.from_user)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[start] ensure_user failed: {e}")
 
-    await _send_start(message.chat.id, message.from_user)
+    try:
+        await _send_start(message.chat.id, message.from_user)
+    except Exception as e:
+        print(f"[start] send failed: {e}")
+        try:
+            await bot.send_message(
+                message.chat.id,
+                f"ʜᴇʏ <a href="tg://user?id={message.from_user.id}">{_esc(message.from_user.first_name or 'there')}</a>! 🌙\n\n"
+                f"「 <b>{_esc(BOT_NAME)}</b> 」 ɪs ᴏɴʟɪɴᴇ.\n\nᴛʀʏ /help",
+                parse_mode=ParseMode.HTML,
+            )
+        except Exception as fallback_error:
+            print(f"[start] final fallback failed: {fallback_error}")
 
 
 @bot.on_callback_query(filters.regex(r"^elara:help$"))
