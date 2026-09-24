@@ -1,153 +1,184 @@
 from pyrogram import filters
-from pyrogram.types import CallbackQuery
+from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from core.bot import app
 from database.users import ensure_user
-from utils.keyboards import start_keyboard, back_keyboard
 import config
 
 WELCOME = """
-🌙 <b>HEY, WELCOME TO ELARA</b> 🌙
+❍ <b>HEY {name}, WELCOME ABOARD! 🌙</b>
 
 I AM <b>ELARA</b> — YOUR AI COMPANION FOR
-CONVERSATIONS, CHAOS & LATE-NIGHT TALKS.
+CONVERSATIONS, CHAOS & LATE-NIGHT TALKS. ✨
 
-<i>“Real conversations. Random thoughts.
-Always here.”</i>
+<b>✦ KEY FEATURES ✦</b>
 
-✦ <b>KEY FEATURES</b> ✦
+┌──────────────────────────────┐
+│ 💬 <b>AI CHAT</b>              │
+│    Natural AI conversations  │
+├──────────────────────────────┤
+│ 🧠 <b>MEMORY</b>               │
+│    Remembers recent chats    │
+├──────────────────────────────┤
+│ 💕 <b>SOCIAL</b>               │
+│    Fun group interactions    │
+├──────────────────────────────┤
+│ ⚡ <b>FAST</b>                  │
+│    Quick AI responses        │
+└──────────────────────────────┘
 
-┌─────────────────────────────┐
-│ 💬 <b>AI CHAT</b>             │
-│    Natural conversations    │
-├─────────────────────────────┤
-│ 🧠 <b>MEMORY</b>              │
-│    Recent chat context      │
-├─────────────────────────────┤
-│ 👥 <b>SOCIAL</b>              │
-│    Fun interactions         │
-├─────────────────────────────┤
-│ ⚡ <b>FAST</b>                 │
-│    Quick AI responses       │
-└─────────────────────────────┘
-
-<b>TALK • CHAT • CONNECT • ALWAYS HERE</b>
+✦ <i>Just talk to Elara — no complicated setup.</i> ✦
 """
 
-ABOUT = """
-📖 <b>ABOUT ELARA</b>
+HELP_HOME = """
+📜 <b>ELARA HELP & COMMANDS</b>
 
-Elara is your AI companion for everyday
-conversations, random thoughts and late-night
-chats. 🌙
+❍ Choose a category below to view
+its commands and features.
 
-💬 Natural AI conversation
-🧠 Conversation memory
-💕 Social interaction commands
-⚡ Fast responses
+<b>🤖 AI</b>
+Chat with Elara and use her AI features.
 
-<i>Just talk to Elara. No complicated setup.</i>
+<b>💕 SOCIAL</b>
+Fun interactions with other members.
+
+<i>All social commands work by replying
+to the target user's message.</i>
 """
 
-HELP = """
-❓ <b>HELP & COMMANDS</b>
+AI_HELP = """
+🤖 <b>ELARA AI</b>
 
-🤖 <b>AI</b>
-/ai &lt;message&gt; — Chat with Elara
+<b>💬 CHAT</b>
+• Send a normal message in DM
+• <code>/ai hello</code> — direct AI chat
 
-💕 <b>SOCIAL</b>
-Reply to a user's message and use:
-/hug  /kiss  /bite  /slap
-/kick  /cuddle  /pat  /highfive
-/flirt  /love  /crush  /couple
-/propose  /marriage  /divorce
+<b>👥 GROUP CHAT</b>
+• <code>Elara hello</code>
+• <code>@BotUsername hello</code>
+• Reply to Elara's message
 
-💡 In groups you can also say:
-<code>Elara hello</code>
-or mention the bot.
-
-<b>Tip:</b> Social commands target the user
-you reply to.
+<b>🧠 MEMORY</b>
+Elara keeps recent conversation context
+for a more natural chat experience. 🌙
 """
 
-SOCIAL = """
+SOCIAL_HELP = """
 💕 <b>ELARA SOCIAL</b>
 
-🫂 /hug       💋 /kiss
-🧛 /bite      👋 /slap
-🦵 /kick      🫶 /cuddle
-🫳 /pat       ✋ /highfive
-😏 /flirt     ❤️ /love
-💘 /crush     💞 /couple
-💍 /propose   💒 /marriage
-💔 /divorce
+Reply to another user's message:
 
-<i>Reply to a user's message before using
-a targeted social command.</i>
+🫂 <code>/hug</code>      💋 <code>/kiss</code>
+🧛 <code>/bite</code>     👋 <code>/slap</code>
+🦵 <code>/kick</code>     🫶 <code>/cuddle</code>
+🫳 <code>/pat</code>      ✋ <code>/highfive</code>
+😏 <code>/flirt</code>    ❤️ <code>/love</code>
+💘 <code>/crush</code>    💞 <code>/couple</code>
+💍 <code>/propose</code>  💒 <code>/marriage</code>
+💔 <code>/divorce</code>
+
+<i>Tip: Reply first, then send the command.</i>
 """
 
-async def send_home(message, edit=False):
-    await ensure_user(message.from_user)
+def home_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "⛩️ ADD ME TO A GROUP ⛩️",
+                url=f"https://t.me/{config.BOT_USERNAME}?startgroup=true"
+                if config.BOT_USERNAME else "https://t.me/",
+            )
+        ],
+        [
+            InlineKeyboardButton("🍬 SUPPORT 🍬", url=config.SUPPORT_URL or "https://t.me/"),
+            InlineKeyboardButton("🍹 UPDATES 🍹", url=config.UPDATES_URL or "https://t.me/"),
+        ],
+        [
+            InlineKeyboardButton("🏩 HELP & COMMANDS 🏩", callback_data="elara_help"),
+        ],
+        [
+            InlineKeyboardButton("👑 OWNER", url=config.OWNER_URL or "https://t.me/"),
+            InlineKeyboardButton("🍡 SOURCE", url=config.SOURCE_URL or "https://t.me/"),
+        ],
+    ])
+
+def help_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🤖 AI", callback_data="elara_help_ai"),
+            InlineKeyboardButton("💕 SOCIAL", callback_data="elara_help_social"),
+        ],
+        [
+            InlineKeyboardButton("✦ CLOSE ✦", callback_data="elara_help_close"),
+        ],
+    ])
+
+def back_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅️ BACK TO HELP", callback_data="elara_help")]
+    ])
+
+def _text_name(user):
+    return (user.first_name or "there").replace("<", "").replace(">", "")
+
+async def _edit(query, text, markup):
+    try:
+        if query.message.caption is not None:
+            await query.message.edit_caption(text, reply_markup=markup)
+        else:
+            await query.message.edit_text(text, reply_markup=markup)
+    except Exception:
+        try:
+            await query.message.edit_text(text, reply_markup=markup)
+        except Exception:
+            pass
+
+@app.on_message(filters.command("start"))
+async def start(_, message):
+    if message.from_user:
+        await ensure_user(message.from_user)
+
+    name = _text_name(message.from_user)
+    text = WELCOME.format(name=name)
+
     if config.START_IMAGE_URL:
-        if edit:
-            try:
-                await message.edit_media(
-                    __import__("pyrogram").types.InputMediaPhoto(
-                        config.START_IMAGE_URL,
-                        caption=WELCOME
-                    ),
-                    reply_markup=start_keyboard()
-                )
-                return
-            except Exception:
-                pass
         try:
             await message.reply_photo(
                 config.START_IMAGE_URL,
-                caption=WELCOME,
-                reply_markup=start_keyboard()
+                caption=text,
+                reply_markup=home_keyboard(),
             )
             return
         except Exception:
             pass
 
-    if edit:
-        await message.edit_text(WELCOME, reply_markup=start_keyboard())
-    else:
-        await message.reply_text(WELCOME, reply_markup=start_keyboard())
+    await message.reply_text(text, reply_markup=home_keyboard())
 
-@app.on_message(filters.command("start"))
-async def start(_, message):
-    await send_home(message)
+@app.on_message(filters.command("help"))
+async def help_command(_, message):
+    await message.reply_text(HELP_HOME, reply_markup=help_keyboard())
 
-@app.on_callback_query(filters.regex(r"^elara:(home|about|help|social|chat)$"))
-async def start_callbacks(_, query: CallbackQuery):
-    action = query.data.split(":", 1)[1]
+@app.on_callback_query(filters.regex(r"^elara_help$"))
+async def help_home(_, query: CallbackQuery):
+    await query.answer()
+    await _edit(query, HELP_HOME, help_keyboard())
 
-    if action == "home":
-        await query.answer()
-        await query.message.edit_text(WELCOME, reply_markup=start_keyboard())
-        return
+@app.on_callback_query(filters.regex(r"^elara_help_ai$"))
+async def help_ai(_, query: CallbackQuery):
+    await query.answer()
+    await _edit(query, AI_HELP, back_keyboard())
 
-    if action == "about":
-        await query.answer()
-        await query.message.edit_text(ABOUT, reply_markup=back_keyboard())
-        return
+@app.on_callback_query(filters.regex(r"^elara_help_social$"))
+async def help_social(_, query: CallbackQuery):
+    await query.answer()
+    await _edit(query, SOCIAL_HELP, back_keyboard())
 
-    if action == "help":
-        await query.answer()
-        await query.message.edit_text(HELP, reply_markup=back_keyboard())
-        return
-
-    if action == "social":
-        await query.answer()
-        await query.message.edit_text(SOCIAL, reply_markup=back_keyboard())
-        return
-
-    if action == "chat":
-        await query.answer("Just send me a message 💬")
-        await query.message.edit_text(
-            "💬 <b>CHAT MODE</b>\n\n"
-            "Just send me a message and I'll reply. 🌙\n\n"
-            "You can talk normally — no command needed.",
-            reply_markup=back_keyboard()
-        )
+@app.on_callback_query(filters.regex(r"^elara_help_close$"))
+async def help_close(_, query: CallbackQuery):
+    await query.answer("Closed.")
+    try:
+        await query.message.delete()
+    except Exception:
+        try:
+            await _edit(query, "🌙 <b>Elara Help closed.</b>", home_keyboard())
+        except Exception:
+            pass
