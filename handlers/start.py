@@ -1,19 +1,16 @@
 # --------------------------------------------------------------------------------
 #  Elara AI Bot © 2026
-#  Rich UI Start — Music Bot Style (OUTLAW X MUSIC clone)
+#  Rich Message Start (OUTLAW X MUSIC style)
 # --------------------------------------------------------------------------------
 
 import asyncio
+import json
+from urllib.request import Request, urlopen
+from urllib.error import URLError
 
 from pyrogram import filters
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from pyrogram.enums import ParseMode
-from pyrogram.errors import FloodWait
-from pyrogram.types import (
-    CallbackQuery,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    Message,
-)
 
 import config
 from core.bot import app
@@ -25,6 +22,7 @@ bot = app
 # ─── Config ──────────────────────────────────────────────────────────────────
 BOT_NAME = getattr(config, "BOT_NAME", "Elara")
 BOT_USERNAME = (getattr(config, "BOT_USERNAME", "") or "").lstrip("@")
+BOT_TOKEN = getattr(config, "BOT_TOKEN", "")
 SUPPORT_URL = getattr(config, "SUPPORT_URL", "")
 UPDATES_URL = getattr(config, "UPDATES_URL", "")
 OWNER_URL = getattr(config, "OWNER_URL", "")
@@ -35,7 +33,7 @@ START_IMAGE_URL = (getattr(config, "START_IMAGE_URL", "") or "").strip()
 # ─── Safe URL helpers ────────────────────────────────────────────────────────
 _FALLBACK = "https://t.me/telegram"
 
-def _safe_url(u: str, fb: str = _FALLBACK) -> str:
+def _safe_url(u, fb=_FALLBACK):
     if not u or not isinstance(u, str):
         return fb
     u = u.strip()
@@ -45,17 +43,17 @@ def _safe_url(u: str, fb: str = _FALLBACK) -> str:
         return fb
     return u
 
-def _safe_user_url(uid) -> str:
+def _safe_user_url(uid):
     try:
         uid = int(uid)
         return f"tg://user?id={uid}" if uid > 0 else _FALLBACK
     except Exception:
         return _FALLBACK
 
-def _safe_startgroup_url() -> str:
+def _safe_startgroup_url():
     return f"https://t.me/{BOT_USERNAME}?startgroup=true" if BOT_USERNAME else _FALLBACK
 
-def _owner_link() -> str:
+def _owner_link():
     return _safe_url(OWNER_URL) if OWNER_URL else _safe_user_url(OWNER_ID)
 
 def _esc(v):
@@ -63,88 +61,82 @@ def _esc(v):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  RICH MESSAGE CAPTION  —  OUTLAW X MUSIC style
+#  RAW BOT API CALL — sendRichMessage
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _rich_welcome(user) -> str:
-    """
-    Rich HTML with <tg-table>, <tg-collapsible>, <tg-button-pill>.
-    Renders like the OUTLAW X MUSIC screenshots when Bot API supports it.
-    """
+async def _bot_api(method: str, payload: dict) -> dict:
+    """Call Telegram Bot API raw HTTP (for sendRichMessage etc.)."""
+    if not BOT_TOKEN:
+        return {"ok": False, "description": "BOT_TOKEN missing"}
+
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
+    data = json.dumps(payload).encode("utf-8")
+    req = Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    def _do():
+        try:
+            with urlopen(req, timeout=20) as r:
+                return json.loads(r.read().decode("utf-8"))
+        except URLError as e:
+            return {"ok": False, "description": str(e)}
+        except Exception as e:
+            return {"ok": False, "description": str(e)}
+
+    return await asyncio.to_thread(_do)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  RICH MESSAGE HTML — OUTLAW X MUSIC EXACT STYLE
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _rich_html(user) -> str:
     uid = getattr(user, "id", 0)
     name = _esc(getattr(user, "first_name", None) or "there")
     bot = _esc(BOT_NAME)
 
-    return f"""
-❍ ʜᴇʏ <a href="tg://user?id={uid}">{name}</a>, ᴡᴇʟᴄᴏᴍᴇ ᴀʙᴏᴀʀᴅ! 🎶
+    support = _safe_url(SUPPORT_URL)
+    updates = _safe_url(UPDATES_URL)
 
-ɪ ᴀᴍ <b>「 {bot} 」</b> — ᴀ ғᴀsᴛ &amp; ᴘᴏᴡᴇʀғᴜʟ
-ᴛᴇʟᴇɢʀᴀᴍ <b>ᴀɪ ᴄᴏᴍᴘᴀɴɪᴏɴ ʙᴏᴛ</b> ᴡɪᴛʜ sᴏᴍᴇ
-ᴀᴡᴇsᴏᴍᴇ ғᴇᴀᴛᴜʀᴇs.
+    # Rich message HTML — Telegram renders tables, collapsibles, pills
+    return f"""❍ ʜᴇʏ <a href="tg://user?id={uid}">{name}</a>, ᴡᴇʟᴄᴏᴍᴇ ᴀʙᴏᴀʀᴅ! 🎶
 
-<tg-collapsible open>
-<tg-title>✦ ᴋᴇʏ ғᴇᴀᴛᴜʀᴇs ✦</tg-title>
+ɪ ᴀᴍ <b>「 {bot} 」</b> — ᴀ ғᴀsᴛ &amp; ᴘᴏᴡᴇʀғᴜʟ ᴛᴇʟᴇɢʀᴀᴍ
+<b>ᴀɪ ᴄᴏᴍᴘᴀɴɪᴏɴ ʙᴏᴛ</b> ᴡɪᴛʜ sᴏᴍᴇ ᴀᴡᴇsᴏᴍᴇ
+ғᴇᴀᴛᴜʀᴇs.
 
-<tg-table>
-<tg-row><tg-cell>🤖 ᴀɪ ᴄʜᴀᴛ</tg-cell><tg-cell>ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴs ɪɴ ᴅᴍ &amp; ɢʀᴏᴜᴘs</tg-cell></tg-row>
-<tg-row><tg-cell>🧠 ᴍᴇᴍᴏʀʏ</tg-cell><tg-cell>ᴋᴇᴇᴘs ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ ғᴏʀ ʙᴇᴛᴛᴇʀ ʀᴇᴘʟɪᴇs</tg-cell></tg-row>
-<tg-row><tg-cell>💕 sᴏᴄɪᴀʟ</tg-cell><tg-cell>ғᴜɴ ɢʀᴏᴜᴘ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs — ʜᴜɢ, ᴋɪss, ᴍᴀʀʀɪᴀɢᴇ &amp; ᴍᴏʀᴇ</tg-cell></tg-row>
-<tg-row><tg-cell>⚡ ғᴀsᴛ</tg-cell><tg-cell>ǫᴜɪᴄᴋ ᴀɪ ʀᴇsᴘᴏɴsᴇs ᴘᴏᴡᴇʀᴇᴅ ʙʏ ɢʀᴏǫ</tg-cell></tg-row>
-</tg-table>
-</tg-collapsible>
+<details open><summary>✦ ᴋᴇʏ ғᴇᴀᴛᴜʀᴇs ✦</summary>
 
-<tg-collapsible open>
-<tg-title>✧ ᴡʜʏ ᴄʜᴏᴏsᴇ ɪᴛ? ✧</tg-title>
+| ғᴇᴀᴛᴜʀᴇ | ᴅᴇᴛᴀɪʟs |
+|---|---|
+| 🤖 **ᴀɪ ᴄʜᴀᴛ** | ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴs ɪɴ ᴅᴍ &amp; ɢʀᴏᴜᴘs |
+| 🧠 **ᴍᴇᴍᴏʀʏ** | ᴋᴇᴇᴘs ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ ғᴏʀ ʙᴇᴛᴛᴇʀ ʀᴇᴘʟɪᴇs |
+| 💕 **sᴏᴄɪᴀʟ** | ғᴜɴ ɢʀᴏᴜᴘ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs ᴡɪᴛʜ ᴜsᴇʀs |
+| ⚡ **ғᴀsᴛ** | ǫᴜɪᴄᴋ ᴀɪ ʀᴇsᴘᴏɴsᴇs ᴘᴏᴡᴇʀᴇᴅ ʙʏ ɢʀᴏǫ |
+</details>
 
-⭐ sɪᴍᴘʟᴇ sʟᴀsʜ ᴄᴏᴍᴍᴀɴᴅs, ɴᴏ sᴇᴛᴜᴘ ɴᴇᴇᴅᴇᴅ.
-🧠 sᴍᴀʀᴛ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴ ᴍᴇᴍᴏʀʏ.
-❍ ᴄʟɪᴄᴋ ʜᴇʟᴘ ʙᴇʟᴏᴡ ғᴏʀ ᴀʟʟ ᴄᴏᴍᴍᴀɴᴅs.
-</tg-collapsible>
-
-<tg-collapsible>
-<tg-title>ᴘᴏᴡᴇʀᴇᴅ ʙʏ » {bot}</tg-title>
-</tg-collapsible>
-
-<tg-button-pill url="{_safe_url(SUPPORT_URL)}" color="primary">🍬 sᴜᴘᴘᴏʀᴛ</tg-button-pill> <tg-button-pill url="{_safe_url(UPDATES_URL)}" color="success">🍹 ᴜᴘᴅᴀᴛᴇs</tg-button-pill>
-"""
-
-
-def _plain_welcome(user) -> str:
-    """Fallback plain HTML — agar rich tags render na ho."""
-    uid = getattr(user, "id", 0)
-    name = _esc(getattr(user, "first_name", None) or "there")
-    bot = _esc(BOT_NAME)
-
-    return f"""
-❍ ʜᴇʏ <a href="tg://user?id={uid}">{name}</a>, ᴡᴇʟᴄᴏᴍᴇ ᴀʙᴏᴀʀᴅ! 🎶
-
-ɪ ᴀᴍ <b>「 {bot} 」</b> — ᴀ ғᴀsᴛ &amp; ᴘᴏᴡᴇʀғᴜʟ
-ᴛᴇʟᴇɢʀᴀᴍ <b>ᴀɪ ᴄᴏᴍᴘᴀɴɪᴏɴ ʙᴏᴛ</b> ᴡɪᴛʜ sᴏᴍᴇ
-ᴀᴡᴇsᴏᴍᴇ ғᴇᴀᴛᴜʀᴇs.
-
-✦ <b>ᴋᴇʏ ғᴇᴀᴛᴜʀᴇs</b> ✦
-
-<code>┌──────────────────────────────┐
-│    ғᴇᴀᴛᴜʀᴇ      ᴅᴇᴛᴀɪʟs    │
-├──────────────────────────────┤
-│ 🤖 ᴀɪ ᴄʜᴀᴛ      ɴᴀᴛᴜʀᴀʟ   │
-│ 🧠 ᴍᴇᴍᴏʀʏ       ʀᴇᴄᴇɴᴛ    │
-│ 💕 sᴏᴄɪᴀʟ        ғᴜɴ      │
-│ ⚡ ғᴀsᴛ           ǫᴜɪᴄᴋ    │
-└──────────────────────────────┘</code>
-
-✧ <b>ᴡʜʏ ᴄʜᴏᴏsᴇ ɪᴛ?</b> ✧
+<details open><summary>✧ ᴡʜʏ ᴄʜᴏᴏsᴇ ɪᴛ? ✧</summary>
 
 ⭐ sɪᴍᴘʟᴇ sʟᴀsʜ ᴄᴏᴍᴍᴀɴᴅs, ɴᴏ sᴇᴛᴜᴘ ɴᴇᴇᴅᴇᴅ.
 🧠 sᴍᴀʀᴛ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴ ᴍᴇᴍᴏʀʏ.
 ❍ ᴄʟɪᴄᴋ ʜᴇʟᴘ ʙᴇʟᴏᴡ ғᴏʀ ᴀʟʟ ᴄᴏᴍᴍᴀɴᴅs.
+</details>
 
-<b>ᴘᴏᴡᴇʀᴇᴅ ʙʏ » {bot}</b>
+<blockquote>ᴘᴏᴡᴇʀᴇᴅ ʙʏ » <b>{bot}</b></blockquote>
+
+[🍬 sᴜᴘᴘᴏʀᴛ]({support}) · [🍹 ᴜᴘᴅᴀᴛᴇs]({updates})
 """
 
 
-# ─── Keyboard (7 buttons — same as OUTLAW X MUSIC) ────────────────────────────
-def _welcome_kb() -> InlineKeyboardMarkup:
+# ══════════════════════════════════════════════════════════════════════════════
+#  KEYBOARD
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _welcome_kb():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("⛩️ ᴀᴅᴅ ᴍᴇ ʙᴀʙʏ ⛩️", url=_safe_startgroup_url())],
         [
@@ -159,121 +151,63 @@ def _welcome_kb() -> InlineKeyboardMarkup:
     ])
 
 
-# ─── Help menus ──────────────────────────────────────────────────────────────
-_HELP_KB = InlineKeyboardMarkup([
-    [
-        InlineKeyboardButton("🤖 ᴀɪ", callback_data="elara:ai"),
-        InlineKeyboardButton("💕 sᴏᴄɪᴀʟ", callback_data="elara:social"),
-    ],
-    [InlineKeyboardButton("⌯ ʜᴏᴍᴇ ⌯", callback_data="elara:home")],
-])
-
-_BACK_KB = InlineKeyboardMarkup([
-    [InlineKeyboardButton("⬅️ ʙᴀᴄᴋ", callback_data="elara:help")],
-    [InlineKeyboardButton("⌯ ᴄʟᴏsᴇ ⌯", callback_data="elara:close")],
-])
-
-HELP_MENU = """📜 <b>ᴇʟᴀʀᴀ ʜᴇʟᴘ &amp; ᴄᴏᴍᴍᴀɴᴅs</b>
-
-❍ ᴄʜᴏᴏsᴇ ᴀ ᴄᴀᴛᴇɢᴏʀʏ ʙᴇʟᴏᴡ.
-
-<b>🤖 ᴀɪ</b> — ᴄʜᴀᴛ, ᴍᴇᴍᴏʀʏ, ɢʀᴏᴜᴘ ᴀɪ
-<b>💕 sᴏᴄɪᴀʟ</b> — ғᴜɴ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs
-"""
-
-AI_HELP = """🤖 <b>ᴇʟᴀʀᴀ ᴀɪ</b>
-
-<b>💬 ᴄʜᴀᴛ</b>
-• <code>/ai &lt;msg&gt;</code>
-• ɴᴏʀᴍᴀʟ ᴍᴇssᴀɢᴇ ɪɴ ᴅᴍ
-
-<b>👥 ɢʀᴏᴜᴘ</b>
-• <code>ᴇʟᴀʀᴀ ʜᴇʟʟᴏ</code>
-• <code>@BotUsername ʜɪ</code>
-• ʀᴇᴘʟʏ ᴛᴏ ᴇʟᴀʀᴀ
-
-<b>🧠 ᴍᴇᴍᴏʀʏ</b>
-ʀᴇᴄᴇɴᴛ ᴄᴏɴᴛᴇxᴛ ᴜsᴇᴅ ғᴏʀ ɴᴀᴛᴜʀᴀʟ ʀᴇᴘʟɪᴇs.
-"""
-
-SOCIAL_HELP = """💕 <b>ᴇʟᴀʀᴀ sᴏᴄɪᴀʟ</b>
-
-ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜsᴇʀ's ᴍᴇssᴀɢᴇ:
-
-🫂 <code>/hug</code>    💋 <code>/kiss</code>
-🧛 <code>/bite</code>   👋 <code>/slap</code>
-🦵 <code>/kick</code>   🫶 <code>/cuddle</code>
-🫳 <code>/pat</code>    ✋ <code>/highfive</code>
-😏 <code>/flirt</code>  ❤️ <code>/love</code>
-💘 <code>/crush</code>  💞 <code>/couple</code>
-💍 <code>/propose</code> 💒 <code>/marriage</code>
-💔 <code>/divorce</code>
-"""
-
-ABOUT = """📖 <b>ᴀʙᴏᴜᴛ ᴇʟᴀʀᴀ</b>
-
-ᴇʟᴀʀᴀ ɪs ʏᴏᴜʀ ᴀɪ ᴄᴏᴍᴘᴀɴɪᴏɴ ғᴏʀ ᴇᴠᴇʀʏᴅᴀʏ
-ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴs, ʀᴀɴᴅᴏᴍ ᴛʜᴏᴜɢʜᴛs ᴀɴᴅ
-ʟᴀᴛᴇ-ɴɪɢʜᴛ ᴄʜᴀᴛs. 🌙
-
-💬 ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴ
-🧠 ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴ ᴍᴇᴍᴏʀʏ
-💕 sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅs
-⚡ ғᴀsᴛ ʀᴇsᴘᴏɴsᴇs
-
-<i>ᴊᴜsᴛ ᴛᴀʟᴋ ᴛᴏ ᴇʟᴀʀᴀ.</i>
-"""
-
-
 # ══════════════════════════════════════════════════════════════════════════════
-#  SEND HELPERS
+#  SEND START MESSAGE
 # ══════════════════════════════════════════════════════════════════════════════
 
-async def _try_rich(chat_id: int, user, caption: str, kb):
-    """Try sending rich message first, fallback to plain."""
-    # Rich HTML version
-    rich_caption = _rich_welcome(user)
+async def _send_start(chat_id: int, user):
+    kb = _welcome_kb()
+    html = _rich_html(user)
+
+    # Convert InlineKeyboardMarkup to dict for raw API
+    kb_dict = {
+        "inline_keyboard": [
+            [
+                {
+                    "text": b.text,
+                    **({"url": b.url} if b.url else {}),
+                    **({"callback_data": b.callback_data} if b.callback_data else {}),
+                }
+                for b in row
+            ]
+            for row in kb.inline_keyboard
+        ]
+    }
+
     image = START_IMAGE_URL.split(",")[0].strip() if START_IMAGE_URL else ""
 
+    # Try sendRichMessage first
+    payload = {
+        "chat_id": chat_id,
+        "rich_message": {"html": html},
+        "reply_markup": kb_dict,
+    }
+    if image:
+        payload["rich_message"]["photo_url"] = image
+
+    result = await _bot_api("sendRichMessage", payload)
+    if result.get("ok"):
+        return
+
+    print(f"[start] sendRichMessage failed: {result.get('description')}")
+
+    # Fallback: sendPhoto with caption
     if image:
         try:
             return await bot.send_photo(
                 chat_id,
                 photo=image,
-                caption=rich_caption,
+                caption=html,
                 reply_markup=kb,
                 parse_mode=ParseMode.HTML,
             )
         except Exception as e:
-            print(f"[rich] photo failed: {e}")
+            print(f"[start] sendPhoto failed: {e}")
 
-    # Try plain text send (rich HTML will render as-is if unsupported)
-    try:
-        return await bot.send_message(
-            chat_id,
-            rich_caption,
-            reply_markup=kb,
-            parse_mode=ParseMode.HTML,
-        )
-    except Exception as e:
-        print(f"[rich] text failed: {e}")
-
-    # Last fallback: plain
-    if image:
-        try:
-            return await bot.send_photo(
-                chat_id,
-                photo=image,
-                caption=_plain_welcome(user),
-                reply_markup=kb,
-                parse_mode=ParseMode.HTML,
-            )
-        except Exception:
-            pass
-
+    # Last fallback: sendMessage
     return await bot.send_message(
         chat_id,
-        _plain_welcome(user),
+        html,
         reply_markup=kb,
         parse_mode=ParseMode.HTML,
     )
@@ -284,7 +218,7 @@ async def _try_rich(chat_id: int, user, caption: str, kb):
 # ══════════════════════════════════════════════════════════════════════════════
 
 @bot.on_message(filters.command("start"))
-async def start_handler(_, message: Message) -> None:
+async def start_handler(_, message):
     try:
         await message.delete()
     except Exception:
@@ -295,65 +229,14 @@ async def start_handler(_, message: Message) -> None:
     except Exception:
         pass
 
-    chat_id = message.chat.id
-
-    try:
-        await _try_rich(chat_id, message.from_user, _plain_welcome(message.from_user), _welcome_kb())
-    except FloodWait as fw:
-        await asyncio.sleep(fw.value + 1)
-        await _try_rich(chat_id, message.from_user, _plain_welcome(message.from_user), _welcome_kb())
+    await _send_start(message.chat.id, message.from_user)
 
 
-@bot.on_message(filters.command("help"))
-async def help_handler(_, message: Message) -> None:
-    try:
-        await message.delete()
-    except Exception:
-        pass
-    await bot.send_message(
-        message.chat.id, HELP_MENU,
-        reply_markup=_HELP_KB,
-        parse_mode=ParseMode.HTML,
-    )
+@bot.on_callback_query(filters.regex(r"^elara:help$"))
+async def help_cb(_, q: CallbackQuery):
+    await q.answer("Help coming soon!")
 
 
-@bot.on_callback_query(filters.regex(r"^elara:(home|help|about|social|ai|close)$"))
-async def cb(_, q: CallbackQuery) -> None:
-    d = q.data.split(":", 1)[1]
-
-    if d == "close":
-        await q.answer()
-        try:
-            await q.message.delete()
-        except Exception:
-            pass
-        return
-
-    if d == "home":
-        await q.answer()
-        try:
-            await q.message.delete()
-        except Exception:
-            pass
-        await _try_rich(q.message.chat.id, q.from_user, "", _welcome_kb())
-        return
-
-    if d == "help":
-        await q.answer()
-        await q.message.edit_text(HELP_MENU, reply_markup=_HELP_KB, parse_mode=ParseMode.HTML)
-        return
-
-    if d == "ai":
-        await q.answer()
-        await q.message.edit_text(AI_HELP, reply_markup=_BACK_KB, parse_mode=ParseMode.HTML)
-        return
-
-    if d == "social":
-        await q.answer()
-        await q.message.edit_text(SOCIAL_HELP, reply_markup=_BACK_KB, parse_mode=ParseMode.HTML)
-        return
-
-    if d == "about":
-        await q.answer()
-        await q.message.edit_text(ABOUT, reply_markup=_BACK_KB, parse_mode=ParseMode.HTML)
-        return
+@bot.on_callback_query(filters.regex(r"^elara:about$"))
+async def about_cb(_, q: CallbackQuery):
+    await q.answer("Elara AI Bot 🌙")
