@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from pyrogram import filters
+from pyrogram.enums import ParseMode
 from core.bot import app
 from utils.helpers import get_reply_target
 from modules.social.actions import action, get_gif_file_id
@@ -21,19 +22,19 @@ async def _send_media(message, media_path, caption):
     ext = Path(str(media_path)).suffix.lower()
 
     if ext == ".gif":
-        await message.reply_animation(animation=str(media_path), caption=caption, parse_mode="html")
+        await message.reply_animation(animation=str(media_path), caption=caption, parse_mode=ParseMode.HTML)
     elif ext == ".mp4":
-        await message.reply_video(video=str(media_path), caption=caption, parse_mode="html", supports_streaming=True)
+        await message.reply_video(video=str(media_path), caption=caption, parse_mode=ParseMode.HTML, supports_streaming=True)
     elif ext in {".jpg", ".jpeg", ".png", ".webp"}:
-        await message.reply_photo(photo=str(media_path), caption=caption, parse_mode="html")
+        await message.reply_photo(photo=str(media_path), caption=caption, parse_mode=ParseMode.HTML)
     elif ext == ".webm":
         # Telegram/Pyrogram may not accept WebM as a normal video in every setup.
-        await message.reply_document(document=str(media_path), caption=caption, parse_mode="html")
+        await message.reply_document(document=str(media_path), caption=caption, parse_mode=ParseMode.HTML)
     else:
         raise ValueError(f"Unsupported social media extension: {ext}")
 
 
-@app.on_message(filters.command(COMMANDS))
+@app.on_message(filters.command(COMMANDS, prefixes=["/", ".", "!", "#"]))
 async def social(_, message):
     command = (message.command[0] if message.command else "").lower().lstrip("/")
 
@@ -88,7 +89,7 @@ async def social(_, message):
                 print(f"[SOCIAL MEDIA PLAIN ERROR] /{command}: {type(e2).__name__}: {e2}", flush=True)
 
     try:
-        await message.reply(text, parse_mode="html")
+        await message.reply(text, parse_mode=ParseMode.HTML)
     except Exception as e:
         print(f"[SOCIAL TEXT HTML ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
         await message.reply(_plain(text))
