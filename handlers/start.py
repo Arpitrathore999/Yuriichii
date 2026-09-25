@@ -5,6 +5,8 @@
 
 import asyncio
 import json
+import io
+import re
 import os
 from urllib.request import Request, urlopen
 
@@ -34,11 +36,7 @@ SUPPORT_URL     = getattr(config, "SUPPORT_URL", "")
 UPDATES_URL     = getattr(config, "UPDATES_URL", "")
 OWNER_URL       = getattr(config, "OWNER_URL", "")
 OWNER_ID        = getattr(config, "OWNER_ID", 0)
-START_IMAGE_URL = (
-    getattr(config, "START_IMAGE_URL", "")
-    or os.getenv("START_IMAGE_URL", "")
-    or os.getenv("START_IMAGE_USL", "")
-).strip()
+START_IMAGE_URL = (getattr(config, "START_IMAGE_URL", "") or os.getenv("START_IMAGE_URL", "") or os.getenv("START_IMAGE_USL", "")).strip()
 
 
 # ─── Safe URL helpers ────────────────────────────────────────────────────────
@@ -333,12 +331,24 @@ async def _send_rich(chat_id, html, kb, image=None):
 
     if image:
         try:
+            # Telegram captions do not support the Rich Message <table>/<details> HTML.
+            # Keep the existing rich message untouched; only the fallback caption is sanitized.
+            plain_caption = re.sub(r"<[^>]+>", "", html).strip()
             return await bot.send_photo(
-                chat_id, photo=image, caption=html,
-                reply_markup=kb, parse_mode=ParseMode.HTML,
+                chat_id, photo=image, caption=plain_caption,
+                reply_markup=kb, parse_mode=None,
             )
         except Exception:
-            pass
+            # If Telegram cannot fetch the configured URL directly, download it first.
+            try:
+                req = Request(image, headers={"User-Agent": "Mozilla/5.0"})
+                data = await asyncio.to_thread(lambda: urlopen(req, timeout=20).read())
+                return await bot.send_photo(
+                    chat_id, photo=io.BytesIO(data), caption=plain_caption,
+                    reply_markup=kb, parse_mode=None,
+                )
+            except Exception as e:
+                print(f"[start] image fallback failed: {e}")
 
     return await bot.send_message(
         chat_id, html, reply_markup=kb, parse_mode=ParseMode.HTML,
