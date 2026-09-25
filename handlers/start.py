@@ -6,6 +6,7 @@
 import asyncio
 import json
 import io
+import re
 from urllib.request import Request, urlopen
 
 from pyrogram import enums, filters
@@ -328,31 +329,25 @@ async def _send_rich(chat_id, html, kb, image=None):
     print(f"[rich] failed: {result.get('description')}")
 
     if image:
-        # First try Telegram fetching the URL directly.
         try:
+            # Telegram captions do not support the Rich Message <table>/<details> HTML.
+            # Keep the existing rich message untouched; only the fallback caption is sanitized.
+            plain_caption = re.sub(r"<[^>]+>", "", html).strip()
             return await bot.send_photo(
-                chat_id, photo=image, caption=html,
-                reply_markup=kb, parse_mode=ParseMode.HTML,
+                chat_id, photo=image, caption=plain_caption,
+                reply_markup=kb, parse_mode=None,
             )
-        except Exception as e:
-            print(f"[start] direct photo URL failed: {e}", flush=True)
-
-        # If Telegram cannot fetch the URL itself (CDN/web-page/redirect issue),
-        # download it from Railway and upload the actual bytes to Telegram.
-        try:
-            req = Request(image, headers={"User-Agent": "Mozilla/5.0"})
-            with urlopen(req, timeout=20) as r:
-                data = r.read()
-                content_type = (r.headers.get("Content-Type") or "").lower()
-            if data and (content_type.startswith("image/") or len(data) > 100):
-                photo = io.BytesIO(data)
-                photo.name = "elara_start.jpg"
+        except Exception:
+            # If Telegram cannot fetch the configured URL directly, download it first.
+            try:
+                req = Request(image, headers={"User-Agent": "Mozilla/5.0"})
+                data = await asyncio.to_thread(lambda: urlopen(req, timeout=20).read())
                 return await bot.send_photo(
-                    chat_id, photo=photo, caption=html,
-                    reply_markup=kb, parse_mode=ParseMode.HTML,
+                    chat_id, photo=io.BytesIO(data), caption=plain_caption,
+                    reply_markup=kb, parse_mode=None,
                 )
-        except Exception as e:
-            print(f"[start] downloaded photo upload failed: {e}", flush=True)
+            except Exception as e:
+                print(f"[start] image fallback failed: {e}")
 
     return await bot.send_message(
         chat_id, html, reply_markup=kb, parse_mode=ParseMode.HTML,
