@@ -13,7 +13,8 @@ def mention(user):
     user_id = getattr(user, "id", None)
     name = getattr(user, "first_name", None) or getattr(user, "username", None) or "Someone"
     name = str(name).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    return f'<a href="tg://user?id={user_id}">{name}</a>' if user_id else name
+    # Telegram HTML mention: the visible name is clickable and resolves to the real user ID.
+    return f'<a href="tg://user?id={int(user_id)}">{name}</a>' if user_id else name
 
 
 def render_caption(template, a, b):
