@@ -1,87 +1,92 @@
 from database.mongo import social_settings
 
-DEFAULT_CAPTIONS = {
-    "hug": [
-        "🫂 <b>{a} finally got the hug they were begging {b} for!</b> 😭",
-        "💀 <b>Plot twist: {a} attacked {b} with a hug!</b> 🫂❤️",
-        "🥺 <b>{a} hugged {b} like rent was due tomorrow.</b> 🫂",
-    ],
-    "kiss": [
-        "💋 <b>{a} stole a kiss from {b} and ran away!</b> 😭",
-        "👀 <b>Someone's getting suspiciously romantic… {a} → {b}</b> 💋",
-        "💀 <b>{a} kissed {b}. No witnesses. Probably.</b> 💋",
-    ],
-    "bite": [
-        "🧛 <b>{a} just decided {b} looked delicious.</b> 😭",
-        "🦷 <b>{a} launched a surprise bite attack on {b}!</b> 💀",
-        "😈 <b>{b} should've run… {a} was hungry.</b> 🩸",
-    ],
-    "slap": [
-        "💀 <b>{a} slapped {b} back to reality.</b> 👋",
-        "😭 <b>{b} really thought {a} would let that slide.</b> 👋",
-        "🔥 <b>Critical hit! {a} just humbled {b}.</b> 💀",
-    ],
-    "kick": [
-        "🚀 <b>{a} sent {b} on a free trip to the moon.</b> 💀",
-        "🦵 <b>{b} has officially been kicked out of {a}'s patience.</b> 😭",
-        "💀 <b>And there goes {b}… flying at 120 km/h.</b> 🦵",
-    ],
-    "cuddle": [
-        "🫂 <b>{a} kidnapped {b} for mandatory cuddles.</b> 😭",
-        "🥹 <b>No escaping. {a} has locked {b} in the cuddle zone.</b> 🫂",
-        "💀 <b>{a} + {b} = professional cuddle criminals.</b> 🫂",
-    ],
-    "pat": [
-        "😭 <b>{a} patted {b} like a well-behaved little gremlin.</b> 🫳",
-        "🥹 <b>Good job, {b}. Here's your emotional-support pat.</b> 🫳",
-        "🫳 <b>{a}: “Who's my favorite idiot?” — {b}: 😭❤️</b>",
-    ],
-    "highfive": [
-        "✋ <b>{a} and {b} just hit a perfect high five!</b> 🔥",
-        "🙌 <b>{a} high-fived {b} like they just won the finals.</b> 😭",
-        "🔥 <b>That high five had more chemistry than most couples.</b> ✋",
-
-    ],
-    "flirt": [
-        "😏 <b>{a} is flirting with {b} like there isn't a whole group watching.</b> 👀",
-        "🚨 <b>{b}, careful… {a} is dangerously smooth today.</b> 😏🔥",
-        "👀 <b>Warning: {a} has entered flirt mode. {b} is the target.</b> ❤️",
-    ],
-    "love": [
-        "😭❤️ <b>{a} and {b} are giving everyone else trust issues.</b>",
-        "👀 <b>The chemistry between {a} and {b} is getting suspicious.</b> 💕",
-        "💀 <b>{a} ❤️ {b} — somebody check the wedding calendar.</b>",
-    ],
-    "crush": [
-        "👀 <b>{a} has a crush on {b}. Pretend you didn't see this.</b> 💘",
-        "😭 <b>Breaking news: {a}'s heart belongs to {b}.</b> 💘",
-        "💀 <b>{a} looked at {b} once and forgot how to act.</b> ❤️",
-    ],
-    "couple": [
-        "💀 <b>{a} and {b} are giving suspiciously strong couple vibes.</b> 💕",
-        "👀 <b>Everyone saw it. {a} × {b} is a thing now.</b> 💞",
-        "😭 <b>{a} + {b} = the duo nobody asked for but everyone ships.</b> ❤️",
-
-    ],
-    "propose": [
-        "💍 <b>{a} just dropped the biggest question on {b}.</b> 😭❤️",
-        "👀 <b>{a} got down on one knee for {b}. This is getting serious.</b> 💍",
-        "💀 <b>{a} proposed to {b}. Someone hide the wedding planner.</b> 💒",
-
-    ],
-    "marriage": [
-        "💒 <b>{a} and {b} really said “let’s make it official.”</b> 😭❤️",
-        "💍 <b>Congratulations! {a} and {b} are officially stuck together.</b> 💀",
-        "🥂 <b>{a} × {b} — somehow this wedding actually happened.</b> 💒",
-
-    ],
-    "divorce": [
-        "💀 <b>{a} and {b} have officially left the group chat… emotionally.</b> 💔",
-        "😭 <b>It was fun while it lasted. {a} × {b} is officially over.</b> 🥀",
-        "🚨 <b>Breaking news: {a} filed for freedom from {b}.</b> 💀💔",
-
-    ],
-}
+DEFAULT_CAPTIONS = {'hug': ['🫂 <b>{a} ᴊᴜsᴛ ʜᴜɢs {b} ᴛɪɢʜᴛʟʏ...</b>\n<i>"Yeah... you\'re not escaping this one. 😏❤️"</i>',
+         '🫂 <b>A ʟɪᴛᴛʟᴇ ʜᴜɢ? Nᴏᴘᴇ. {a} ɪs ɴᴏᴛ ʟᴇᴛᴛɪɴɢ ɢᴏ ᴏғ {b}. 🥰💕</b>\n<i>"Stay right here."</i>',
+         '🤗 <b>{a} ᴊᴜsᴛ ғᴏᴜɴᴅ ᴛʜᴇ ᴘᴇʀғᴇᴄᴛ ᴇxᴄᴜsᴇ ᴛᴏ ʜᴏʟᴅ {b} ᴄʟᴏsᴇ. 🫶🏻</b>'],
+ 'kiss': ['💋 <b>Oᴏᴘs... {a} ᴊᴜsᴛ sᴛᴏʟᴇ ᴀ ᴋɪss ғʀᴏᴍ {b}.</b>\n'
+          '<i>"Don\'t look at me like that... you\'ll make me do it again. 😘"</i>',
+          '😘 <b>Tʜᴀᴛ ᴡᴀs sᴜᴘᴘᴏsᴇᴅ ᴛᴏ ʙᴇ ᴀ ǫᴜɪᴄᴋ ᴋɪss...</b>\n<i>"Well, that didn\'t go as planned. 🤭❤️"</i>',
+          '💋 <b>{a} ᴊᴜsᴛ ʟᴇғᴛ {b} ᴡɪᴛʜ ᴀ ᴋɪss ᴀɴᴅ ᴀ ʟᴏᴛ ᴏғ ǫᴜᴇsᴛɪᴏɴs. 😏</b>'],
+ 'bite': ['😲 <b>{a} ᴊᴜsᴛ ʙɪᴛ {b}... ᴀɴᴅ ᴅɪᴅɴ\'ᴛ ᴇᴠᴇɴ ᴀᴘᴏʟᴏɢɪᴢᴇ.</b>\n<i>"You looked too tempting. 🤭"</i>',
+          '🧛 <b>{b} ᴡᴀs ᴊᴜsᴛ ᴍɪɴᴅɪɴɢ ᴛʜᴇɪʀ ᴏᴡɴ ʙᴜsɪɴᴇss...</b>\n<i>Then {a} happened. 😭</i>',
+          '😏 <b>Wᴀʀɴɪɴɢ: {a} ʜᴀs ᴅᴇᴠᴇʟᴏᴘᴇᴅ {b} ʟᴏᴏᴋs ᴛᴏᴏ ᴛᴀsᴛʏ. 🫦</b>'],
+ 'slap': ['👋 <b>{b} ᴊᴜsᴛ ʀᴇᴄᴇɪᴠᴇᴅ ᴀ ʟɪᴛᴛʟᴇ ʀᴇᴀʟɪᴛʏ ᴄʜᴇᴄᴋ ғʀᴏᴍ {a}. 💥</b>',
+          '👋 <b>{a} sᴀɪᴅ "ᴡᴀᴋᴇ ᴜᴘ."</b>\n<i>{b} ᴜɴᴅᴇʀsᴛᴏᴏᴅ ᴛʜɪs ᴛɪᴍᴇ. 😭</i>',
+          '💥 <b>Sʟᴏᴡ ᴅᴏᴡɴ. Nᴏ ʀᴇғᴜɴᴅs.</b>'],
+ 'kick': ['🦵 <b>{a} ᴊᴜsᴛ sᴇɴᴛ {b} ᴏɴ ᴀ ᴏɴᴇ-ᴡᴀʏ ᴛʀɪᴘ ᴛᴏ ᴛʜᴇ ғʟᴏᴏʀ. 🚀😭</b>',
+          '💥 <b>{b} ᴡᴀs ᴛᴏᴏ ᴄʟᴏsᴇ... {a} ғɪxᴇᴅ ᴛʜᴀᴛ.</b>',
+          '🦵 <b>Kɪᴄᴋ!</b>\n<i>"Nothing personal, babe. 😭❤️"</i>'],
+ 'cuddle': ['🫶 <b>{a} ᴊᴜsᴛ ᴄʟᴀɪᴍᴇᴅ {b} ғᴏʀ ᴀ ᴄᴜᴅᴅʟᴇ.</b>\n'
+            '<i>"Come here... you\'re mine for the next few hours. 🫶🏻"</i>',
+            '🧸 <b>Cᴜᴅᴅʟᴇ ᴍᴏᴅᴇ: Aᴄᴛɪᴠᴀᴛᴇᴅ. 💕</b>\n<i>{a} × {b} = ᴛᴏᴏ ᴄᴜᴛᴇ.</i>',
+            '🤗 <b>Nᴏ ᴡᴏʀᴅs. Jᴜsᴛ {a} ᴀɴᴅ {b} ᴇɴᴊᴏʏɪɴɢ ᴛʜᴇ ᴍᴏᴍᴇɴᴛ. 🫂</b>'],
+ 'pat': ['🫳 <b>{a} ɢᴇɴᴛʟʏ ᴘᴀᴛᴛᴇᴅ {b}\'s ʜᴇᴀᴅ. 🥰💕</b>\n<i>"Good job, cutie."</i>',
+         '🐾 <b>Pᴀᴛ ᴘᴀᴛ...</b>\n<i>{a} ʜᴀs ᴅᴇᴄɪᴅᴇᴅ {b} ɪs ᴛᴏᴏ ᴄᴜᴛᴇ ᴛᴏ ʟᴇᴀᴠᴇ ᴀʟᴏɴᴇ. 🤭</i>',
+         "🫶🏻 <b>{a}'s ᴘᴀᴛᴛɪɴɢ ʜᴀs ᴜɴʟᴏᴄᴋᴇᴅ ᴘʀᴇᴍɪᴜᴍ ᴄᴜᴛᴇɴᴇss. ✨</b>"],
+ 'highfive': ['✋ <b>{a} ʜɪɢʜ-ғɪᴠᴇs {b} ʟɪᴋᴇ ᴛʜᴇʏ ᴊᴜsᴛ ᴡᴏɴ ᴛʜᴇ ʟᴏᴛᴛᴇʀʏ. 🔥</b>',
+              '✋💥 <b>Hɪɢʜ ғɪᴠᴇ!</b>\n<i>Tʜᴀᴛ sʟᴀᴘ ᴡᴀs ʟᴏᴜᴅᴇʀ ᴛʜᴀɴ ᴛʜᴇɪʀ ᴄʜᴀᴛ. 😂</i>',
+              '✨ <b>{a} + {b} = ᴅᴀɴɢᴇʀᴏᴜs ɢᴏᴏᴅ ᴛᴇᴀᴍᴡᴏʀᴋ. 🤝❤️</b>'],
+ 'flirt': ['😏 <b>{a} ᴊᴜsᴛ ᴅʀᴏᴘᴘᴇᴅ sᴏᴍᴇ sᴇʀɪᴏᴜs ғʟɪʀᴛ ᴏɴ {b}.</b>\n'
+           '<i>"Are you always this attractive, or is today special? 👀❤️"</i>',
+           '👀 <b>{a} ᴡᴀs ʟᴏᴏᴋɪɴɢ ᴀᴛ {b}...</b>\n<i>"Why are you making it so hard to behave? 😏"</i>',
+           "💘 <b>Fʟɪʀᴛɪɴɢ ᴡɪᴛʜ {b} ʜᴀs ʙᴇᴇɴ ᴀᴅᴅᴇᴅ ᴛᴏ {a}'s ᴅᴀɪʟʏ sᴄʜᴇᴅᴜʟᴇ. 😌</b>"],
+ 'love': ['❤️ <b>Lᴏᴠᴇ Cʜᴇᴄᴋ</b> ❤️\n'
+          '<b>{a} × {b}</b>\n'
+          '💕 <b>Cᴏᴍᴘᴀᴛɪʙɪʟɪᴛʏ: {pct}%</b>\n'
+          '<i>"Okay... this is getting suspiciously romantic. 👀💗"</i>',
+          '💗 <b>Hᴇᴀʀᴛ Sʏɴᴄ Cᴏᴍᴘʟᴇᴛᴇᴅ</b>\n'
+          '<b>{a} ❤️ {b}</b>\n'
+          '✨ <b>Mᴀᴛᴄʜ: {pct}%</b>\n'
+          '<i>"The chemistry is doing a little too much. 😏"</i>',
+          '💞 <b>Lᴏᴠᴇ Aʟᴇʀᴛ!</b>\n'
+          '<b>{a} + {b} = {pct}%</b>\n'
+          '<i>"Someone\'s heart is definitely acting suspicious. 🤭❤️"</i>'],
+ 'crush': ['💘 <b>Sᴇᴄʀᴇᴛ Cʀᴜsʜ Dᴇᴛᴇᴄᴛᴇᴅ... 👀</b>\n'
+           "<b>{a}'s sᴇᴄʀᴇᴛ ᴄʀᴜsʜ ɪs {b}!</b> 💕\n"
+           '💘 <b>Cʀᴜsʜ Lᴇᴠᴇʟ: {pct}%</b>\n'
+           '<i>"Don\'t tell them... this is supposed to be a secret. 🤫❤️"</i>',
+           "👀 <b>Wᴇ ᴊᴜsᴛ ᴜɴᴄᴏᴠᴇʀᴇᴅ {a}'s sᴇᴄʀᴇᴛ...</b>\n"
+           "💗 <b>Iᴛ's {b}!</b>\n"
+           '✨ <b>Cʀᴜsʜ Pᴏᴡᴇʀ: {pct}%</b>\n'
+           '<i>"Your secret is out. Oops. 🤭"</i>',
+           '💌 <b>Sᴇᴄʀᴇᴛ ᴄʀᴜsʜ ᴘᴇɴᴅɪɴɢ ғᴏʀ {a}...</b>\n'
+           '💞 <b>{b}</b>\n'
+           '💘 <b>Hᴇᴀʀᴛ ʟᴇᴠᴇʟ: {pct}%</b>\n'
+           '<i>"The heart knows something the brain doesn\'t. 😏❤️"</i>'],
+ 'couple': ["💞 <b>Tᴏᴅᴀʏ's Cᴜᴛᴇsᴛ Cᴏᴜᴘʟᴇ</b> 💞\n"
+            '<b>{a} × {b}</b>\n'
+            '💘 <b>Mᴀᴛᴄʜ: {pct}%</b>\n'
+            '<i>"Okay... someone explain this chemistry. 👀❤️"</i>',
+            '💗 <b>Cᴏᴜᴘʟᴇ Aʟᴇʀᴛ!</b>\n'
+            '<b>{a} 💕 {b}</b>\n'
+            '✨ <b>Lᴏᴠᴇ Sʏɴᴄ: {pct}%</b>\n'
+            '<i>"This pairing is dangerously cute. 🤭"</i>',
+            '💘 <b>Rᴀɴᴅᴏᴍ Cᴏᴜᴘʟᴇ Sᴇʟᴇᴄᴛᴇᴅ!</b>\n'
+            '<b>{a} ❤️ {b}</b>\n'
+            '💞 <b>Cʜᴇᴍɪsᴛʀʏ: {pct}%</b>\n'
+            '<i>"The GC did not see this coming. 😏"</i>'],
+ 'propose': ['💍 <b>Wᴀɪᴛ... Tʜɪs ɪs Sᴇʀɪᴏᴜs. 😳</b>\n'
+             '<b>{a}</b> ᴊᴜsᴛ ɢᴏᴛ ᴅᴏᴡɴ ᴏɴ ᴏɴᴇ ᴋɴᴇᴇ ғᴏʀ <b>{b}</b>. 💍\n'
+             '<i>"I don\'t need forever... just say yes to me. 💍🫶"</i>',
+             '💍 <b>Sᴏᴍᴇᴏɴᴇ Jᴜsᴛ Gᴏᴛ Bʀᴀᴠᴇ... 😭❤️</b>\n<b>{a} → {b}</b>\n<i>"Will you be mine? 👉👈💗"</i>',
+             '🥹 <b>Tʜᴇ Bɪɢ Qᴜᴇsᴛɪᴏɴ ɪs Hᴇʀᴇ...</b>\n'
+             '<b>{a} ᴡᴀɴᴛs {b} ᴛᴏ sᴀʏ ʏᴇs ᴡɪᴛʜ ғᴏʀᴇᴠᴇʀ. 💍</b>\n'
+             '<i>"One little yes could change everything. ❤️"</i>'],
+ 'marriage': ['💒 <b>Wᴇʟʟ... Tʜᴇʏ ᴀᴄᴛᴜᴀʟʟʏ ᴅɪᴅ ɪᴛ. 😳❤️</b>\n'
+              '<b>{a} × {b}</b>\n'
+              '💍 <b>Oғғɪᴄɪᴀʟʟʏ Mᴀʀʀɪᴇᴅ. 💞</b>\n'
+              '<i>"From one little yes... to forever. 🥹💗"</i>',
+              "💍 <b>Iᴛ's Oғғɪᴄɪᴀʟ!</b>\n"
+              '<b>{a} ❤️ {b}</b>\n'
+              '💒 <b>Mᴀʀʀɪᴇᴅ!</b>\n'
+              '<i>"The GC has a new power couple. 😎💕"</i>',
+              '🥂 <b>Mᴀʀʀɪᴀɢᴇ Cᴏɴғɪʀᴍᴇᴅ!</b>\n<b>{a} & {b}</b> 💞\n<i>"Two hearts, one beautiful mess. 😭❤️"</i>'],
+ 'divorce': ['💔 <b>Sᴏ... Tʜɪs Is Rᴇᴀʟʟʏ Hᴀᴘᴘᴇɴɪɴɢ? 🥺</b>\n'
+             '<b>{a} × {b}</b>\n'
+             '<i>"Some stories don\'t get their forever... 💔"</i>\n'
+             '💔 <b>Mᴀʀʀɪᴀɢᴇ Eɴᴅᴇᴅ</b>',
+             '🥺 <b>Tʜᴇ Fᴏʀᴇᴠᴇʀ Pʟᴀɴ ʜᴀs ᴇɴᴅᴇᴅ...</b>\n<b>{a} 💔 {b}</b>\n<i>"And just like that, it\'s over. 😭"</i>',
+             '💔 <b>Dɪᴠᴏʀᴄᴇ Fɪʟᴇᴅ... ᴀɴᴅ Aᴘᴘʀᴏᴠᴇᴅ. 🥺</b>\n<b>{a} ≠ {b}</b>\n<i>"Love story status: archived. 😭"</i>']}
 
 COMMANDS = tuple(DEFAULT_CAPTIONS)
 
