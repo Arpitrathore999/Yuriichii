@@ -32,3 +32,52 @@ async def get_social_data(command):
     except Exception as e:
         print(f"[SOCIAL SETTINGS ERROR] /{command}: {type(e).__name__}: {e}",flush=True)
         return fallback
+
+
+# Legacy admin compatibility. Social media itself is now loaded from assets/social/<command>.
+async def add_gif(command, file_id):
+    col = _col()
+    if col is None:
+        return False
+    try:
+        await col.update_one({"_id": command}, {"$addToSet": {"gifs": file_id}}, upsert=True)
+        return True
+    except Exception as e:
+        print(f"[SOCIAL ADD GIF ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
+        return False
+
+
+async def add_caption(command, caption):
+    col = _col()
+    if col is None:
+        return False
+    try:
+        await col.update_one({"_id": command}, {"$addToSet": {"custom_captions": caption}}, upsert=True)
+        return True
+    except Exception as e:
+        print(f"[SOCIAL ADD CAPTION ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
+        return False
+
+
+async def clear_gifs(command):
+    col = _col()
+    if col is None:
+        return False
+    try:
+        await col.update_one({"_id": command}, {"$set": {"gifs": []}}, upsert=True)
+        return True
+    except Exception as e:
+        print(f"[SOCIAL CLEAR GIF ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
+        return False
+
+
+async def clear_captions(command):
+    col = _col()
+    if col is None:
+        return False
+    try:
+        await col.update_one({"_id": command}, {"$set": {"custom_captions": []}}, upsert=True)
+        return True
+    except Exception as e:
+        print(f"[SOCIAL CLEAR CAPTION ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
+        return False

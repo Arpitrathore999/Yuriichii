@@ -62,14 +62,8 @@ async def get_gif_file_id(command):
     if local_media:
         return local_media
 
-    # Backward-compatible DB/file-id fallback.
-    try:
-        data = await get_social_data(command)
-        gifs = data.get("gifs") or []
-        return random.choice(gifs) if gifs else None
-    except Exception as e:
-        print(f"[SOCIAL GIF DB ERROR] /{command}: {type(e).__name__}: {e}", flush=True)
-        return None
+    # Manual assets are the only media source now.
+    return None
 
 
 async def action(message, command, target):
