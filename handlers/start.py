@@ -5,6 +5,7 @@
 
 import asyncio
 import json
+import io
 from urllib.request import Request, urlopen
 
 from pyrogram import enums, filters
@@ -327,13 +328,31 @@ async def _send_rich(chat_id, html, kb, image=None):
     print(f"[rich] failed: {result.get('description')}")
 
     if image:
+        # First try Telegram fetching the URL directly.
         try:
             return await bot.send_photo(
                 chat_id, photo=image, caption=html,
                 reply_markup=kb, parse_mode=ParseMode.HTML,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[start] direct photo URL failed: {e}", flush=True)
+
+        # If Telegram cannot fetch the URL itself (CDN/web-page/redirect issue),
+        # download it from Railway and upload the actual bytes to Telegram.
+        try:
+            req = Request(image, headers={"User-Agent": "Mozilla/5.0"})
+            with urlopen(req, timeout=20) as r:
+                data = r.read()
+                content_type = (r.headers.get("Content-Type") or "").lower()
+            if data and (content_type.startswith("image/") or len(data) > 100):
+                photo = io.BytesIO(data)
+                photo.name = "elara_start.jpg"
+                return await bot.send_photo(
+                    chat_id, photo=photo, caption=html,
+                    reply_markup=kb, parse_mode=ParseMode.HTML,
+                )
+        except Exception as e:
+            print(f"[start] downloaded photo upload failed: {e}", flush=True)
 
     return await bot.send_message(
         chat_id, html, reply_markup=kb, parse_mode=ParseMode.HTML,
