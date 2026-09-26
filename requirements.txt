@@ -5,3 +5,4 @@ python-dotenv
 psutil
 groq
 speedtest-cli
+aiohttp
