@@ -9,7 +9,7 @@ from pyrogram import filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 try:
-    from ShizuMusic import bot as app
+    from core.bot import app
 except Exception:
     app = None
 
@@ -31,7 +31,7 @@ try:
 except Exception:
     _mongo = _db = _rel_col = None
 
-ASSET_ROOT = Path(__file__).resolve().parent.parent / "assets" / "social_gifs"
+ASSET_ROOT = Path(__file__).resolve().parent.parent / "assets" / "social"
 
 # ---------- Clean Captions ----------
 CAPTIONS = {
