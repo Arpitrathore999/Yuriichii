@@ -1,9 +1,8 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  handlers/ping.py — Music Bot style /ping (screenshot exact)
+#  handlers/ping.py — Native Rich Message ping (kurigram)
 # --------------------------------------------------------------------------------
 
-import asyncio
 import os
 import time
 from datetime import timedelta
@@ -11,32 +10,32 @@ from datetime import timedelta
 import psutil
 import speedtest
 from pyrogram import filters
-from pyrogram.enums import ParseMode
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 import config
 from core.bot import app
 
+from utils.rich_ui import (
+    rich_esc,
+    rich_heading,
+    rich_img,
+    rich_kv_table,
+    rich_send,
+    rich_edit,
+    rich_note,
+)
+
 BOT_START_TIME = time.time()
 
 
-def _esc(v) -> str:
-    return (
-        str(v or "")
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
-
-
-def _support_markup():
-    url = (getattr(config, "SUPPORT_URL", "") or "").strip()
+def supp_markup():
+    url = (getattr(config, "SUPPORT_GROUP", None)
+           or getattr(config, "SUPPORT_URL", ""))
     if not url:
         return None
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton(text="🎀 sᴜᴘᴘᴏʀᴛ 🎀", url=url)]
-    ])
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(text="🎀 sᴜᴘᴘᴏʀᴛ 🎀", url=url),
+    ]])
 
 
 # ── /ping ──────────────────────────────────────────────────────────────────────
@@ -44,94 +43,57 @@ def _support_markup():
 @app.on_message(filters.command("ping"))
 async def ping_cmd(client, message: Message):
     chat_id = message.chat.id
+    start   = time.perf_counter()
 
-    # ✅ Proper latency measure (get_me se)
-    t1 = time.perf_counter()
+    # Latency measure
     try:
         await client.get_me()
     except Exception:
         pass
-    bot_latency = round((time.perf_counter() - t1) * 1000)
-    if bot_latency == 0:
-        bot_latency = 1
+    latency = max(1, round((time.perf_counter() - start) * 1000))
 
-    # API latency
-    t2 = time.perf_counter()
-    try:
-        await client.send_chat_action(chat_id, "typing")
-    except Exception:
-        pass
-    api_latency = round((time.perf_counter() - t2) * 1000)
+    uptime  = str(timedelta(seconds=int(time.time() - BOT_START_TIME)))
 
-    # uptime
-    up = int(time.time() - BOT_START_TIME)
-    uptime_full = str(timedelta(seconds=up))
-    d, h, m = up // 86400, (up % 86400) // 3600, (up % 3600) // 60
-    uptime_short = (f"{d}d " if d else "") + (f"{h}h " if h else "") + f"{m}m"
+    try:    cpu = psutil.cpu_percent(interval=0.5)
+    except: cpu = 0
 
-    # stats
-    try:
-        cpu = psutil.cpu_percent(interval=0.2)
-    except Exception:
-        cpu = 0
     try:
         ram = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
-    except Exception:
+    except:
         ram = 0
+
     try:
         disk = psutil.disk_usage("/")
         disk_str = (
-            f"{disk.used // (1024 ** 3)}GB / "
-            f"{disk.total // (1024 ** 3)}GB "
+            f"{disk.used // (1024**3)}GB / "
+            f"{disk.total // (1024**3)}GB "
             f"({disk.percent}%)"
         )
-    except Exception:
+    except:
         disk_str = "N/A"
 
-    pytgc = "N/A"
+    pytg = "N/A"
 
     bot_name    = getattr(config, "BOT_NAME", "Elara")
-    support_url = getattr(config, "SUPPORT_URL", "")
-    img_url     = (getattr(config, "PING_IMG_URL", "") or "").strip()
+    support_url = (getattr(config, "SUPPORT_GROUP", None)
+                   or getattr(config, "SUPPORT_URL", ""))
+    img_url     = getattr(config, "PING_IMG_URL", "")
 
-    # ── Caption EXACT screenshot format
+    # ── Rich HTML build (kurigram render karega)
     caption = (
-        f"🏓 <b>ᴘᴏɴɢ : {bot_latency}ms</b>\n"
-        f"<blockquote expandable>"
-        f"<b>ᴜᴘᴛɪᴍᴇ :</b> <code>{_esc(uptime_full)}</code>\n"
-        f"<b>ʀᴀᴍ :</b> <code>{ram:.2f} MB</code>\n"
-        f"<b>ᴄᴘᴜ :</b> <code>{cpu}%</code>\n"
-        f"<b>ᴅɪsᴋ :</b> <code>{_esc(disk_str)}</code>\n"
-        f"<b>ᴘʏᴛɢᴄ :</b> <code>{pytgc}</code>"
-        f"</blockquote>\n"
-        f'❍ ʙʏ » <a href="{support_url}">{_esc(bot_name)}</a>'
+        rich_heading(f"🏓 ᴘᴏɴɢ : {latency}ms", level=3)
+        + rich_img(img_url)
+        + rich_kv_table([
+            ("ᴜᴘᴛɪᴍᴇ", f"<code>{rich_esc(uptime)}</code>"),
+            ("ʀᴀᴍ",    f"<code>{ram:.2f} MB</code>"),
+            ("ᴄᴘᴜ",    f"<code>{cpu}%</code>"),
+            ("ᴅɪsᴋ",   f"<code>{rich_esc(disk_str)}</code>"),
+            ("ᴘʏᴛɢᴄ",  f"<code>{pytg}</code>"),
+        ])
+        + f'❍ ʙʏ » <a href="{support_url}">{rich_esc(bot_name)}</a>'
     )
 
-    # ── Send photo if URL exists, else text
-    if img_url:
-        try:
-            return await client.send_photo(
-                chat_id,
-                photo=img_url,
-                caption=caption,
-                parse_mode=ParseMode.HTML,
-                reply_markup=_support_markup(),
-            )
-        except Exception as e:
-            # Image fail → text bhej + error log
-            print(f"[PING] Image send failed: {e}")
-
-    # Fallback text-only
-    try:
-        return await client.send_message(
-            chat_id,
-            caption,
-            parse_mode=ParseMode.HTML,
-            reply_markup=_support_markup(),
-            disable_web_page_preview=True,
-        )
-    except Exception as e:
-        print(f"[PING] Send failed: {e}")
+    await rich_send(client, chat_id, caption, reply_markup=supp_markup())
 
 
 # ── /speedtest ─────────────────────────────────────────────────────────────────
@@ -142,63 +104,68 @@ def _run_speedtest():
         st.get_best_server()
         st.download()
         st.upload()
-        try:
-            st.results.share()
-        except Exception:
-            pass
+        st.results.share()
         return st.results.dict()
     except Exception:
         return None
 
 
-@app.on_message(filters.command(["speedtest", "spt"]) & filters.user(config.OWNER_ID))
+@app.on_message(
+    filters.command(["speedtest", "spt"]) & filters.user(config.OWNER_ID)
+)
 async def speedtest_cmd(client, message: Message):
-    status = await message.reply("❍ sᴛᴀʀᴛɪɴɢ sᴘᴇᴇᴅᴛᴇsᴛ...")
+    chat_id = message.chat.id
+    m = await rich_send(
+        client, chat_id,
+        rich_heading("❍ sᴛᴀʀᴛɪɴɢ sᴘᴇᴇᴅ ᴛᴇsᴛ, ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ...", level=3)
+    )
 
-    loop = asyncio.get_running_loop()
+    import asyncio
+    loop   = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, _run_speedtest)
 
-    if not result:
-        return await status.edit("❍ sᴘᴇᴇᴅᴛᴇsᴛ ғᴀɪʟᴇᴅ")
+    if result is None:
+        return await rich_edit(m, rich_heading("❍ sᴘᴇᴇᴅᴛᴇsᴛ ғᴀɪʟᴇᴅ", level=3))
 
-    dl = result.get("download", 0) / 1_000_000
-    ul = result.get("upload", 0) / 1_000_000
-    pg = result.get("ping", 0)
-    ci = result.get("client", {}) or {}
-    si = result.get("server", {}) or {}
-    share = result.get("share")
+    download = result["download"] / 1_000_000
+    upload   = result["upload"]   / 1_000_000
+    ping     = result["ping"]
+    isp      = result["client"]["isp"]
+    country  = result["client"]["country"]
+    server   = result["server"]["name"]
+    sponsor  = result["server"]["sponsor"]
+    s_cc     = result["server"]["cc"]
+    s_lat    = result["server"]["latency"]
+    share    = result["share"]
 
-    text = (
-        "⚡ <b>sᴘᴇᴇᴅᴛᴇsᴛ ʀᴇsᴜʟᴛs</b>\n"
-        f"<blockquote expandable>"
-        f"<b>ɪsᴘ :</b> <code>{_esc(ci.get('isp','N/A'))}</code>\n"
-        f"<b>ᴄᴏᴜɴᴛʀʏ :</b> <code>{_esc(ci.get('country','N/A'))}</code>\n"
-        f"<b>sᴇʀᴠᴇʀ :</b> <code>{_esc(si.get('name','N/A'))}</code>\n"
-        f"<b>sᴘᴏɴsᴏʀ :</b> <code>{_esc(si.get('sponsor','N/A'))}</code>\n"
-        f"<b>ʟᴀᴛᴇɴᴄʏ :</b> <code>{si.get('latency','N/A')} ms</code>\n"
-        f"<b>ᴘɪɴɢ :</b> <code>{pg:.2f} ms</code>\n"
-        f"<b>ᴅᴏᴡɴʟᴏᴀᴅ :</b> <code>{dl:.2f} Mbps</code>\n"
-        f"<b>ᴜᴘʟᴏᴀᴅ :</b> <code>{ul:.2f} Mbps</code>"
-        f"</blockquote>"
+    support_url = (getattr(config, "SUPPORT_GROUP", None)
+                   or getattr(config, "SUPPORT_URL", ""))
+    bot_name    = getattr(config, "BOT_NAME", "Elara")
+
+    caption = (
+        rich_heading("⚡ sᴘᴇᴇᴅᴛᴇsᴛ ʀᴇsᴜʟᴛs", level=3)
+        + rich_img(share)
+        + rich_kv_table([
+            ("ɪsᴘ",     f"<code>{rich_esc(isp)}</code>"),
+            ("ᴄᴏᴜɴᴛʀʏ", f"<code>{rich_esc(country)}</code>"),
+        ], headers=["ᴄʟɪᴇɴᴛ ɪɴғᴏ", ""])
+        + rich_kv_table([
+            ("ɴᴀᴍᴇ",    f"<code>{rich_esc(server)}</code>"),
+            ("sᴘᴏɴsᴏʀ", f"<code>{rich_esc(sponsor)}</code>"),
+            ("ᴄᴏᴜɴᴛʀʏ", f"<code>{rich_esc(s_cc)}</code>"),
+            ("ʟᴀᴛᴇɴᴄʏ", f"<code>{s_lat} ms</code>"),
+        ], headers=["sᴇʀᴠᴇʀ ɪɴғᴏ", ""])
+        + rich_kv_table([
+            ("ᴘɪɴɢ",     f"<code>{ping:.2f} ms</code>"),
+            ("ᴅᴏᴡɴʟᴏᴀᴅ", f"<code>{download:.2f} Mbps</code>"),
+            ("ᴜᴘʟᴏᴀᴅ",   f"<code>{upload:.2f} Mbps</code>"),
+        ], headers=["sᴘᴇᴇᴅ", ""])
+        + f'❍ ʙʏ » <a href="{support_url}">{rich_esc(bot_name)}</a>'
     )
 
     try:
-        await status.delete()
+        await m.delete()
     except Exception:
         pass
 
-    if share:
-        try:
-            return await client.send_photo(
-                message.chat.id, share, caption=text,
-                parse_mode=ParseMode.HTML, reply_markup=_support_markup()
-            )
-        except Exception:
-            pass
-
-    await client.send_message(
-        message.chat.id, text,
-        parse_mode=ParseMode.HTML,
-        reply_markup=_support_markup(),
-        disable_web_page_preview=True,
-    )
+    await rich_send(client, chat_id, caption, reply_markup=supp_markup())
