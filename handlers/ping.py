@@ -1,16 +1,18 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  handlers/ping.py — Music Bot style /ping & /speedtest
-#  Compatible with: pyrogram, Yuriichii, psutil, speedtest-cli
+#  handlers/ping.py — Premium PING with dynamic image + rich blockquote
 # --------------------------------------------------------------------------------
 
 import asyncio
 import os
 import time
 from datetime import timedelta
+from io import BytesIO
 
+import aiohttp
 import psutil
 import speedtest
+from PIL import Image, ImageDraw, ImageFont
 from pyrogram import filters
 from pyrogram.enums import ParseMode
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -20,79 +22,153 @@ from core.bot import app
 
 BOT_START_TIME = time.time()
 
+# ⚙️ Config (apne config.py me daal dena)
+BOT_NAME       = getattr(config, "BOT_NAME", "ELARA MUSIC")
+SUPPORT_URL    = getattr(config, "SUPPORT_URL", "https://t.me/YourSupport")
+PING_IMG_URL   = getattr(config, "PING_IMG_URL", "")   # background image URL
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _esc(value) -> str:
-    value = str(value or "")
+def _esc(v) -> str:
     return (
-        value.replace("&", "&amp;")
-             .replace("<", "&lt;")
-             .replace(">", "&gt;")
-             .replace('"', "&quot;")
+        str(v or "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
     )
 
 
 def _support_markup():
-    url = (getattr(config, "SUPPORT_URL", "") or "").strip()
-    if not url:
+    if not SUPPORT_URL:
         return None
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(text="🍬 sᴜᴘᴘᴏʀᴛ 🍬", url=url)]
+        [InlineKeyboardButton(text="🎀 sᴜᴘᴘᴏʀᴛ 🎀", url=SUPPORT_URL)]
     ])
+
+
+# ── Image Generator (PONG card) ────────────────────────────────────────────────
+
+def _generate_ping_image(latency, api_latency, uptime, bg_url=None):
+    """Screenshot jaisi PONG image banata hai."""
+    W, H = 900, 500
+
+    # Base background
+    if bg_url:
+        try:
+            import urllib.request
+            with urllib.request.urlopen(bg_url, timeout=10) as r:
+                bg = Image.open(BytesIO(r.read())).convert("RGBA")
+                bg = bg.resize((W, H))
+        except Exception:
+            bg = Image.new("RGBA", (W, H), (18, 10, 30, 255))
+    else:
+        bg = Image.new("RGBA", (W, H), (18, 10, 30, 255))
+
+    draw = ImageDraw.Draw(bg)
+
+    # Dark overlay
+    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 90))
+    bg = Image.alpha_composite(bg, overlay)
+    draw = ImageDraw.Draw(bg)
+
+    # Neon border
+    draw.rounded_rectangle(
+        [(10, 10), (W - 10, H - 10)],
+        radius=35, outline=(255, 105, 180, 255), width=5
+    )
+
+    # Fonts
+    try:
+        f_big   = ImageFont.truetype("arialbd.ttf", 90)
+        f_med   = ImageFont.truetype("arialbd.ttf", 30)
+        f_small = ImageFont.truetype("arial.ttf", 26)
+    except Exception:
+        f_big = f_med = f_small = ImageFont.load_default()
+
+    # PONG title
+    draw.text((60, 70), "PONG", font=f_big, fill=(255, 105, 180, 255))
+
+    # Stats lines
+    lines = [
+        ("⚡ Bot Latency", f"{latency} ms"),
+        ("🛰 API Latency", f"{api_latency} ms"),
+        ("⏱ Uptime",      uptime),
+    ]
+    y = 230
+    for label, value in lines:
+        draw.rounded_rectangle(
+            [(60, y), (500, y + 45)],
+            radius=12, fill=(40, 20, 60, 220)
+        )
+        draw.text((80, y + 8),  label, font=f_small, fill=(230, 230, 230))
+        draw.text((320, y + 8), value, font=f_small, fill=(255, 105, 180))
+        y += 60
+
+    # Footer
+    draw.text((60, 440), "Always Online 💗", font=f_small, fill=(255, 182, 220))
+    draw.text((640, 445), BOT_NAME, font=f_small, fill=(180, 180, 255))
+
+    out = BytesIO()
+    out.name = "ping.jpg"
+    bg.convert("RGB").save(out, "JPEG", quality=90)
+    out.seek(0)
+    return out
 
 
 # ── /ping ──────────────────────────────────────────────────────────────────────
 
 @app.on_message(filters.command("ping"))
-async def ping_cmd(client, message: Message) -> None:
+async def ping_cmd(client, message: Message):
     chat_id = message.chat.id
     started = time.perf_counter()
 
-    # Bot name
+    # Loading
     try:
-        me = await client.get_me()
-        bot_name = me.first_name or getattr(config, "BOT_NAME", "Elara")
-    except Exception:
-        bot_name = getattr(config, "BOT_NAME", "Elara")
-
-    # Loading message
-    try:
-        loading = await message.reply(
-            f"❍ <b>{_esc(bot_name)}</b> ɪs ᴘɪɴɢɪɴɢ...",
-            parse_mode=ParseMode.HTML,
-        )
+        loading = await message.reply("🏓 <b>ᴘɪɴɢɪɴɢ...</b>", parse_mode=ParseMode.HTML)
     except Exception:
         loading = None
 
-    latency = round((time.perf_counter() - started) * 1000)
-    uptime  = str(timedelta(seconds=max(0, int(time.time() - BOT_START_TIME))))
+    # Bot latency
+    bot_latency = round((time.perf_counter() - started) * 1000)
 
-    # CPU
+    # API latency (get_me round trip)
+    api_start = time.perf_counter()
     try:
-        cpu = psutil.cpu_percent(interval=0.15)
+        await client.get_me()
+    except Exception:
+        pass
+    api_latency = round((time.perf_counter() - api_start) * 1000)
+
+    # Uptime
+    uptime_sec = int(time.time() - BOT_START_TIME)
+    uptime_str = str(timedelta(seconds=uptime_sec))
+    # Short format: 2d 14h 36m
+    d = uptime_sec // 86400
+    h = (uptime_sec % 86400) // 3600
+    m = (uptime_sec % 3600) // 60
+    uptime_short = (f"{d}d " if d else "") + (f"{h}h " if h else "") + f"{m}m"
+
+    # Stats
+    try:
+        cpu = psutil.cpu_percent(interval=0.2)
     except Exception:
         cpu = 0
 
-    # RAM
     try:
-        process = psutil.Process(os.getpid())
-        ram = process.memory_info().rss / 1024 / 1024
+        proc = psutil.Process(os.getpid())
+        ram = proc.memory_info().rss / 1024 / 1024
     except Exception:
         ram = 0
 
-    # Disk
     try:
         disk = psutil.disk_usage("/")
-        disk_str = (
-            f"{disk.used / (1024 ** 3):.1f}GB / "
-            f"{disk.total / (1024 ** 3):.1f}GB ({disk.percent}%)"
-        )
+        disk_str = f"{disk.used // (1024**3)}GB / {disk.total // (1024**3)}GB ({disk.percent}%)"
     except Exception:
         disk_str = "N/A"
 
-    # PyTgCalls (Yuriichii me alag assistant nahi hota)
-    pytgcalls = "N/A"
+    pytgc = "N/A"  # Yuriichii
 
     # Delete loading
     if loading:
@@ -101,55 +177,42 @@ async def ping_cmd(client, message: Message) -> None:
         except Exception:
             pass
 
-    support_url = _esc(getattr(config, "SUPPORT_URL", ""))
-    image_url   = (getattr(config, "PING_IMAGE_URL", "") or "").strip()
+    # Generate image in executor
+    loop = asyncio.get_running_loop()
+    img = await loop.run_in_executor(
+        None, _generate_ping_image,
+        bot_latency, api_latency, uptime_short, PING_IMG_URL
+    )
 
+    # Caption with rich blockquote (Telegram expandable quote)
     caption = (
-        f"🏓 <b>ᴘᴏɴɢ : {latency}ms</b>\n\n"
-        f"<b>ᴜᴘᴛɪᴍᴇ</b> : <code>{_esc(uptime)}</code>\n"
+        f"🏓 <b>ᴘᴏɴɢ : {bot_latency}ms</b>\n\n"
+        f"<blockquote expandable>"
+        f"<b>ᴜᴘᴛɪᴍᴇ</b> : <code>{_esc(uptime_str)}</code>\n"
         f"<b>ʀᴀᴍ</b> : <code>{ram:.2f} MB</code>\n"
         f"<b>ᴄᴘᴜ</b> : <code>{cpu}%</code>\n"
         f"<b>ᴅɪsᴋ</b> : <code>{_esc(disk_str)}</code>\n"
-        f"<b>ᴘʏᴛɢᴄ</b> : <code>{pytgcalls}</code>\n\n"
+        f"<b>ᴘʏᴛɢᴄ</b> : <code>{pytgc}</code>"
+        f"</blockquote>\n\n"
+        f"❍ ʙʏ » <a href=\"{SUPPORT_URL}\">{_esc(BOT_NAME)}</a>"
     )
 
-    if support_url:
-        caption += f'❍ ʙʏ » <a href="{support_url}">{_esc(bot_name)}</a>'
-    else:
-        caption += f"❍ ʙʏ » {_esc(bot_name)}"
-
-    markup = _support_markup()
-
-    # Image ke saath bhejne ki koshish, fail ho toh text
-    if image_url:
-        try:
-            return await client.send_photo(
-                chat_id,
-                photo=image_url,
-                caption=caption,
-                parse_mode=ParseMode.HTML,
-                reply_markup=markup,
-            )
-        except Exception:
-            pass
-
     try:
-        return await client.send_message(
+        await client.send_photo(
             chat_id,
-            caption,
+            photo=img,
+            caption=caption,
             parse_mode=ParseMode.HTML,
-            reply_markup=markup,
+            reply_markup=_support_markup(),
+        )
+    except Exception:
+        # Fallback text-only
+        await client.send_message(
+            chat_id, caption,
+            parse_mode=ParseMode.HTML,
+            reply_markup=_support_markup(),
             disable_web_page_preview=True,
         )
-    except Exception as exc:
-        # Final fallback
-        try:
-            await message.reply(
-                f"🏓 <b>Pong!</b>\n<code>{_esc(type(exc).__name__)}</code>",
-                parse_mode=ParseMode.HTML,
-            )
-        except Exception:
-            pass
 
 
 # ── /speedtest ─────────────────────────────────────────────────────────────────
@@ -169,39 +232,35 @@ def _run_speedtest():
         return None
 
 
-@app.on_message(
-    filters.command(["speedtest", "spt"]) & filters.user(config.OWNER_ID)
-)
-async def speedtest_cmd(client, message: Message) -> None:
-    status = await message.reply(
-        "❍ sᴛᴀʀᴛɪɴɢ sᴘᴇᴇᴅ ᴛᴇsᴛ, ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ..."
-    )
+@app.on_message(filters.command(["speedtest", "spt"]) & filters.user(config.OWNER_ID))
+async def speedtest_cmd(client, message: Message):
+    status = await message.reply("❍ sᴛᴀʀᴛɪɴɢ sᴘᴇᴇᴅᴛᴇsᴛ...")
 
-    loop   = asyncio.get_running_loop()
+    loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(None, _run_speedtest)
 
     if not result:
-        return await status.edit(
-            "❍ sᴘᴇᴇᴅᴛᴇsᴛ ғᴀɪʟᴇᴅ, ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ"
-        )
+        return await status.edit("❍ sᴘᴇᴇᴅᴛᴇsᴛ ғᴀɪʟᴇᴅ")
 
-    download     = result.get("download", 0) / 1_000_000
-    upload       = result.get("upload", 0) / 1_000_000
-    ping         = result.get("ping", 0)
-    client_info  = result.get("client", {}) or {}
-    server_info  = result.get("server", {}) or {}
-    share        = result.get("share")
+    download = result.get("download", 0) / 1_000_000
+    upload   = result.get("upload", 0) / 1_000_000
+    ping     = result.get("ping", 0)
+    cinfo    = result.get("client", {}) or {}
+    sinfo    = result.get("server", {}) or {}
+    share    = result.get("share")
 
     text = (
         "⚡ <b>sᴘᴇᴇᴅᴛᴇsᴛ ʀᴇsᴜʟᴛs</b>\n\n"
-        f"<b>ɪsᴘ</b> : <code>{_esc(client_info.get('isp', 'N/A'))}</code>\n"
-        f"<b>ᴄᴏᴜɴᴛʀʏ</b> : <code>{_esc(client_info.get('country', 'N/A'))}</code>\n\n"
-        f"<b>sᴇʀᴠᴇʀ</b> : <code>{_esc(server_info.get('name', 'N/A'))}</code>\n"
-        f"<b>sᴘᴏɴsᴏʀ</b> : <code>{_esc(server_info.get('sponsor', 'N/A'))}</code>\n"
-        f"<b>ʟᴀᴛᴇɴᴄʏ</b> : <code>{server_info.get('latency', 'N/A')} ms</code>\n\n"
+        f"<blockquote expandable>"
+        f"<b>ɪsᴘ</b> : <code>{_esc(cinfo.get('isp','N/A'))}</code>\n"
+        f"<b>ᴄᴏᴜɴᴛʀʏ</b> : <code>{_esc(cinfo.get('country','N/A'))}</code>\n\n"
+        f"<b>sᴇʀᴠᴇʀ</b> : <code>{_esc(sinfo.get('name','N/A'))}</code>\n"
+        f"<b>sᴘᴏɴsᴏʀ</b> : <code>{_esc(sinfo.get('sponsor','N/A'))}</code>\n"
+        f"<b>ʟᴀᴛᴇɴᴄʏ</b> : <code>{sinfo.get('latency','N/A')} ms</code>\n\n"
         f"<b>ᴘɪɴɢ</b> : <code>{ping:.2f} ms</code>\n"
         f"<b>ᴅᴏᴡɴʟᴏᴀᴅ</b> : <code>{download:.2f} Mbps</code>\n"
         f"<b>ᴜᴘʟᴏᴀᴅ</b> : <code>{upload:.2f} Mbps</code>"
+        f"</blockquote>"
     )
 
     try:
@@ -212,18 +271,14 @@ async def speedtest_cmd(client, message: Message) -> None:
     if share:
         try:
             return await client.send_photo(
-                message.chat.id,
-                share,
-                caption=text,
-                parse_mode=ParseMode.HTML,
-                reply_markup=_support_markup(),
+                message.chat.id, share, caption=text,
+                parse_mode=ParseMode.HTML, reply_markup=_support_markup()
             )
         except Exception:
             pass
 
     await client.send_message(
-        message.chat.id,
-        text,
+        message.chat.id, text,
         parse_mode=ParseMode.HTML,
         reply_markup=_support_markup(),
         disable_web_page_preview=True,
