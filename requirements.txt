@@ -3,3 +3,5 @@ tgcrypto
 motor
 python-dotenv
 groq
+psutil
+speedtest-cli
