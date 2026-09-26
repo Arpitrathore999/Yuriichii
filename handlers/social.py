@@ -8,7 +8,7 @@ from modules.social.actions import action, get_gif_file_id
 from modules.social.settings import DEFAULT_CAPTIONS
 
 COMMANDS = [
-    "hug", "kiss", "bite", "slap", "kick", "cuddle", "pat", "highfive",
+    "hug", "kiss", "bite", "slap", "punch", "cuddle", "pat", "highfive",
     "flirt", "love", "crush", "couple", "propose", "marriage", "divorce"
 ]
 
