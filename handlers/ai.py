@@ -6,7 +6,7 @@ from database.users import ensure_user
 from modules.ai.companion import chat
 
 SOCIAL_COMMANDS = [
-    "hug", "kiss", "bite", "slap", "kick", "cuddle", "pat", "highfive",
+    "hug", "kiss", "bite", "slap", "punch", "cuddle", "pat", "highfive",
     "flirt", "love", "crush", "couple", "propose", "marriage", "divorce"
 ]
 
