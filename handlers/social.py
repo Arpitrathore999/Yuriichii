@@ -365,7 +365,7 @@ if app:
             await _edit_proposal_message(cq, "💔 <b>Proposal Rejected.</b>")
         await cq.answer()
 
-    @app.on_message(filters.command(*COMMANDS))
+    @app.on_message(filters.command(COMMANDS))
     async def social_dispatch(client, message):
         cmd = (message.command or [""])[0].lower()
         if cmd == "crush":
