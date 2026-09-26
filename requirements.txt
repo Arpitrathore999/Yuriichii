@@ -2,6 +2,5 @@ kurigram
 tgcrypto
 motor
 python-dotenv
-groq
+groqspeedtest-cli
 psutil
-speedtest-cli
