@@ -11,9 +11,9 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from core.bot import app
 
 try:
-    from config import MONGO_DB_URI
+    from config import MONGO_URI
 except Exception:
-    MONGO_DB_URI = None
+    MONGO_URI = None
 
 # ---------- Storage ----------
 _relationships = {}
@@ -22,7 +22,7 @@ PENDING_TTL = 600      # 10 minutes
 
 try:
     from motor.motor_asyncio import AsyncIOMotorClient
-    _mongo = AsyncIOMotorClient(MONGO_DB_URI) if MONGO_DB_URI else None
+    _mongo = AsyncIOMotorClient(MONGO_URI) if MONGO_URI else None
     _db = _mongo["outlaw_music"] if _mongo else None
     _rel_col = _db["social_relationships"] if _db else None
 except Exception:
