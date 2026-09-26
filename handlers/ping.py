@@ -1,6 +1,6 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  handlers/ping.py — Music Bot style /ping (image direct from config)
+#  handlers/ping.py — Music Bot style /ping (screenshot exact)
 # --------------------------------------------------------------------------------
 
 import asyncio
@@ -19,8 +19,6 @@ from core.bot import app
 
 BOT_START_TIME = time.time()
 
-
-# ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _esc(v) -> str:
     return (
@@ -46,34 +44,40 @@ def _support_markup():
 @app.on_message(filters.command("ping"))
 async def ping_cmd(client, message: Message):
     chat_id = message.chat.id
-    started = time.perf_counter()
 
-    # ── measure bot latency
-    bot_latency = round((time.perf_counter() - started) * 1000)
-
-    # ── measure API latency
-    api_start = time.perf_counter()
+    # ✅ Proper latency measure (get_me se)
+    t1 = time.perf_counter()
     try:
         await client.get_me()
     except Exception:
         pass
-    api_latency = round((time.perf_counter() - api_start) * 1000)
+    bot_latency = round((time.perf_counter() - t1) * 1000)
+    if bot_latency == 0:
+        bot_latency = 1
 
-    # ── uptime
+    # API latency
+    t2 = time.perf_counter()
+    try:
+        await client.send_chat_action(chat_id, "typing")
+    except Exception:
+        pass
+    api_latency = round((time.perf_counter() - t2) * 1000)
+
+    # uptime
     up = int(time.time() - BOT_START_TIME)
     uptime_full = str(timedelta(seconds=up))
+    d, h, m = up // 86400, (up % 86400) // 3600, (up % 3600) // 60
+    uptime_short = (f"{d}d " if d else "") + (f"{h}h " if h else "") + f"{m}m"
 
-    # ── stats
+    # stats
     try:
         cpu = psutil.cpu_percent(interval=0.2)
     except Exception:
         cpu = 0
-
     try:
         ram = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
     except Exception:
         ram = 0
-
     try:
         disk = psutil.disk_usage("/")
         disk_str = (
@@ -84,30 +88,26 @@ async def ping_cmd(client, message: Message):
     except Exception:
         disk_str = "N/A"
 
-    pytgc = "N/A"   # Yuriichii me alag assistant nahi hota
+    pytgc = "N/A"
 
-    bot_name    = getattr(config, "BOT_NAME", "Elara Music")
+    bot_name    = getattr(config, "BOT_NAME", "Elara")
     support_url = getattr(config, "SUPPORT_URL", "")
     img_url     = (getattr(config, "PING_IMG_URL", "") or "").strip()
 
-    # ── Caption (screenshot jaisa)
+    # ── Caption EXACT screenshot format
     caption = (
-        f"🏓 <b>ᴘᴏɴɢ : {bot_latency}ms</b>\n\n"
+        f"🏓 <b>ᴘᴏɴɢ : {bot_latency}ms</b>\n"
         f"<blockquote expandable>"
-        f"<b>ᴜᴘᴛɪᴍᴇ</b> : <code>{_esc(uptime_full)}</code>\n"
-        f"<b>ʀᴀᴍ</b> : <code>{ram:.2f} MB</code>\n"
-        f"<b>ᴄᴘᴜ</b> : <code>{cpu}%</code>\n"
-        f"<b>ᴅɪsᴋ</b> : <code>{_esc(disk_str)}</code>\n"
-        f"<b>ᴘʏᴛɢᴄ</b> : <code>{pytgc}</code>"
-        f"</blockquote>\n\n"
+        f"<b>ᴜᴘᴛɪᴍᴇ :</b> <code>{_esc(uptime_full)}</code>\n"
+        f"<b>ʀᴀᴍ :</b> <code>{ram:.2f} MB</code>\n"
+        f"<b>ᴄᴘᴜ :</b> <code>{cpu}%</code>\n"
+        f"<b>ᴅɪsᴋ :</b> <code>{_esc(disk_str)}</code>\n"
+        f"<b>ᴘʏᴛɢᴄ :</b> <code>{pytgc}</code>"
+        f"</blockquote>\n"
+        f'❍ ʙʏ » <a href="{support_url}">{_esc(bot_name)}</a>'
     )
 
-    if support_url:
-        caption += f'❍ ʙʏ » <a href="{support_url}">{_esc(bot_name)}</a>'
-    else:
-        caption += f"❍ ʙʏ » {_esc(bot_name)}"
-
-    # ── Send (image direct from config URL)
+    # ── Send photo if URL exists, else text
     if img_url:
         try:
             return await client.send_photo(
@@ -117,17 +117,21 @@ async def ping_cmd(client, message: Message):
                 parse_mode=ParseMode.HTML,
                 reply_markup=_support_markup(),
             )
-        except Exception:
-            pass
+        except Exception as e:
+            # Image fail → text bhej + error log
+            print(f"[PING] Image send failed: {e}")
 
-    # fallback: text only
-    await client.send_message(
-        chat_id,
-        caption,
-        parse_mode=ParseMode.HTML,
-        reply_markup=_support_markup(),
-        disable_web_page_preview=True,
-    )
+    # Fallback text-only
+    try:
+        return await client.send_message(
+            chat_id,
+            caption,
+            parse_mode=ParseMode.HTML,
+            reply_markup=_support_markup(),
+            disable_web_page_preview=True,
+        )
+    except Exception as e:
+        print(f"[PING] Send failed: {e}")
 
 
 # ── /speedtest ─────────────────────────────────────────────────────────────────
@@ -165,16 +169,16 @@ async def speedtest_cmd(client, message: Message):
     share = result.get("share")
 
     text = (
-        "⚡ <b>sᴘᴇᴇᴅᴛᴇsᴛ ʀᴇsᴜʟᴛs</b>\n\n"
+        "⚡ <b>sᴘᴇᴇᴅᴛᴇsᴛ ʀᴇsᴜʟᴛs</b>\n"
         f"<blockquote expandable>"
-        f"<b>ɪsᴘ</b> : <code>{_esc(ci.get('isp','N/A'))}</code>\n"
-        f"<b>ᴄᴏᴜɴᴛʀʏ</b> : <code>{_esc(ci.get('country','N/A'))}</code>\n\n"
-        f"<b>sᴇʀᴠᴇʀ</b> : <code>{_esc(si.get('name','N/A'))}</code>\n"
-        f"<b>sᴘᴏɴsᴏʀ</b> : <code>{_esc(si.get('sponsor','N/A'))}</code>\n"
-        f"<b>ʟᴀᴛᴇɴᴄʏ</b> : <code>{si.get('latency','N/A')} ms</code>\n\n"
-        f"<b>ᴘɪɴɢ</b> : <code>{pg:.2f} ms</code>\n"
-        f"<b>ᴅᴏᴡɴʟᴏᴀᴅ</b> : <code>{dl:.2f} Mbps</code>\n"
-        f"<b>ᴜᴘʟᴏᴀᴅ</b> : <code>{ul:.2f} Mbps</code>"
+        f"<b>ɪsᴘ :</b> <code>{_esc(ci.get('isp','N/A'))}</code>\n"
+        f"<b>ᴄᴏᴜɴᴛʀʏ :</b> <code>{_esc(ci.get('country','N/A'))}</code>\n"
+        f"<b>sᴇʀᴠᴇʀ :</b> <code>{_esc(si.get('name','N/A'))}</code>\n"
+        f"<b>sᴘᴏɴsᴏʀ :</b> <code>{_esc(si.get('sponsor','N/A'))}</code>\n"
+        f"<b>ʟᴀᴛᴇɴᴄʏ :</b> <code>{si.get('latency','N/A')} ms</code>\n"
+        f"<b>ᴘɪɴɢ :</b> <code>{pg:.2f} ms</code>\n"
+        f"<b>ᴅᴏᴡɴʟᴏᴀᴅ :</b> <code>{dl:.2f} Mbps</code>\n"
+        f"<b>ᴜᴘʟᴏᴀᴅ :</b> <code>{ul:.2f} Mbps</code>"
         f"</blockquote>"
     )
 
