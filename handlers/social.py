@@ -8,10 +8,7 @@ from typing import Optional
 from pyrogram import filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-try:
-    from core.bot import app
-except Exception:
-    app = None
+from core.bot import app
 
 try:
     from config import MONGO_DB_URI
