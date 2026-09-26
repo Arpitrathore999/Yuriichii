@@ -1,189 +1,152 @@
 # --------------------------------------------------------------------------------
-#  Elara AI Bot © 2026
+#  Elara © 2026
 #  handlers/ping.py — Music Bot style, Yuriichii compatible
 # --------------------------------------------------------------------------------
 
 import asyncio
-import json
 import os
 import time
 from datetime import timedelta
-from urllib.request import Request, urlopen
 
 import psutil
 import speedtest
 from pyrogram import filters
 from pyrogram.enums import ParseMode
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions, Message
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 import config
 from core.bot import app
 
-bot = app
-BOT_TOKEN = getattr(config, "BOT_TOKEN", "")
-SUPPORT_URL = getattr(config, "SUPPORT_URL", "") or "https://t.me/telegram"
-PING_IMAGE_URL = getattr(config, "PING_IMAGE_URL", "") or ""
-BOT_NAME = getattr(config, "BOT_NAME", "Elara")
 BOT_START_TIME = time.time()
 
 
-def supp_markup():
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton(text="🍬 sᴜᴘᴘᴏʀᴛ 🍬", url=SUPPORT_URL),
-    ]])
-
-
 def _esc(value) -> str:
-    return (str(value or "")
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;"))
+    value = str(value or "")
+    return (value.replace("&", "&amp;")
+                 .replace("<", "&lt;")
+                 .replace(">", "&gt;")
+                 .replace('"', "&quot;"))
 
 
-async def _bot_api(method: str, payload: dict) -> dict:
-    if not BOT_TOKEN:
-        return {"ok": False, "description": "BOT_TOKEN missing"}
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
-    data = json.dumps(payload).encode("utf-8")
+def _support_markup():
+    url = (getattr(config, "SUPPORT_URL", "") or "").strip()
+    if not url:
+        return None
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(text="🍬 sᴜᴘᴘᴏʀᴛ 🍬", url=url)]
+    ])
 
-    def _do():
+
+async def _send_ping(client, message: Message):
+    """Music-Bot style ping, with a plain Telegram fallback so it cannot
+    disappear if the optional Rich UI layer fails."""
+    chat_id = message.chat.id
+    started = time.perf_counter()
+
+    # First message: same visual flow as the Music Bot.
+    try:
+        me = await client.get_me()
+        bot_name = me.first_name or getattr(config, "BOT_NAME", "Elara")
+    except Exception:
+        bot_name = getattr(config, "BOT_NAME", "Elara")
+
+    try:
+        loading = await message.reply(
+            f"❍ <b>{_esc(bot_name)}</b> ɪs ᴘɪɴɢɪɴɢ...",
+            parse_mode=ParseMode.HTML,
+        )
+    except Exception:
+        loading = None
+
+    latency = round((time.perf_counter() - started) * 1000)
+    uptime = str(timedelta(seconds=max(0, int(time.time() - BOT_START_TIME))))
+
+    try:
+        cpu = psutil.cpu_percent(interval=0.15)
+    except Exception:
+        cpu = 0
+
+    try:
+        process = psutil.Process(os.getpid())
+        ram = process.memory_info().rss / 1024 / 1024
+    except Exception:
+        ram = 0
+
+    try:
+        disk = psutil.disk_usage("/")
+        disk_str = (
+            f"{disk.used / (1024 ** 3):.1f}GB / "
+            f"{disk.total / (1024 ** 3):.1f}GB ({disk.percent}%)"
+        )
+    except Exception:
+        disk_str = "N/A"
+
+    # Yuriichii has no separate PyTgCalls assistant.
+    pytgcalls = "N/A"
+
+    if loading:
         try:
-            req = Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
-            with urlopen(req, timeout=20) as r:
-                return json.loads(r.read().decode("utf-8"))
-        except Exception as e:
-            return {"ok": False, "description": str(e)}
+            await loading.delete()
+        except Exception:
+            pass
 
-    return await asyncio.to_thread(_do)
+    bot_name = _esc(getattr(config, "BOT_NAME", bot_name))
+    support_url = _esc(getattr(config, "SUPPORT_URL", ""))
+    image_url = (getattr(config, "PING_IMAGE_URL", "") or "").strip()
 
+    caption = (
+        f"🏓 <b>ᴘᴏɴɢ : {latency}ms</b>\n\n"
+        f"<b>ᴜᴘᴛɪᴍᴇ</b> : <code>{_esc(uptime)}</code>\n"
+        f"<b>ʀᴀᴍ</b> : <code>{ram:.2f} MB</code>\n"
+        f"<b>ᴄᴘᴜ</b> : <code>{cpu}%</code>\n"
+        f"<b>ᴅɪsᴋ</b> : <code>{_esc(disk_str)}</code>\n"
+        f"<b>ᴘʏᴛɢᴄ</b> : <code>{pytgcalls}</code>\n\n"
+    )
+    if support_url:
+        caption += f'❍ ʙʏ » <a href="{support_url}">{bot_name}</a>'
+    else:
+        caption += f"❍ ʙʏ » {bot_name}"
 
-async def _send_rich(chat_id: int, html: str, image: str = "", reply_markup=None):
-    """Use the same Rich Message API approach as Yuriichii's start handler."""
-    payload = {
-        "chat_id": chat_id,
-        "rich_message": {"html": html},
-    }
-    if image:
-        payload["rich_message"]["photo_url"] = image
+    markup = _support_markup()
 
-    if reply_markup:
-        payload["reply_markup"] = {
-            "inline_keyboard": [[
-                {
-                    "text": b.text,
-                    **({"url": b.url} if b.url else {}),
-                    **({"callback_data": b.callback_data} if getattr(b, "callback_data", None) else {}),
-                }
-                for b in row
-            ] for row in reply_markup.inline_keyboard]
-        }
-
-    result = await _bot_api("sendRichMessage", payload)
-    if result.get("ok"):
-        return result
-
-    # Normal Telegram fallback if Rich Message API is unavailable.
-    if image:
+    # Prefer image like Music Bot, but never let a bad image URL break /ping.
+    if image_url:
         try:
-            return await bot.send_photo(
+            return await client.send_photo(
                 chat_id,
-                photo=image,
-                caption=html,
-                reply_markup=reply_markup,
+                photo=image_url,
+                caption=caption,
                 parse_mode=ParseMode.HTML,
+                reply_markup=markup,
             )
         except Exception:
             pass
 
-    return await bot.send_message(
+    return await client.send_message(
         chat_id,
-        html,
-        reply_markup=reply_markup,
+        caption,
         parse_mode=ParseMode.HTML,
-        link_preview_options=LinkPreviewOptions(is_disabled=True),
+        reply_markup=markup,
+        disable_web_page_preview=True,
     )
-
-
-async def _edit_message(message: Message, html: str):
-    try:
-        await message.edit_text(
-            html,
-            parse_mode=ParseMode.HTML,
-            link_preview_options=LinkPreviewOptions(is_disabled=True),
-        )
-    except Exception:
-        try:
-            await message.delete()
-        except Exception:
-            pass
-        return await bot.send_message(
-            message.chat.id,
-            html,
-            parse_mode=ParseMode.HTML,
-            link_preview_options=LinkPreviewOptions(is_disabled=True),
-        )
 
 
 # ── /ping ──────────────────────────────────────────────────────────────────────
 
-@bot.on_message(filters.command("ping"))
+@app.on_message(filters.command("ping"))
 async def ping_cmd(client, message: Message) -> None:
-    chat_id = message.chat.id
-    start = time.perf_counter()
-
     try:
-        me = await client.get_me()
-        first_name = _esc(me.first_name or BOT_NAME)
-    except Exception:
-        first_name = _esc(BOT_NAME)
-
-    # Same "is pinging..." flow as the Music Bot.
-    pm = await _send_rich(
-        chat_id,
-        f"❍ <b>{first_name}</b> ɪs ᴘɪɴɢɪɴɢ...",
-    )
-
-    latency = round((time.perf_counter() - start) * 1000)
-    uptime = str(timedelta(seconds=int(time.time() - BOT_START_TIME)))
-    cpu = psutil.cpu_percent(interval=1)
-
-    process = psutil.Process(os.getpid())
-    ram = process.memory_info().rss / 1024 / 1024
-
-    disk = psutil.disk_usage("/")
-    disk_str = (
-        f"{disk.used // (1024**3)}GB / "
-        f"{disk.total // (1024**3)}GB "
-        f"({disk.percent}%)"
-    )
-
-    # Yuriichii has no separate music assistant/pytgcalls client.
-    pytg = "N/A"
-
-    try:
-        await pm.delete()
-    except Exception:
-        pass
-
-    caption = (
-        f"🏓 <b>ᴘᴏɴɢ : {latency}ms</b>\n\n"
-        + "<table>"
-        + "<tr><th>sʏsᴛᴇᴍ</th><th>ᴠᴀʟᴜᴇ</th></tr>"
-        + f"<tr><td>ᴜᴘᴛɪᴍᴇ</td><td><code>{_esc(uptime)}</code></td></tr>"
-        + f"<tr><td>ʀᴀᴍ</td><td><code>{ram:.2f} MB</code></td></tr>"
-        + f"<tr><td>ᴄᴘᴜ</td><td><code>{cpu}%</code></td></tr>"
-        + f"<tr><td>ᴅɪsᴋ</td><td><code>{_esc(disk_str)}</code></td></tr>"
-        + f"<tr><td>ᴘʏᴛɢᴄ</td><td><code>{pytg}</code></td></tr>"
-        + "</table>\n\n"
-        + f'❍ ʙʏ » <a href="{_esc(SUPPORT_URL)}">{_esc(BOT_NAME)}</a>'
-    )
-
-    await _send_rich(
-        chat_id,
-        caption,
-        image=PING_IMAGE_URL,
-        reply_markup=supp_markup(),
-    )
+        await _send_ping(client, message)
+    except Exception as exc:
+        # Final hard fallback: /ping must still answer even if a system metric,
+        # image or formatting operation fails.
+        try:
+            await message.reply(
+                f"🏓 <b>Pong!</b>\n<code>{_esc(type(exc).__name__)}</code>",
+                parse_mode=ParseMode.HTML,
+            )
+        except Exception:
+            pass
 
 
 # ── /speedtest ─────────────────────────────────────────────────────────────────
@@ -203,69 +166,62 @@ def _run_speedtest():
         return None
 
 
-@bot.on_message(filters.command(["speedtest", "spt"]) & filters.user(getattr(config, "OWNER_ID", 0)))
+@app.on_message(
+    filters.command(["speedtest", "spt"]) & filters.user(config.OWNER_ID)
+)
 async def speedtest_cmd(client, message: Message) -> None:
-    chat_id = message.chat.id
-    m = await _send_rich(
-        chat_id,
-        "❍ sᴛᴀʀᴛɪɴɢ sᴘᴇᴇᴅ ᴛᴇsᴛ, ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ...",
+    status = await message.reply(
+        "❍ sᴛᴀʀᴛɪɴɢ sᴘᴇᴇᴅ ᴛᴇsᴛ, ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ..."
     )
 
     loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(None, _run_speedtest)
 
-    if result is None:
-        return await _edit_message(
-            m,
-            "❍ sᴘᴇᴇᴅᴛᴇsᴛ ғᴀɪʟᴇᴅ, ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ",
+    if not result:
+        return await status.edit(
+            "❍ sᴘᴇᴇᴅᴛᴇsᴛ ғᴀɪʟᴇᴅ, ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ"
         )
 
-    download = result["download"] / 1_000_000
-    upload = result["upload"] / 1_000_000
-    ping = result["ping"]
-    client_info = result.get("client", {})
-    server_info = result.get("server", {})
+    download = result.get("download", 0) / 1_000_000
+    upload = result.get("upload", 0) / 1_000_000
+    ping = result.get("ping", 0)
+    client_info = result.get("client", {}) or {}
+    server_info = result.get("server", {}) or {}
+    share = result.get("share")
 
-    isp = client_info.get("isp", "N/A")
-    country = client_info.get("country", "N/A")
-    server = server_info.get("name", "N/A")
-    sponsor = server_info.get("sponsor", "N/A")
-    s_cc = server_info.get("cc", "N/A")
-    s_lat = server_info.get("latency", "N/A")
-    share = result.get("share", "")
-
-    caption = (
+    text = (
         "⚡ <b>sᴘᴇᴇᴅᴛᴇsᴛ ʀᴇsᴜʟᴛs</b>\n\n"
-        + (f'<a href="{_esc(share)}">sᴘᴇᴇᴅᴛᴇsᴛ ɪᴍᴀɢᴇ</a>\n\n' if share else "")
-        + "<table>"
-        + "<tr><th>ᴄʟɪᴇɴᴛ ɪɴғᴏ</th><th></th></tr>"
-        + f"<tr><td>ɪsᴘ</td><td><code>{_esc(isp)}</code></td></tr>"
-        + f"<tr><td>ᴄᴏᴜɴᴛʀʏ</td><td><code>{_esc(country)}</code></td></tr>"
-        + "</table>\n\n"
-        + "<table>"
-        + "<tr><th>sᴇʀᴠᴇʀ ɪɴғᴏ</th><th></th></tr>"
-        + f"<tr><td>ɴᴀᴍᴇ</td><td><code>{_esc(server)}</code></td></tr>"
-        + f"<tr><td>sᴘᴏɴsᴏʀ</td><td><code>{_esc(sponsor)}</code></td></tr>"
-        + f"<tr><td>ᴄᴏᴜɴᴛʀʏ</td><td><code>{_esc(s_cc)}</code></td></tr>"
-        + f"<tr><td>ʟᴀᴛᴇɴᴄʏ</td><td><code>{_esc(s_lat)} ms</code></td></tr>"
-        + "</table>\n\n"
-        + "<table>"
-        + "<tr><th>sᴘᴇᴇᴅ</th><th></th></tr>"
-        + f"<tr><td>ᴘɪɴɢ</td><td><code>{ping:.2f} ms</code></td></tr>"
-        + f"<tr><td>ᴅᴏᴡɴʟᴏᴀᴅ</td><td><code>{download:.2f} Mbps</code></td></tr>"
-        + f"<tr><td>ᴜᴘʟᴏᴀᴅ</td><td><code>{upload:.2f} Mbps</code></td></tr>"
-        + "</table>\n\n"
-        + f'❍ ʙʏ » <a href="{_esc(SUPPORT_URL)}">{_esc(BOT_NAME)}</a>'
+        f"<b>ɪsᴘ</b> : <code>{_esc(client_info.get('isp', 'N/A'))}</code>\n"
+        f"<b>ᴄᴏᴜɴᴛʀʏ</b> : <code>{_esc(client_info.get('country', 'N/A'))}</code>\n\n"
+        f"<b>sᴇʀᴠᴇʀ</b> : <code>{_esc(server_info.get('name', 'N/A'))}</code>\n"
+        f"<b>sᴘᴏɴsᴏʀ</b> : <code>{_esc(server_info.get('sponsor', 'N/A'))}</code>\n"
+        f"<b>ʟᴀᴛᴇɴᴄʏ</b> : <code>{server_info.get('latency', 'N/A')} ms</code>\n\n"
+        f"<b>ᴘɪɴɢ</b> : <code>{ping:.2f} ms</code>\n"
+        f"<b>ᴅᴏᴡɴʟᴏᴀᴅ</b> : <code>{download:.2f} Mbps</code>\n"
+        f"<b>ᴜᴘʟᴏᴀᴅ</b> : <code>{upload:.2f} Mbps</code>"
     )
 
     try:
-        await m.delete()
+        await status.delete()
     except Exception:
         pass
 
-    await _send_rich(
-        chat_id,
-        caption,
-        image=share,
-        reply_markup=supp_markup(),
+    if share:
+        try:
+            return await client.send_photo(
+                message.chat.id,
+                share,
+                caption=text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=_support_markup(),
+            )
+        except Exception:
+            pass
+
+    await client.send_message(
+        message.chat.id,
+        text,
+        parse_mode=ParseMode.HTML,
+        reply_markup=_support_markup(),
+        disable_web_page_preview=True,
     )
