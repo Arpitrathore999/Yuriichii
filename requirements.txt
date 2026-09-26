@@ -6,4 +6,4 @@ psutil
 groq
 speedtest-cli
 aiohttp
-PIL
+Pillow
