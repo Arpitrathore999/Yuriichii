@@ -1,6 +1,7 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  handlers/ping.py — Music Bot style, Yuriichii compatible
+#  handlers/ping.py — Music Bot style /ping & /speedtest
+#  Compatible with: pyrogram, Yuriichii, psutil, speedtest-cli
 # --------------------------------------------------------------------------------
 
 import asyncio
@@ -20,12 +21,16 @@ from core.bot import app
 BOT_START_TIME = time.time()
 
 
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
 def _esc(value) -> str:
     value = str(value or "")
-    return (value.replace("&", "&amp;")
-                 .replace("<", "&lt;")
-                 .replace(">", "&gt;")
-                 .replace('"', "&quot;"))
+    return (
+        value.replace("&", "&amp;")
+             .replace("<", "&lt;")
+             .replace(">", "&gt;")
+             .replace('"', "&quot;")
+    )
 
 
 def _support_markup():
@@ -37,19 +42,21 @@ def _support_markup():
     ])
 
 
-async def _send_ping(client, message: Message):
-    """Music-Bot style ping, with a plain Telegram fallback so it cannot
-    disappear if the optional Rich UI layer fails."""
+# ── /ping ──────────────────────────────────────────────────────────────────────
+
+@app.on_message(filters.command("ping"))
+async def ping_cmd(client, message: Message) -> None:
     chat_id = message.chat.id
     started = time.perf_counter()
 
-    # First message: same visual flow as the Music Bot.
+    # Bot name
     try:
         me = await client.get_me()
         bot_name = me.first_name or getattr(config, "BOT_NAME", "Elara")
     except Exception:
         bot_name = getattr(config, "BOT_NAME", "Elara")
 
+    # Loading message
     try:
         loading = await message.reply(
             f"❍ <b>{_esc(bot_name)}</b> ɪs ᴘɪɴɢɪɴɢ...",
@@ -59,19 +66,22 @@ async def _send_ping(client, message: Message):
         loading = None
 
     latency = round((time.perf_counter() - started) * 1000)
-    uptime = str(timedelta(seconds=max(0, int(time.time() - BOT_START_TIME))))
+    uptime  = str(timedelta(seconds=max(0, int(time.time() - BOT_START_TIME))))
 
+    # CPU
     try:
         cpu = psutil.cpu_percent(interval=0.15)
     except Exception:
         cpu = 0
 
+    # RAM
     try:
         process = psutil.Process(os.getpid())
         ram = process.memory_info().rss / 1024 / 1024
     except Exception:
         ram = 0
 
+    # Disk
     try:
         disk = psutil.disk_usage("/")
         disk_str = (
@@ -81,18 +91,18 @@ async def _send_ping(client, message: Message):
     except Exception:
         disk_str = "N/A"
 
-    # Yuriichii has no separate PyTgCalls assistant.
+    # PyTgCalls (Yuriichii me alag assistant nahi hota)
     pytgcalls = "N/A"
 
+    # Delete loading
     if loading:
         try:
             await loading.delete()
         except Exception:
             pass
 
-    bot_name = _esc(getattr(config, "BOT_NAME", bot_name))
     support_url = _esc(getattr(config, "SUPPORT_URL", ""))
-    image_url = (getattr(config, "PING_IMAGE_URL", "") or "").strip()
+    image_url   = (getattr(config, "PING_IMAGE_URL", "") or "").strip()
 
     caption = (
         f"🏓 <b>ᴘᴏɴɢ : {latency}ms</b>\n\n"
@@ -102,14 +112,15 @@ async def _send_ping(client, message: Message):
         f"<b>ᴅɪsᴋ</b> : <code>{_esc(disk_str)}</code>\n"
         f"<b>ᴘʏᴛɢᴄ</b> : <code>{pytgcalls}</code>\n\n"
     )
+
     if support_url:
-        caption += f'❍ ʙʏ » <a href="{support_url}">{bot_name}</a>'
+        caption += f'❍ ʙʏ » <a href="{support_url}">{_esc(bot_name)}</a>'
     else:
-        caption += f"❍ ʙʏ » {bot_name}"
+        caption += f"❍ ʙʏ » {_esc(bot_name)}"
 
     markup = _support_markup()
 
-    # Prefer image like Music Bot, but never let a bad image URL break /ping.
+    # Image ke saath bhejne ki koshish, fail ho toh text
     if image_url:
         try:
             return await client.send_photo(
@@ -122,24 +133,16 @@ async def _send_ping(client, message: Message):
         except Exception:
             pass
 
-    return await client.send_message(
-        chat_id,
-        caption,
-        parse_mode=ParseMode.HTML,
-        reply_markup=markup,
-        disable_web_page_preview=True,
-    )
-
-
-# ── /ping ──────────────────────────────────────────────────────────────────────
-
-@app.on_message(filters.command("ping"))
-async def ping_cmd(client, message: Message) -> None:
     try:
-        await _send_ping(client, message)
+        return await client.send_message(
+            chat_id,
+            caption,
+            parse_mode=ParseMode.HTML,
+            reply_markup=markup,
+            disable_web_page_preview=True,
+        )
     except Exception as exc:
-        # Final hard fallback: /ping must still answer even if a system metric,
-        # image or formatting operation fails.
+        # Final fallback
         try:
             await message.reply(
                 f"🏓 <b>Pong!</b>\n<code>{_esc(type(exc).__name__)}</code>",
@@ -174,7 +177,7 @@ async def speedtest_cmd(client, message: Message) -> None:
         "❍ sᴛᴀʀᴛɪɴɢ sᴘᴇᴇᴅ ᴛᴇsᴛ, ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ..."
     )
 
-    loop = asyncio.get_running_loop()
+    loop   = asyncio.get_running_loop()
     result = await loop.run_in_executor(None, _run_speedtest)
 
     if not result:
@@ -182,12 +185,12 @@ async def speedtest_cmd(client, message: Message) -> None:
             "❍ sᴘᴇᴇᴅᴛᴇsᴛ ғᴀɪʟᴇᴅ, ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ"
         )
 
-    download = result.get("download", 0) / 1_000_000
-    upload = result.get("upload", 0) / 1_000_000
-    ping = result.get("ping", 0)
-    client_info = result.get("client", {}) or {}
-    server_info = result.get("server", {}) or {}
-    share = result.get("share")
+    download     = result.get("download", 0) / 1_000_000
+    upload       = result.get("upload", 0) / 1_000_000
+    ping         = result.get("ping", 0)
+    client_info  = result.get("client", {}) or {}
+    server_info  = result.get("server", {}) or {}
+    share        = result.get("share")
 
     text = (
         "⚡ <b>sᴘᴇᴇᴅᴛᴇsᴛ ʀᴇsᴜʟᴛs</b>\n\n"
