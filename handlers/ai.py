@@ -11,7 +11,7 @@ SOCIAL_COMMANDS = [
 ]
 
 
-@app.on_message(filters.private & filters.text & ~filters.command(["start", "ai"] + SOCIAL_COMMANDS))
+@app.on_message(filters.private & filters.text & ~filters.command(["start", "ai", "ping", "speedtest", "spt", "broadcast", "gcast"] + SOCIAL_COMMANDS))
 async def private_chat(_, message):
     if not message.from_user or not message.text:
         return
