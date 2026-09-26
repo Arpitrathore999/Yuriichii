@@ -77,7 +77,7 @@ async def ping_cmd(client, message: Message):
     bot_name    = getattr(config, "BOT_NAME", "Elara")
     support_url = (getattr(config, "SUPPORT_GROUP", None)
                    or getattr(config, "SUPPORT_URL", ""))
-    img_url     = getattr(config, "PING_IMG_URL", "")
+    img_url     = (getattr(config, "PING_IMAGE_URL", "") or getattr(config, "PING_IMG_URL", "")).strip()
 
     # ── Rich HTML build (kurigram render karega)
     caption = (

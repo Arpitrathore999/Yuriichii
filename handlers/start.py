@@ -21,6 +21,7 @@ from pyrogram.types import (
 import config
 from core.bot import app
 from database.users import ensure_user
+from utils.rich_ui import rich_send, rich_img
 
 bot = app
 
@@ -311,32 +312,33 @@ def _kb_to_dict(kb):
 
 
 async def _send_rich(chat_id, html, kb, image=None):
-    """Send via Rich Message API. Fallback to photo/text."""
-    payload = {
-        "chat_id": chat_id,
-        "rich_message": {"html": html},
-        "reply_markup": _kb_to_dict(kb),
-    }
-    if image:
-        payload["rich_message"]["photo_url"] = image
+    """Send a Rich Message with an embedded image, with a safe fallback."""
+    rich_html = (rich_img(image) if image else "") + html
+    try:
+        result = await rich_send(bot, chat_id, rich_html, reply_markup=kb)
+        if result is not None:
+            return result
+    except Exception as e:
+        print(f"[rich] delivery failed: {e}")
 
-    result = await _bot_api("sendRichMessage", payload)
-    if result.get("ok"):
-        return
-
-    print(f"[rich] failed: {result.get('description')}")
-
+    # Final fallback: send the image as a normal Telegram photo.
     if image:
         try:
+            from utils.rich_ui import rich_caption
             return await bot.send_photo(
-                chat_id, photo=image, caption=html,
-                reply_markup=kb, parse_mode=ParseMode.HTML,
+                chat_id,
+                photo=image,
+                caption=rich_caption(html),
+                reply_markup=kb,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[photo] failed: {e}")
 
     return await bot.send_message(
-        chat_id, html, reply_markup=kb, parse_mode=ParseMode.HTML,
+        chat_id,
+        html,
+        reply_markup=kb,
+        parse_mode=ParseMode.HTML,
         link_preview_options=LinkPreviewOptions(is_disabled=True),
     )
 
