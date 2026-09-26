@@ -1,6 +1,7 @@
 # Outlaw Music Social System — FIXED
 # 15 commands | reply-only actions | random captions | relationship state
 import random
+import re
 import time
 from pathlib import Path
 from typing import Optional
@@ -362,7 +363,7 @@ if app:
             await _edit_proposal_message(cq, "💔 <b>Proposal Rejected.</b>")
         await cq.answer()
 
-    @app.on_message(filters.command(COMMANDS))
+    @app.on_message(filters.regex(r"^/(" + "|".join(COMMANDS) + r")(?:@\w+)?(?:\s|$)", flags=re.IGNORECASE))
     async def social_dispatch(client, message):
         cmd = (message.command or [""])[0].lower()
         if cmd == "crush":
