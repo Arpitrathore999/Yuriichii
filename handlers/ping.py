@@ -43,7 +43,7 @@ def supp_markup():
 
 # ── /ping ──────────────────────────────────────────────────────────────────────
 
-@app.on_message(filters.command("ping"))
+@app.on_message(filters.command("ping") & (filters.private | filters.group))
 async def ping_cmd(client, message: Message):
     """Reliable /ping for private chats and groups."""
     start = time.perf_counter()
