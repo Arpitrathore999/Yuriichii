@@ -540,14 +540,124 @@ async def admin_panel_callback(_, query: CallbackQuery):
         )
 
     if action == "db":
-    state = "🟢 ᴄᴏɴɴᴇᴄᴛᴇᴅ" if db is not None else "🔴 ɴᴏᴛ ᴄᴏɴғɪɢᴜʀᴇᴅ"
-    if db is not None:
-        try:
-            await db.command("ping")
-        except Exception:
-            state = "🔴 ᴄᴏɴɴᴇᴄᴛɪᴏɴ ᴇʀʀᴏʀ"
-    return await _edit_panel(
-        query,
-        rich_heading("🗄 ᴅᴀᴛᴀʙᴀsᴇ sᴛᴀᴛᴜs", level=3)
-        + rich_kv_table([("ᴍᴏɴɢᴏᴅʙ", state)], headers=["sᴇʀᴠɪᴄᴇ", "sᴛᴀᴛᴜs"])
+        state = "🟢 ᴄᴏɴɴᴇᴄᴛᴇᴅ" if db is not None else "🔴 ɴᴏᴛ ᴄᴏɴғɪɢᴜʀᴇᴅ"
+        if db is not None:
+            try:
+                await db.command("ping")
+            except Exception:
+                state = "🔴 ᴄᴏɴɴᴇᴄᴛɪᴏɴ ᴇʀʀᴏʀ"
+        return await _edit_panel(
+            query,
+            rich_heading("🗄 ᴅᴀᴛᴀʙᴀsᴇ sᴛᴀᴛᴜs", level=3)
+            + rich_kv_table([("ᴍᴏɴɢᴏᴅʙ", state)], headers=["sᴇʀᴠɪᴄᴇ", "sᴛᴀᴛᴜs"])
+        )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  BROADCAST
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.on_message(filters.command("cancelbroadcast"))
+async def cancel_admin_broadcast(_, message):
+    if not _panel_owner(message):
+        return await message.reply("⛔ <b>ᴏᴡɴᴇʀ ᴏɴʟʏ</b>")
+    _ADMIN_BROADCAST_WAIT.pop(int(message.from_user.id), None)
+    await message.reply("❌ <b>ʙʀᴏᴀᴅᴄᴀsᴛ ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>")
+
+
+async def _copy_or_send(client, target_id, message):
+    try:
+        if message.text:
+            return await client.send_message(target_id, message.text)
+        return await client.copy_message(target_id, message.chat.id, message.id)
+    except Exception:
+        raise
+
+
+@app.on_message(filters.all, group=-50)
+async def admin_broadcast_message(client, message):
+    if not _panel_owner(message):
+        return
+    uid = int(message.from_user.id) if message.from_user else 0
+    state = _ADMIN_BROADCAST_WAIT.get(uid)
+    if not state or state.get("mode") == "selected_ids":
+        if state and state.get("mode") == "selected_ids" and message.text and not message.text.startswith("/"):
+            raw_ids = message.text.replace(",", " ").split()
+            ids = []
+            for raw in raw_ids:
+                try:
+                    ids.append(int(raw))
+                except ValueError:
+                    pass
+            if not ids:
+                return await message.reply("❌ ɴᴏ ᴠᴀʟɪᴅ ᴛᴇʟᴇɢʀᴀᴍ ɪᴅs ғᴏᴜɴᴅ.")
+            state["ids"] = ids
+            state["mode"] = "selected_message"
+            return await message.reply(
+                "✅ ɪᴅs sᴀᴠᴇᴅ. ɴᴏᴡ sᴇɴᴅ ᴛʜᴇ ᴍᴇssᴀɢᴇ ᴛᴏ ʙʀᴏᴀᴅᴄᴀsᴛ.\n\n"
+                "<code>/cancelbroadcast</code> ᴛᴏ ᴄᴀɴᴄᴇʟ."
+            )
+        return
+    if state.get("mode") == "selected_message":
+        targets = state.get("ids", [])
+    else:
+        docs = await get_broadcast_chats()
+        mode = state.get("mode")
+        if mode == "groups":
+            targets = [int(d["chat_id"]) for d in docs if d.get("type") == "group"]
+        elif mode == "private":
+            targets = [int(d["chat_id"]) for d in docs if d.get("type") == "private"]
+        elif mode == "active":
+            targets = await get_active_user_ids(7)
+        else:
+            targets = [int(d["chat_id"]) for d in docs]
+    if message.text and message.text.startswith("/"):
+        return
+    _ADMIN_BROADCAST_WAIT.pop(uid, None)
+    if not targets:
+        return await message.reply("❌ ɴᴏ ᴛᴀʀɢᴇᴛs ғᴏᴜɴᴅ ғᴏʀ ᴛʜɪs ʙʀᴏᴀᴅᴄᴀsᴛ ᴍᴏᴅᴇ.")
+    status = await message.reply(
+        f"📢 <b>ʙʀᴏᴀᴅᴄᴀsᴛ sᴛᴀʀᴛᴇᴅ</b>\n\n"
+        f"🎯 ᴛᴀʀɢᴇᴛs: <code>{len(targets)}</code>\n⏳ sᴇɴᴅɪɴɢ..."
     )
+    sent = failed = 0
+    for cid in targets:
+        try:
+            await _copy_or_send(client, cid, message)
+            sent += 1
+        except Exception:
+            failed += 1
+        await asyncio.sleep(0.05)
+    await status.edit_text(
+        "<b>📢 ʙʀᴏᴀᴅᴄᴀsᴛ ᴄᴏᴍᴘʟᴇᴛᴇ</b>\n\n"
+        f"🎯 ᴛᴀʀɢᴇᴛs: <code>{len(targets)}</code>\n"
+        f"✅ sᴇɴᴛ: <code>{sent}</code>\n"
+        f"❌ ғᴀɪʟᴇᴅ: <code>{failed}</code>"
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  GLOBAL BAN GUARDS (silent — no reply to banned users)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.on_message(filters.all, group=-100)
+async def banned_user_guard(_, message):
+    if not message.from_user or _panel_owner(message):
+        return
+    if await is_user_banned(message.from_user.id):
+        # Silently ignore — no reply, no reaction, nothing.
+        raise StopPropagation
+
+
+@app.on_callback_query(group=-100)
+async def banned_callback_guard(_, query):
+    if not query.from_user or _panel_owner(query):
+        return
+    if await is_user_banned(query.from_user.id):
+        # Telegram requires an answer to stop the button spinner.
+        # Empty answer = user sees nothing.
+        try:
+            await query.answer()
+        except Exception:
+            pass
+        raise StopPropagation
