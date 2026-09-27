@@ -1,18 +1,15 @@
 def load_handlers():
-    # Core bot handlers
-    import handlers.start
-    import handlers.ai
-    import handlers.social
-    import handlers.admin
-    import handlers.ping
-    import handlers.broadcast
-
-    # GC Management System
-    import management.bans
-    import management.warnings
-    import management.purge
-    import management.pin
-    import management.lock
-    import management.greetings
-    import management.report
-    import management.filter
+    """Load all bot modules without allowing one optional module to kill startup."""
+    modules = [
+        "handlers.start", "handlers.ai", "handlers.social",
+        "handlers.admin", "handlers.ping", "handlers.broadcast",
+        "management.admin", "management.bans", "management.filter",
+        "management.greetings", "management.lock", "management.pin",
+        "management.purge", "management.report", "management.warnings",
+    ]
+    for module_name in modules:
+        try:
+            __import__(module_name)
+            print(f"[LOADER] loaded: {module_name}", flush=True)
+        except Exception as exc:
+            print(f"[LOADER] FAILED: {module_name}: {type(exc).__name__}: {exc}", flush=True)
