@@ -10,8 +10,20 @@ SOCIAL_COMMANDS = [
     "flirt", "love", "crush", "couple", "propose", "marriage", "divorce"
 ]
 
+ALL_COMMANDS = SOCIAL_COMMANDS + [
+    "start", "ai", "ping", "speedtest", "spt",
+    "broadcast", "gcast", "adminpanel", "adminuser",
+    "cancelbroadcast", "adminhelp", "stats",
+    "addgif", "addcaption", "socialgifs", "socialcaptions",
+    "clearsocialgifs", "clearsocialcaptions", "banbot", "botunban",
+]
 
-@app.on_message(filters.private & filters.text & ~filters.command(["start", "ai", "ping", "speedtest", "spt", "broadcast", "gcast", "adminpanel", "adminuser", "cancelbroadcast", "adminhelp", "stats", "addgif", "addcaption", "socialgifs", "socialcaptions", "clearsocialgifs", "clearsocialcaptions"] + SOCIAL_COMMANDS))
+
+@app.on_message(
+    filters.private
+    & filters.text
+    & ~filters.command(ALL_COMMANDS)
+)
 async def private_chat(_, message):
     if not message.from_user or not message.text:
         return
@@ -32,9 +44,17 @@ async def ai_command(_, message):
     await message.reply(await chat(message.from_user.id, parts[1]))
 
 
-@app.on_message(filters.group & filters.text & ~filters.command(SOCIAL_COMMANDS))
+@app.on_message(
+    filters.group
+    & filters.text
+    & ~filters.command(ALL_COMMANDS)   # 👈 ye update kiya
+)
 async def group_chat(_, message):
     if not message.from_user or not message.text:
+        return
+
+    # 👇 extra safety
+    if message.text.startswith("/"):
         return
 
     me = await app.get_me()
