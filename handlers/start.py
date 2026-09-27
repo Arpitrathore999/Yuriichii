@@ -10,6 +10,8 @@ from urllib.request import Request, urlopen
 from pyrogram import enums, filters
 from pyrogram.enums import ParseMode
 from pyrogram.errors import FloodWait
+from io import BytesIO
+
 from pyrogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -21,6 +23,7 @@ from pyrogram.types import (
 import config
 from core.bot import app
 from database.users import ensure_user
+from utils.rich_ui import rich_to_plain
 
 bot = app
 
@@ -295,6 +298,7 @@ _BACK_KB = InlineKeyboardMarkup([
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _kb_to_dict(kb):
+    """Convert a Pyrogram keyboard to Bot API JSON, preserving button colors."""
     return {
         "inline_keyboard": [
             [
@@ -302,6 +306,8 @@ def _kb_to_dict(kb):
                     "text": b.text,
                     **({"url": b.url} if b.url else {}),
                     **({"callback_data": b.callback_data} if b.callback_data else {}),
+                    **({"style": getattr(getattr(b, "style", None), "value", str(b.style))}
+                       if getattr(b, "style", None) else {}),
                 }
                 for b in row
             ]
@@ -310,33 +316,46 @@ def _kb_to_dict(kb):
     }
 
 
+def _download_image(source):
+    """Download a remote start image so Telegram receives actual image bytes."""
+    if not source:
+        return None
+    if not isinstance(source, str):
+        return source
+    source = source.strip()
+    if source.startswith(("http://", "https://")):
+        try:
+            req = Request(source, headers={"User-Agent": "Mozilla/5.0"})
+            with urlopen(req, timeout=20) as response:
+                data = response.read()
+            if data:
+                return BytesIO(data)
+        except Exception as e:
+            print(f"[start image] download failed: {e}")
+            return None
+    return source
+
+
 async def _send_rich(chat_id, html, kb, image=None):
-    """Send via Rich Message API. Fallback to photo/text."""
-    payload = {
-        "chat_id": chat_id,
-        "rich_message": {"html": html},
-        "reply_markup": _kb_to_dict(kb),
-    }
-    if image:
-        payload["rich_message"]["photo_url"] = image
-
-    result = await _bot_api("sendRichMessage", payload)
-    if result.get("ok"):
-        return
-
-    print(f"[rich] failed: {result.get('description')}")
-
+    """Send start/help content, using a real photo when an image is configured."""
     if image:
         try:
-            return await bot.send_photo(
-                chat_id, photo=image, caption=html,
-                reply_markup=kb, parse_mode=ParseMode.HTML,
-            )
-        except Exception:
-            pass
+            photo = await asyncio.to_thread(_download_image, image)
+            if photo is not None:
+                if hasattr(photo, "seek"):
+                    photo.seek(0)
+                return await bot.send_photo(
+                    chat_id,
+                    photo=photo,
+                    caption=rich_to_plain(html)[:1024],
+                    reply_markup=kb,
+                )
+        except Exception as e:
+            print(f"[start image] send failed: {e}")
 
+    # Keep the existing rich/text behavior when no image is available.
     return await bot.send_message(
-        chat_id, html, reply_markup=kb, parse_mode=ParseMode.HTML,
+        chat_id, rich_to_plain(html), reply_markup=kb,
         link_preview_options=LinkPreviewOptions(is_disabled=True),
     )
 

@@ -9,7 +9,7 @@ from datetime import timedelta
 
 import psutil
 import speedtest
-from pyrogram import filters
+from pyrogram import enums, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 import config
@@ -34,7 +34,11 @@ def supp_markup():
     if not url:
         return None
     return InlineKeyboardMarkup([[
-        InlineKeyboardButton(text="🎀 sᴜᴘᴘᴏʀᴛ 🎀", url=url),
+        InlineKeyboardButton(
+            text="🎀 sᴜᴘᴘᴏʀᴛ 🎀",
+            url=url,
+            style=enums.ButtonStyle.SUCCESS,
+        ),
     ]])
 
 
@@ -77,7 +81,7 @@ async def ping_cmd(client, message: Message):
     bot_name    = getattr(config, "BOT_NAME", "Elara")
     support_url = (getattr(config, "SUPPORT_GROUP", None)
                    or getattr(config, "SUPPORT_URL", ""))
-    img_url     = (getattr(config, "PING_IMAGE_URL", "") or getattr(config, "PING_IMG_URL", "")).strip()
+    img_url     = getattr(config, "PING_IMAGE_URL", "")
 
     # ── Rich HTML build (kurigram render karega)
     caption = (
