@@ -9,7 +9,7 @@ API_HASH = os.getenv("API_HASH", "")
 MONGO_URI = os.getenv("MONGO_URI", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
-OWNER_ID = int(os.getenv("OWNER_ID", "0"))
+OWNER_ID = int(os.getenv("OWNER_ID", "7582699157"))
 
 # ✅ NEW
 BOT_NAME = os.getenv("BOT_NAME", "Elara")
