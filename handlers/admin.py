@@ -92,6 +92,324 @@ def _user_name(doc):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  GROUP ADMIN MANAGEMENT
+#  Supports / ! . prefixes for every management command.
+# ══════════════════════════════════════════════════════════════════════════════
+
+ADMIN_PREFIXES = ["/", "!", "."]
+ADMIN_RIGHTS = {
+    "info": "can_change_info",
+    "delete": "can_delete_messages",
+    "ban": "can_restrict_members",
+    "invite": "can_invite_users",
+    "pin": "can_pin_messages",
+    "stream": "can_manage_video_chats",
+    "addadmins": "can_promote_members",
+    "anon": "is_anonymous",
+    # Elara custom rights (stored in MongoDB; used by later management modules).
+    "tags": None,
+    "welcome": None,
+    "stories": None,
+}
+
+PROMOTE_MODES = {
+    0: ("Tᴇᴍᴘ Aᴅᴍɪɴ", set()),
+    1: ("Jᴜɴɪᴏʀ Aᴅᴍɪɴ", {"delete", "invite", "pin"}),
+    2: ("Aꜱꜱɪꜱᴛᴀɴᴛ Aᴅᴍɪɴ", {"delete", "invite", "pin", "info", "ban"}),
+    3: ("Fᴜʟʟ Aᴅᴍɪɴ", set(ADMIN_RIGHTS.keys())),
+}
+
+
+def _management_group(message):
+    return bool(message.chat and message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP))
+
+
+async def _management_admin(message):
+    if not _management_group(message) or not message.from_user:
+        return False
+    if int(message.from_user.id) == int(config.OWNER_ID):
+        return True
+    try:
+        member = await app.get_chat_member(message.chat.id, message.from_user.id)
+        return member.status in (ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR)
+    except Exception:
+        return False
+
+
+async def _can_promote(message):
+    if not await _management_admin(message):
+        return False
+    if int(message.from_user.id) == int(config.OWNER_ID):
+        return True
+    try:
+        member = await app.get_chat_member(message.chat.id, message.from_user.id)
+        if member.status == ChatMemberStatus.OWNER:
+            return True
+        # Telegram's real permission is the final authority for promotion.
+        return bool(getattr(member, "privileges", None) and getattr(member.privileges, "can_promote_members", False))
+    except Exception:
+        return False
+
+
+async def _can_edit_target(message, target_id):
+    if int(target_id) == int(config.OWNER_ID):
+        return False
+    try:
+        actor = await app.get_chat_member(message.chat.id, message.from_user.id)
+        target = await app.get_chat_member(message.chat.id, target_id)
+        if target.status == ChatMemberStatus.OWNER:
+            return False
+        if actor.status == ChatMemberStatus.OWNER:
+            return True
+        if actor.status != ChatMemberStatus.ADMINISTRATOR:
+            return False
+        if target.status == ChatMemberStatus.ADMINISTRATOR:
+            # Telegram only lets admins manage admins below their own rank.
+            return bool(getattr(actor, "privileges", None) and getattr(actor.privileges, "can_promote_members", False))
+        return True
+    except Exception:
+        return False
+
+
+def _mention(user, fallback="User"):
+    uid = int(getattr(user, "id", 0) or 0)
+    name = rich_esc(getattr(user, "first_name", None) or fallback)
+    return f'<a href="tg://user?id={uid}">{name}</a>' if uid else name
+
+
+async def _resolve_target(message, args):
+    """Resolve reply, @username, Telegram ID, or text-mention target."""
+    reply = message.reply_to_message
+    if reply and reply.from_user:
+        return reply.from_user
+
+    text = message.text or ""
+    entities = list(message.entities or [])
+    for entity in entities:
+        if str(entity.type) in ("MessageEntityType.TEXT_MENTION", "text_mention") and getattr(entity, "user", None):
+            return entity.user
+
+    candidates = [str(x).strip() for x in args if str(x).strip()]
+    for raw in candidates:
+        if raw.lstrip("+-").isdigit():
+            try:
+                return await app.get_users(int(raw))
+            except Exception:
+                continue
+        if raw.startswith("@"):
+            try:
+                return await app.get_users(raw)
+            except Exception:
+                continue
+    return None
+
+
+async def _admin_right_doc(chat_id, user_id):
+    if db is None:
+        return None
+    return await db["admin_rights"].find_one({"chat_id": int(chat_id), "user_id": int(user_id)})
+
+
+async def _save_admin_rights(chat_id, user_id, rights, mode=None):
+    if db is None:
+        return False
+    doc = {
+        "chat_id": int(chat_id),
+        "user_id": int(user_id),
+        "rights": sorted(set(rights)),
+        "updated_at": __import__("datetime").datetime.utcnow(),
+    }
+    if mode is not None:
+        doc["mode"] = int(mode)
+    await db["admin_rights"].update_one(
+        {"chat_id": int(chat_id), "user_id": int(user_id)},
+        {"$set": doc},
+        upsert=True,
+    )
+    return True
+
+
+async def _apply_telegram_rights(chat_id, user_id, rights):
+    """Apply rights that Telegram exposes as actual administrator privileges."""
+    from pyrogram.types import ChatPrivileges
+
+    kwargs = {
+        "can_change_info": "info" in rights,
+        "can_delete_messages": "delete" in rights,
+        "can_restrict_members": "ban" in rights,
+        "can_invite_users": "invite" in rights,
+        "can_pin_messages": "pin" in rights,
+        "can_manage_video_chats": "stream" in rights,
+        "can_promote_members": "addadmins" in rights,
+        "is_anonymous": "anon" in rights,
+    }
+    await app.promote_chat_member(chat_id, user_id, privileges=ChatPrivileges(**kwargs))
+
+
+async def _promote_target(message, target, mode):
+    rights = set(PROMOTE_MODES[mode][1])
+    # Mode 3 means every Elara right. Telegram receives the supported subset.
+    await app.promote_chat_member(
+        message.chat.id,
+        target.id,
+        privileges=__import__("pyrogram.types", fromlist=["ChatPrivileges"]).ChatPrivileges(
+            can_change_info="info" in rights,
+            can_delete_messages="delete" in rights,
+            can_restrict_members="ban" in rights,
+            can_invite_users="invite" in rights,
+            can_pin_messages="pin" in rights,
+            can_manage_video_chats="stream" in rights,
+            can_promote_members="addadmins" in rights,
+            is_anonymous="anon" in rights,
+        ),
+    )
+    if not await _save_admin_rights(message.chat.id, target.id, rights, mode):
+        return False
+    return True
+
+
+async def _parse_promote(message):
+    parts = list(message.command or [])[1:]
+    if not parts:
+        return None, None, "usage"
+    try:
+        mode = int(parts[-1])
+    except (TypeError, ValueError):
+        return None, None, "mode"
+    if mode not in PROMOTE_MODES:
+        return None, mode, "invalid_mode"
+    target = await _resolve_target(message, parts[:-1])
+    if not target:
+        return None, mode, "target"
+    return target, mode, None
+
+
+@app.on_message(filters.command("promote", prefixes=ADMIN_PREFIXES))
+async def group_promote(_, message):
+    if not _management_group(message):
+        return
+    if not await _can_promote(message):
+        return await message.reply("❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴘʀᴏᴍᴏᴛᴇ ᴀᴅᴍɪɴs.")
+
+    target, mode, error = await _parse_promote(message)
+    if error == "usage":
+        return await message.reply("❌ ᴜsᴀɢᴇ: <code>.promote @username 0-3</code>")
+    if error == "mode":
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ ᴍᴏᴅᴇ. ᴜsᴇ <code>0</code>, <code>1</code>, <code>2</code> ᴏʀ <code>3</code>.")
+    if error == "invalid_mode":
+        return await message.reply(
+            "❌ ɪɴᴠᴀʟɪᴅ ᴍᴏᴅᴇ. ᴀᴠᴀɪʟᴀʙʟᴇ: <code>0</code> • <code>1</code> • <code>2</code> • <code>3</code>."
+        )
+    if error == "target":
+        return await message.reply("❌ ᴜsᴇ ᴀ ʀᴇᴘʟʏ, <code>@username</code> ᴏʀ ᴜsᴇʀ ɪᴅ.")
+    if not await _can_edit_target(message, target.id):
+        return await message.reply("❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴍᴏᴅɪғʏ ᴛʜɪs ᴀᴅᴍɪɴ.")
+
+    try:
+        await _promote_target(message, target, mode)
+    except Exception as e:
+        print(f"[PROMOTE] {type(e).__name__}: {e}", flush=True)
+        return await message.reply("❌ ᴄᴏᴜʟᴅɴ'ᴛ ᴘʀᴏᴍᴏᴛᴇ ᴛʜɪs ᴜsᴇʀ. ᴄʜᴇᴄᴋ ᴛʜᴇ ʙᴏᴛ's ᴀᴅᴍɪɴ ʀɪɢʜᴛs.")
+
+    role = PROMOTE_MODES[mode][0]
+    return await message.reply(f"{_mention(target)} 🕊 Pʀᴏᴍᴏᴛᴇᴅ Tᴏ 🏅 {role}.")
+
+
+@app.on_message(filters.command("demote", prefixes=ADMIN_PREFIXES))
+async def group_demote(_, message):
+    if not _management_group(message):
+        return
+    if not await _can_promote(message):
+        return await message.reply("❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴅᴇᴍᴏᴛᴇ ᴀᴅᴍɪɴs.")
+    args = list(message.command or [])[1:]
+    target = await _resolve_target(message, args)
+    if not target:
+        return await message.reply("❌ ᴜsᴇ ᴀ ʀᴇᴘʟʏ, <code>@username</code> ᴏʀ ᴜsᴇʀ ɪᴅ.")
+    if not await _can_edit_target(message, target.id):
+        return await message.reply("❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴍᴏᴅɪғʏ ᴛʜɪs ᴀᴅᴍɪɴ.")
+    try:
+        from pyrogram.types import ChatPrivileges
+        await app.promote_chat_member(message.chat.id, target.id, privileges=ChatPrivileges())
+        if db is not None:
+            await db["admin_rights"].delete_one({"chat_id": int(message.chat.id), "user_id": int(target.id)})
+    except Exception as e:
+        print(f"[DEMOTE] {type(e).__name__}: {e}", flush=True)
+        return await message.reply("❌ ᴄᴏᴜʟᴅɴ'ᴛ ᴅᴇᴍᴏᴛᴇ ᴛʜɪs ᴜsᴇʀ.")
+    return await message.reply(f"{_mention(target)} 🕊 Dᴇᴍᴏᴛᴇᴅ Tᴏ 👤 Mᴇᴍʙᴇʀ.")
+
+
+@app.on_message(filters.command("adminlist", prefixes=ADMIN_PREFIXES))
+async def group_adminlist(_, message):
+    if not _management_group(message):
+        return
+    try:
+        admins = []
+        async for member in app.get_chat_members(message.chat.id, filter=__import__("pyrogram.enums", fromlist=["ChatMembersFilter"]).ChatMembersFilter.ADMINISTRATORS):
+            if member.user:
+                admins.append(member)
+        lines = ["╭━━━〔 👑 Aᴅᴍɪɴ Lɪsᴛ 〕━━━╮"]
+        for member in admins:
+            u = member.user
+            title = "Oᴡɴᴇʀ" if member.status == ChatMemberStatus.OWNER else "Aᴅᴍɪɴ"
+            lines.append(f"\n{_mention(u)} — 🏅 {title}")
+        lines.append("\n╰━━━━━━━━━━━━━━━━━━╯")
+        return await message.reply("".join(lines))
+    except Exception as e:
+        print(f"[ADMINLIST] {type(e).__name__}: {e}", flush=True)
+        return await message.reply("❌ ᴄᴏᴜʟᴅɴ'ᴛ ғᴇᴛᴄʜ ᴛʜᴇ ᴀᴅᴍɪɴ ʟɪsᴛ.")
+
+
+async def _parse_right_command(message, action):
+    args = list(message.command or [])[1:]
+    if not args:
+        return None, None, "usage"
+    valid = set(ADMIN_RIGHTS)
+    rights = [str(x).lower().lstrip("/") for x in args if str(x).lower().lstrip("/") in valid]
+    invalid = [str(x) for x in args if str(x).lower().lstrip("/") not in valid and not str(x).lstrip("+-").isdigit() and not str(x).startswith("@")] 
+    target = await _resolve_target(message, args)
+    if not target:
+        return None, rights, "target" if not rights else "target"
+    if not rights:
+        return target, rights, "right"
+    return target, rights, None
+
+
+@app.on_message(filters.command(["add", "remove"], prefixes=ADMIN_PREFIXES))
+async def group_rights(_, message):
+    if not _management_group(message):
+        return
+    if not await _can_promote(message):
+        return await message.reply("❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴍᴀɴᴀɢᴇ ᴀᴅᴍɪɴ ʀɪɢʜᴛs.")
+    action = (message.command[0] or "").lower()
+    target, rights, error = await _parse_right_command(message, action)
+    if error == "usage":
+        return await message.reply("❌ ᴜsᴀɢᴇ: <code>.add ban</code> ᴏɴ ᴀɴ ᴀᴅᴍɪɴ's ʀᴇᴘʟʏ.")
+    if error == "right":
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ ʀɪɢʜᴛ. ᴜsᴇ: <code>info delete ban invite pin tags welcome stream addadmins anon stories</code>")
+    if error == "target":
+        return await message.reply("❌ ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴀᴅᴍɪɴ ᴏʀ ᴀᴅᴅ <code>@username</code>/<code>user id</code>.")
+    if not await _can_edit_target(message, target.id):
+        return await message.reply("❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴍᴏᴅɪғʏ ᴛʜɪs ᴀᴅᴍɪɴ.")
+
+    doc = await _admin_right_doc(message.chat.id, target.id)
+    current = set(doc.get("rights", [])) if doc else set()
+    if action == "add":
+        current.update(rights)
+    else:
+        current.difference_update(rights)
+    try:
+        await _apply_telegram_rights(message.chat.id, target.id, current)
+        await _save_admin_rights(message.chat.id, target.id, current, doc.get("mode") if doc else None)
+    except Exception as e:
+        print(f"[ADMIN RIGHTS] {type(e).__name__}: {e}", flush=True)
+        return await message.reply("❌ ᴄᴏᴜʟᴅɴ'ᴛ ᴜᴘᴅᴀᴛᴇ ᴛʜᴇsᴇ ʀɪɢʜᴛs. ᴄʜᴇᴄᴋ ᴛʜᴇ ʙᴏᴛ's ᴀᴅᴍɪɴ ᴘᴇʀᴍɪssɪᴏɴs.")
+
+    label = " • ".join(r.title() for r in rights)
+    verb = "Aᴅᴅᴇᴅ" if action == "add" else "Rᴇᴍᴏᴠᴇᴅ"
+    return await message.reply(f"{_mention(target)} 🕊 Rɪɢʜᴛs {verb} — 🏅 {label}.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  SOCIAL ADMIN COMMANDS
 # ══════════════════════════════════════════════════════════════════════════════
 

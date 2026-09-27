@@ -152,7 +152,17 @@ def _rich_help() -> str:
 </table>
 </details>
 
-<i>ᴛᴀᴘ ᴀ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ ᴛᴏ ᴄᴏɴᴛɪɴᴜᴇ</i> 👇
+<details open>
+<summary>🛡️ <b>ɢᴄ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ</b></summary>
+
+<code>/ban</code> <code>/unban</code> <code>/mute</code> <code>/tmute</code> <code>/kick</code>
+<code>/warn</code> <code>/warns</code> <code>/purge</code> <code>/pin</code> <code>/unpin</code>
+<code>/lock</code> <code>/unlock</code> <code>/locks</code> <code>/filter</code> <code>/filters</code>
+<code>/welcome</code> <code>/goodbye</code> <code>/report</code>
+
+</details>
+
+<i>ᴛᴀᴘ ᴀ ᴄᴀᴛᴇɢᴏʀʏ ʙᴇʟᴏᴡ ᴛᴏ ᴄᴏɴᴛɪɴᴜᴇ</i> 👇
 """
 
 
@@ -204,6 +214,55 @@ def _rich_social() -> str:
 </table>
 </details>
 """
+
+
+def _rich_management() -> str:
+    return """🛡️ <b>ɢᴄ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ</b>
+
+❍ ᴄʜᴏᴏsᴇ ᴀ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ ᴄᴀᴛᴇɢᴏʀʏ ʙᴇʟᴏᴡ.
+
+<i>ᴍᴏsᴛ ᴄᴏᴍᴍᴀɴᴅs ʀᴇǫᴜɪʀᴇ ɢʀᴏᴜᴘ ᴀᴅᴍɪɴ ᴘᴇʀᴍɪssɪᴏɴs.</i> 👇
+"""
+
+
+def _management_page(title: str, intro: str, commands: str) -> str:
+    return f"""🛡️ <b>{title}</b>\n\n{intro}\n\n<details open>\n<summary>✦ ᴄᴏᴍᴍᴀɴᴅs ✦</summary>\n\n{commands}\n\n</details>\n\n<i>ᴜsᴇ ᴛʜᴇ ʙᴀᴄᴋ ʙᴜᴛᴛᴏɴ ᴛᴏ ʀᴇᴛᴜʀɴ ᴛᴏ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ.</i>\n"""
+
+
+def _rich_admin():
+    return _management_page("👑 ᴀᴅᴍɪɴ", "ᴏᴡɴᴇʀ & ᴀᴅᴍɪɴ ᴛᴏᴏʟs", "<code>/promote</code> <code>/demote</code> <code>/adminlist</code> <code>/add</code> <code>/remove</code>\n<code>/adminpanel</code> <code>/adminuser</code> <code>/banbot</code> <code>/botunban</code>\n<code>/stats</code> <code>/broadcast</code> <code>/cancelbroadcast</code> <code>/adminhelp</code>")
+
+
+def _rich_bans():
+    return _management_page("🔨 ʙᴀɴs", "ᴍᴀɴᴀɢᴇ ʙᴀɴs, ᴍᴜᴛᴇs & ᴋɪᴄᴋs", "<code>/ban</code> <code>/unban</code> <code>/tban</code> <code>/dban</code> <code>/sban</code>\n<code>/mute</code> <code>/unmute</code> <code>/tmute</code> <code>/dmute</code> <code>/smute</code>\n<code>/kick</code> <code>/dkick</code> <code>/skick</code>")
+
+
+def _rich_filters():
+    return _management_page("🔎 ғɪʟᴛᴇʀs", "ᴄʀᴇᴀᴛᴇ ᴀɴᴅ ᴍᴀɴᴀɢᴇ ᴄʜᴀᴛ ғɪʟᴛᴇʀs", "<code>/filter &lt;trigger&gt; &lt;reply&gt;</code>\n<code>/filters</code> — ʟɪsᴛ ғɪʟᴛᴇʀs\n<code>/stop &lt;trigger&gt;</code> — ʀᴇᴍᴏᴠᴇ ᴀ ғɪʟᴛᴇʀ\n<code>/stopall</code> — ʀᴇᴍᴏᴠᴇ ᴀʟʟ ғɪʟᴛᴇʀs")
+
+
+def _rich_greetings():
+    return _management_page("👋 ɢʀᴇᴇᴛɪɴɢs", "ᴡᴇʟᴄᴏᴍᴇ & ɢᴏᴏᴅʙʏᴇ ᴍᴇssᴀɢᴇs", "<code>/welcome</code> <code>/goodbye</code>\n<code>/setwelcome</code> <code>/resetwelcome</code>\n<code>/setgoodbye</code> <code>/resetgoodbye</code>\n<code>/cleanwelcome</code>")
+
+
+def _rich_locks():
+    return _management_page("🔒 ʟᴏᴄᴋs", "ʟᴏᴄᴋ ᴄʜᴀᴛ ᴛʏᴘᴇs & ᴍᴇᴅɪᴀ", "<code>/lock &lt;type&gt;</code> <code>/unlock &lt;type&gt;</code>\n<code>/locks</code> — ᴄᴜʀʀᴇɴᴛ ʟᴏᴄᴋs\n<code>/locktypes</code> — ᴀᴠᴀɪʟᴀʙʟᴇ ᴛʏᴘᴇs\n<code>/lockwarns</code> — ʟᴏᴄᴋ ᴡᴀʀɴɪɴɢs")
+
+
+def _rich_pins():
+    return _management_page("📌 ᴘɪɴs", "ᴍᴀɴᴀɢᴇ ᴘɪɴɴᴇᴅ ᴍᴇssᴀɢᴇs", "<code>/pin</code> — ᴘɪɴ ᴀ ᴍᴇssᴀɢᴇ\n<code>/unpin</code> — ᴜɴᴘɪɴ ᴀ ᴍᴇssᴀɢᴇ\n<code>/pinned</code> — sʜᴏᴡ ᴘɪɴɴᴇᴅ ᴍᴇssᴀɢᴇ\n<code>/unpinall</code> — ᴄʟᴇᴀʀ ᴘɪɴs")
+
+
+def _rich_purges():
+    return _management_page("🧹 ᴘᴜʀɢᴇs", "ᴅᴇʟᴇᴛᴇ ᴍᴜʟᴛɪᴘʟᴇ ᴍᴇssᴀɢᴇs", "<code>/purge</code> — ᴘᴜʀɢᴇ ʀᴇᴘʟɪᴇᴅ ᴍᴇssᴀɢᴇs\n<code>/spurge</code> — sɪʟᴇɴᴛ ᴘᴜʀɢᴇ\n<code>/del</code> <code>/d</code> <code>/delete</code> — ᴅᴇʟᴇᴛᴇ\n<code>/purgefrom</code> <code>/purgeto</code> — ᴘᴜʀɢᴇ ʀᴀɴɢᴇ")
+
+
+def _rich_reports():
+    return _management_page("🚨 ʀᴇᴘᴏʀᴛs", "ʀᴇᴘᴏʀᴛ ᴍᴇᴍʙᴇʀs & ᴠɪᴇᴡ ʀᴇᴘᴏʀᴛs", "<code>/report</code> — ʀᴇᴘᴏʀᴛ ᴀ ᴜsᴇʀ\n<code>/reports</code> — ᴠɪᴇᴡ ʀᴇᴘᴏʀᴛs")
+
+
+def _rich_warnings():
+    return _management_page("⚠️ ᴡᴀʀɴɪɴɢs", "ᴛʀᴀᴄᴋ ᴜsᴇʀ ᴡᴀʀɴɪɴɢs & ʟɪᴍɪᴛs", "<code>/warn</code> <code>/dwarn</code> <code>/swarn</code>\n<code>/warns</code> <code>/warnings</code> — ᴠɪᴇᴡ ᴡᴀʀɴs\n<code>/rmwarn</code> — ʀᴇᴍᴏᴠᴇ ᴡᴀʀɴ\n<code>/resetwarn</code> <code>/resetallwarns</code>\n<code>/warnmode</code> <code>/warnlimit</code> <code>/warntime</code>")
 
 
 def _rich_about() -> str:
@@ -272,15 +331,25 @@ def _welcome_kb() -> InlineKeyboardMarkup:
 
 _HELP_KB = InlineKeyboardMarkup([
     [
-        InlineKeyboardButton("🤖 ᴀɪ", callback_data="elara:ai",
-                             style=enums.ButtonStyle.PRIMARY),
-        InlineKeyboardButton("💕 sᴏᴄɪᴀʟ", callback_data="elara:social",
-                             style=enums.ButtonStyle.SUCCESS),
+        InlineKeyboardButton("🤖 ᴀɪ", callback_data="elara:ai", style=enums.ButtonStyle.PRIMARY),
+        InlineKeyboardButton("💕 sᴏᴄɪᴀʟ", callback_data="elara:social", style=enums.ButtonStyle.SUCCESS),
     ],
-    [InlineKeyboardButton("⌯ ʜᴏᴍᴇ ⌯", callback_data="elara:home",
-                          style=enums.ButtonStyle.PRIMARY)],
+    [InlineKeyboardButton("🛡️ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ", callback_data="elara:management", style=enums.ButtonStyle.PRIMARY)],
+    [InlineKeyboardButton("⌯ ʜᴏᴍᴇ ⌯", callback_data="elara:home", style=enums.ButtonStyle.PRIMARY)],
 ])
 
+_MANAGEMENT_KB = InlineKeyboardMarkup([
+    [InlineKeyboardButton("👑 ᴀᴅᴍɪɴ", callback_data="elara:mg_admin", style=enums.ButtonStyle.DANGER),
+     InlineKeyboardButton("🔨 ʙᴀɴs", callback_data="elara:mg_bans", style=enums.ButtonStyle.PRIMARY)],
+    [InlineKeyboardButton("🔎 ғɪʟᴛᴇʀs", callback_data="elara:mg_filters", style=enums.ButtonStyle.SUCCESS),
+     InlineKeyboardButton("👋 ɢʀᴇᴇᴛɪɴɢs", callback_data="elara:mg_greetings", style=enums.ButtonStyle.SUCCESS)],
+    [InlineKeyboardButton("🔒 ʟᴏᴄᴋs", callback_data="elara:mg_locks", style=enums.ButtonStyle.PRIMARY),
+     InlineKeyboardButton("📌 ᴘɪɴs", callback_data="elara:mg_pins", style=enums.ButtonStyle.PRIMARY)],
+    [InlineKeyboardButton("🧹 ᴘᴜʀɢᴇs", callback_data="elara:mg_purges", style=enums.ButtonStyle.DANGER),
+     InlineKeyboardButton("🚨 ʀᴇᴘᴏʀᴛs", callback_data="elara:mg_reports", style=enums.ButtonStyle.DANGER)],
+    [InlineKeyboardButton("⚠️ ᴡᴀʀɴɪɴɢs", callback_data="elara:mg_warnings", style=enums.ButtonStyle.PRIMARY)],
+    [InlineKeyboardButton("⬅️ ʙᴀᴄᴋ ᴛᴏ ʜᴇʟᴘ", callback_data="elara:help", style=enums.ButtonStyle.PRIMARY)],
+])
 
 _BACK_KB = InlineKeyboardMarkup([
     [InlineKeyboardButton("⬅️ ʙᴀᴄᴋ", callback_data="elara:help",
@@ -425,7 +494,7 @@ async def help_handler(_, message: Message):
     await _send_rich(message.chat.id, _rich_help(), _HELP_KB, _pick_image())
 
 
-@bot.on_callback_query(filters.regex(r"^elara:(home|help|about|social|ai|close)$"))
+@bot.on_callback_query(filters.regex(r"^elara:(home|help|about|social|ai|management|mg_admin|mg_bans|mg_filters|mg_greetings|mg_locks|mg_pins|mg_purges|mg_reports|mg_warnings|close)$"))
 async def cb(_, q: CallbackQuery):
     d = q.data.split(":", 1)[1]
 
@@ -464,6 +533,31 @@ async def cb(_, q: CallbackQuery):
     if d == "social":
         await q.answer()
         await _edit_rich(q.message, _rich_social(), _BACK_KB)
+        return
+
+    if d == "management":
+        await q.answer()
+        await _edit_rich(q.message, _rich_management(), _MANAGEMENT_KB)
+        return
+
+    management_pages = {
+        "mg_admin": _rich_admin,
+        "mg_bans": _rich_bans,
+        "mg_filters": _rich_filters,
+        "mg_greetings": _rich_greetings,
+        "mg_locks": _rich_locks,
+        "mg_pins": _rich_pins,
+        "mg_purges": _rich_purges,
+        "mg_reports": _rich_reports,
+        "mg_warnings": _rich_warnings,
+    }
+
+    if d in management_pages:
+        await q.answer()
+        await _edit_rich(q.message, management_pages[d](), InlineKeyboardMarkup([
+            [InlineKeyboardButton("⬅️ ʙᴀᴄᴋ ᴛᴏ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ", callback_data="elara:management", style=enums.ButtonStyle.PRIMARY)],
+            [InlineKeyboardButton("⌯ ʜᴏᴍᴇ ⌯", callback_data="elara:home", style=enums.ButtonStyle.DANGER)],
+        ]))
         return
 
     if d == "about":
