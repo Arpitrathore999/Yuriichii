@@ -5,14 +5,11 @@
 
 import os
 import time
-import asyncio
-from urllib.request import Request, urlopen
 from datetime import timedelta
 
 import psutil
 import speedtest
-from pyrogram import filters
-from pyrogram.enums import ParseMode
+from pyrogram import enums, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 import config
@@ -37,82 +34,70 @@ def supp_markup():
     if not url:
         return None
     return InlineKeyboardMarkup([[
-        InlineKeyboardButton(text="🎀 sᴜᴘᴘᴏʀᴛ 🎀", url=url),
+        InlineKeyboardButton(
+            text="🎀 sᴜᴘᴘᴏʀᴛ 🎀",
+            url=url,
+            style=enums.ButtonStyle.SUCCESS,
+        ),
     ]])
 
 
 # ── /ping ──────────────────────────────────────────────────────────────────────
 
-@app.on_message(filters.command("ping") & (filters.private | filters.group))
+@app.on_message(filters.command("ping"))
 async def ping_cmd(client, message: Message):
-    """Reliable /ping for private chats and groups."""
-    start = time.perf_counter()
+    chat_id = message.chat.id
+    start   = time.perf_counter()
 
+    # Latency measure
     try:
         await client.get_me()
     except Exception:
         pass
-
     latency = max(1, round((time.perf_counter() - start) * 1000))
-    uptime = str(timedelta(seconds=int(time.time() - BOT_START_TIME)))
 
-    try:
-        cpu = psutil.cpu_percent(interval=0.5)
-    except Exception:
-        cpu = 0
+    uptime  = str(timedelta(seconds=int(time.time() - BOT_START_TIME)))
+
+    try:    cpu = psutil.cpu_percent(interval=0.5)
+    except: cpu = 0
 
     try:
         ram = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
-    except Exception:
+    except:
         ram = 0
 
     try:
         disk = psutil.disk_usage("/")
-        disk_str = f"{disk.used // (1024**3)}GB / {disk.total // (1024**3)}GB ({disk.percent}%)"
-    except Exception:
+        disk_str = (
+            f"{disk.used // (1024**3)}GB / "
+            f"{disk.total // (1024**3)}GB "
+            f"({disk.percent}%)"
+        )
+    except:
         disk_str = "N/A"
 
-    bot_name = getattr(config, "BOT_NAME", "Elara")
-    img_url = (getattr(config, "PING_IMAGE_URL", "") or "").strip()
+    pytg = "N/A"
 
+    bot_name    = getattr(config, "BOT_NAME", "Elara")
+    support_url = (getattr(config, "SUPPORT_GROUP", None)
+                   or getattr(config, "SUPPORT_URL", ""))
+    img_url     = getattr(config, "PING_IMAGE_URL", "")
+
+    # ── Rich HTML build (kurigram render karega)
     caption = (
-        f"🏓 <b>ᴘᴏɴɢ : {latency}ms</b>\n\n"
-        f"❍ <b>ᴜᴘᴛɪᴍᴇ:</b> <code>{uptime}</code>\n"
-        f"❍ <b>ʀᴀᴍ:</b> <code>{ram:.2f} MB</code>\n"
-        f"❍ <b>ᴄᴘᴜ:</b> <code>{cpu}%</code>\n"
-        f"❍ <b>ᴅɪsᴋ:</b> <code>{disk_str}</code>\n"
-        f"❍ <b>ᴘʏᴛɢᴄ:</b> <code>N/A</code>\n\n"
-        f"❍ ʙʏ » <b>{rich_esc(bot_name)}</b>"
+        rich_heading(f"🏓 ᴘᴏɴɢ : {latency}ms", level=3)
+        + rich_img(img_url)
+        + rich_kv_table([
+            ("ᴜᴘᴛɪᴍᴇ", f"<code>{rich_esc(uptime)}</code>"),
+            ("ʀᴀᴍ",    f"<code>{ram:.2f} MB</code>"),
+            ("ᴄᴘᴜ",    f"<code>{cpu}%</code>"),
+            ("ᴅɪsᴋ",   f"<code>{rich_esc(disk_str)}</code>"),
+            ("ᴘʏᴛɢᴄ",  f"<code>{pytg}</code>"),
+        ])
+        + f'❍ ʙʏ » <a href="{support_url}">{rich_esc(bot_name)}</a>'
     )
 
-    markup = supp_markup()
-
-    # Download the image ourselves so Telegram does not have to fetch the URL.
-    if img_url:
-        try:
-            req = Request(img_url, headers={"User-Agent": "Mozilla/5.0"})
-            def _download():
-                with urlopen(req, timeout=15) as r:
-                    return r.read()
-            image_bytes = await asyncio.to_thread(_download)
-            await client.send_photo(
-                chat_id=message.chat.id,
-                photo=image_bytes,
-                caption=caption,
-                parse_mode=ParseMode.HTML,
-                reply_markup=markup,
-            )
-            return
-        except Exception as e:
-            print(f"[/ping] image send failed: {e}")
-
-    # Always respond even if the image URL is unavailable.
-    await client.send_message(
-        chat_id=message.chat.id,
-        text=caption,
-        parse_mode=ParseMode.HTML,
-        reply_markup=markup,
-    )
+    await rich_send(client, chat_id, caption, reply_markup=supp_markup())
 
 
 # ── /speedtest ─────────────────────────────────────────────────────────────────
