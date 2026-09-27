@@ -12,6 +12,7 @@ from datetime import timedelta
 import psutil
 import speedtest
 from pyrogram import filters
+from pyrogram.enums import ParseMode
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 import config
