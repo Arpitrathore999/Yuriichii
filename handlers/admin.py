@@ -540,4 +540,14 @@ async def admin_panel_callback(_, query: CallbackQuery):
         )
 
     if action == "db":
-        state = "🟢 ᴄᴏɴɴᴇᴄᴛ
+    state = "🟢 ᴄᴏɴɴᴇᴄᴛᴇᴅ" if db is not None else "🔴 ɴᴏᴛ ᴄᴏɴғɪɢᴜʀᴇᴅ"
+    if db is not None:
+        try:
+            await db.command("ping")
+        except Exception:
+            state = "🔴 ᴄᴏɴɴᴇᴄᴛɪᴏɴ ᴇʀʀᴏʀ"
+    return await _edit_panel(
+        query,
+        rich_heading("🗄 ᴅᴀᴛᴀʙᴀsᴇ sᴛᴀᴛᴜs", level=3)
+        + rich_kv_table([("ᴍᴏɴɢᴏᴅʙ", state)], headers=["sᴇʀᴠɪᴄᴇ", "sᴛᴀᴛᴜs"])
+    )
