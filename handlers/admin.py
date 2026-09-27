@@ -3,10 +3,14 @@
 #  handlers/admin.py — Premium Owner Panel + Social Admin
 # --------------------------------------------------------------------------------
 
-from pyrogram import enums, filters
+from pyrogram import enums, filters, StopPropagation
 from pyrogram.enums import ChatMemberStatus, ChatType
-from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
-from pyrogram import StopPropagation
+from pyrogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 
 import config
 from core.bot import app
@@ -48,7 +52,11 @@ from database.broadcast import get_broadcast_count, get_broadcast_chats
 # ══════════════════════════════════════════════════════════════════════════════
 
 def owner_only(message):
-    return bool(message.from_user and config.OWNER_ID and message.from_user.id == config.OWNER_ID)
+    return bool(
+        message.from_user
+        and config.OWNER_ID
+        and message.from_user.id == config.OWNER_ID
+    )
 
 
 async def can_manage_social(message):
@@ -67,7 +75,10 @@ async def can_manage_social(message):
 
 
 async def deny(message):
-    await message.reply("🚫 <b>ᴀᴄᴄᴇss ᴅᴇɴɪᴇᴅ</b>\n\n<i>ʏᴏᴜ ᴍᴜsᴛ ʙᴇ ᴛʜᴇ ɢʀᴏᴜᴘ ᴏᴡɴᴇʀ/ᴀᴅᴍɪɴ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</i>")
+    await message.reply(
+        "🚫 <b>ᴀᴄᴄᴇss ᴅᴇɴɪᴇᴅ</b>\n\n"
+        "<i>ʏᴏᴜ ᴍᴜsᴛ ʙᴇ ᴛʜᴇ ɢʀᴏᴜᴘ ᴏᴡɴᴇʀ/ᴀᴅᴍɪɴ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</i>"
+    )
 
 
 def _btn(text, callback_data, style=enums.ButtonStyle.PRIMARY):
@@ -81,7 +92,7 @@ def _user_name(doc):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  SOCIAL ADMIN (unchanged logic)
+#  SOCIAL ADMIN COMMANDS
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.on_message(filters.command("adminhelp"))
@@ -106,7 +117,9 @@ async def admin_help(_, message):
 async def stats(_, message):
     if not await can_manage_social(message):
         return await deny(message)
-    await message.reply("📊 <b>ᴇʟᴀʀᴀ sᴛᴀᴛs</b>\n\n<i>ʙᴏᴛ ɪs ᴏɴʟɪɴᴇ ᴀɴᴅ ᴍᴏᴅᴜʟᴀʀ.</i>")
+    await message.reply(
+        "📊 <b>ᴇʟᴀʀᴀ sᴛᴀᴛs</b>\n\n<i>ʙᴏᴛ ɪs ᴏɴʟɪɴᴇ ᴀɴᴅ ᴍᴏᴅᴜʟᴀʀ.</i>"
+    )
 
 
 @app.on_message(filters.command("addgif"))
@@ -129,7 +142,10 @@ async def add_social_gif(_, message):
 
     if await add_gif(command, media.file_id):
         data = await get_social_data(command)
-        await message.reply(f"✅ ɢɪғ ᴀᴅᴅᴇᴅ ᴛᴏ <code>/{command}</code>\n🎞️ ᴛᴏᴛᴀʟ ɢɪғs: <b>{len(data['gifs'])}</b>")
+        await message.reply(
+            f"✅ ɢɪғ ᴀᴅᴅᴇᴅ ᴛᴏ <code>/{command}</code>\n"
+            f"🎞️ ᴛᴏᴛᴀʟ ɢɪғs: <b>{len(data['gifs'])}</b>"
+        )
     else:
         await message.reply("❌ ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ. ᴄʜᴇᴄᴋ <code>MONGO_URI</code>.")
 
@@ -148,9 +164,12 @@ async def add_social_caption(_, message):
 
     if await add_caption(command, caption):
         data = await get_social_data(command)
-        await message.reply(f"✅ ᴄᴀᴘᴛɪᴏɴ ᴀᴅᴅᴇᴅ ᴛᴏ <code>/{command}</code>\n📝 ᴛᴏᴛᴀʟ ᴄᴀᴘᴛɪᴏɴs: <b>{len(data['captions'])}</b>")
+        await message.reply(
+            f"✅ ᴄᴀᴘᴛɪᴏɴ ᴀᴅᴅᴇᴅ ᴛᴏ <code>/{command}</code>\n"
+            f"📝 ᴛᴏᴛᴀʟ ᴄᴀᴘᴛɪᴏɴs: <b>{len(data['captions'])}</b>"
+        )
     else:
-        return await message.reply("❌ ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ. ᴄʜᴇᴄᴋ <code>MONGO_URI</code>.")
+        await message.reply("❌ ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ. ᴄʜᴇᴄᴋ <code>MONGO_URI</code>.")
 
 
 @app.on_message(filters.command("socialgifs"))
@@ -163,7 +182,10 @@ async def social_gifs(_, message):
     if command not in COMMANDS:
         return await message.reply("❌ ɪɴᴠᴀʟɪᴅ sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ.")
     data = await get_social_data(command)
-    await message.reply(f"🎞️ <code>/{command}</code> ɢɪғs: <b>{len(data['gifs'])}</b>\n📝 ᴄᴀᴘᴛɪᴏɴs: <b>{len(data['captions'])}</b>")
+    await message.reply(
+        f"🎞️ <code>/{command}</code> ɢɪғs: <b>{len(data['gifs'])}</b>\n"
+        f"📝 ᴄᴀᴘᴛɪᴏɴs: <b>{len(data['captions'])}</b>"
+    )
 
 
 @app.on_message(filters.command("socialcaptions"))
@@ -176,7 +198,9 @@ async def social_captions(_, message):
     if command not in COMMANDS:
         return await message.reply("❌ ɪɴᴠᴀʟɪᴅ sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ.")
     data = await get_social_data(command)
-    await message.reply(f"📝 <code>/{command}</code> ʜᴀs <b>{len(data['captions'])}</b> ᴄᴀᴘᴛɪᴏɴ(s).")
+    await message.reply(
+        f"📝 <code>/{command}</code> ʜᴀs <b>{len(data['captions'])}</b> ᴄᴀᴘᴛɪᴏɴ(s)."
+    )
 
 
 @app.on_message(filters.command("clearsocialgifs"))
@@ -314,7 +338,10 @@ async def _show_users(query, page=0, banned_only=False):
 @app.on_message(filters.command("adminpanel"))
 async def admin_panel(_, message):
     if not _panel_owner(message):
-        return await message.reply("⛔ <b>ᴏᴡɴᴇʀ ᴏɴʟʏ</b>\n\n<i>ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ɪs ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴛᴏ ᴛʜᴇ ʙᴏᴛ ᴏᴡɴᴇʀ.</i>")
+        return await message.reply(
+            "⛔ <b>ᴏᴡɴᴇʀ ᴏɴʟʏ</b>\n\n"
+            "<i>ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ɪs ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴛᴏ ᴛʜᴇ ʙᴏᴛ ᴏᴡɴᴇʀ.</i>"
+        )
     stats = await get_user_stats()
     bc = await get_broadcast_count()
     await rich_send(
@@ -513,122 +540,4 @@ async def admin_panel_callback(_, query: CallbackQuery):
         )
 
     if action == "db":
-        state = "🟢 ᴄᴏɴɴᴇᴄᴛᴇᴅ" if db is not None else "🔴 ɴᴏᴛ ᴄᴏɴғɪɢᴜʀᴇᴅ"
-        if db is not None:
-            try:
-                await db.command("ping")
-            except Exception:
-                state = "🔴 ᴄᴏɴɴᴇᴄᴛɪᴏɴ ᴇʀʀᴏʀ"
-        return await _edit_panel(
-            query,
-            rich_heading("🗄 ᴅᴀᴛᴀʙᴀsᴇ sᴛᴀᴛᴜs", level=3)
-            + rich_kv_table([("ᴍᴏɴɢᴏᴅʙ", state)], headers=["sᴇʀᴠɪᴄᴇ", "sᴛᴀᴛᴜs"])
-        )
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  BROADCAST
-# ══════════════════════════════════════════════════════════════════════════════
-
-@app.on_message(filters.command("cancelbroadcast"))
-async def cancel_admin_broadcast(_, message):
-    if not _panel_owner(message):
-        return await message.reply("⛔ <b>ᴏᴡɴᴇʀ ᴏɴʟʏ</b>")
-    _ADMIN_BROADCAST_WAIT.pop(int(message.from_user.id), None)
-    await message.reply("❌ <b>ʙʀᴏᴀᴅᴄᴀsᴛ ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>")
-
-
-async def _copy_or_send(client, target_id, message):
-    try:
-        if message.text:
-            return await client.send_message(target_id, message.text)
-        return await client.copy_message(target_id, message.chat.id, message.id)
-    except Exception:
-        raise
-
-
-@app.on_message(filters.all, group=-50)
-async def admin_broadcast_message(client, message):
-    if not _panel_owner(message):
-        return
-    uid = int(message.from_user.id) if message.from_user else 0
-    state = _ADMIN_BROADCAST_WAIT.get(uid)
-    if not state or state.get("mode") == "selected_ids":
-        if state and state.get("mode") == "selected_ids" and message.text and not message.text.startswith("/"):
-            raw_ids = message.text.replace(",", " ").split()
-            ids = []
-            for raw in raw_ids:
-                try:
-                    ids.append(int(raw))
-                except ValueError:
-                    pass
-            if not ids:
-                return await message.reply("❌ ɴᴏ ᴠᴀʟɪᴅ ᴛᴇʟᴇɢʀᴀᴍ ɪᴅs ғᴏᴜɴᴅ.")
-            state["ids"] = ids
-            state["mode"] = "selected_message"
-            return await message.reply(
-                "✅ ɪᴅs sᴀᴠᴇᴅ. ɴᴏᴡ sᴇɴᴅ ᴛʜᴇ ᴍᴇssᴀɢᴇ ᴛᴏ ʙʀᴏᴀᴅᴄᴀsᴛ.\n\n"
-                "<code>/cancelbroadcast</code> ᴛᴏ ᴄᴀɴᴄᴇʟ."
-            )
-        return
-    if state.get("mode") == "selected_message":
-        targets = state.get("ids", [])
-    else:
-        docs = await get_broadcast_chats()
-        mode = state.get("mode")
-        if mode == "groups":
-            targets = [int(d["chat_id"]) for d in docs if d.get("type") == "group"]
-        elif mode == "private":
-            targets = [int(d["chat_id"]) for d in docs if d.get("type") == "private"]
-        elif mode == "active":
-            targets = await get_active_user_ids(7)
-        else:
-            targets = [int(d["chat_id"]) for d in docs]
-    if message.text and message.text.startswith("/"):
-        return
-    _ADMIN_BROADCAST_WAIT.pop(uid, None)
-    if not targets:
-        return await message.reply("❌ ɴᴏ ᴛᴀʀɢᴇᴛs ғᴏᴜɴᴅ ғᴏʀ ᴛʜɪs ʙʀᴏᴀᴅᴄᴀsᴛ ᴍᴏᴅᴇ.")
-    status = await message.reply(
-        f"📢 <b>ʙʀᴏᴀᴅᴄᴀsᴛ sᴛᴀʀᴛᴇᴅ</b>\n\n"
-        f"🎯 ᴛᴀʀɢᴇᴛs: <code>{len(targets)}</code>\n⏳ sᴇɴᴅɪɴɢ..."
-    )
-    sent = failed = 0
-    for cid in targets:
-        try:
-            await _copy_or_send(client, cid, message)
-            sent += 1
-        except Exception:
-            failed += 1
-        await asyncio.sleep(0.05)
-    await status.edit_text(
-        "<b>📢 ʙʀᴏᴀᴅᴄᴀsᴛ ᴄᴏᴍᴘʟᴇᴛᴇ</b>\n\n"
-        f"🎯 ᴛᴀʀɢᴇᴛs: <code>{len(targets)}</code>\n"
-        f"✅ sᴇɴᴛ: <code>{sent}</code>\n"
-        f"❌ ғᴀɪʟᴇᴅ: <code>{failed}</code>"
-    )
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  GLOBAL BAN GUARDS
-# ══════════════════════════════════════════════════════════════════════════════
-
-@app.on_message(filters.all, group=-100)
-async def banned_user_guard(_, message):
-    if not message.from_user or _panel_owner(message):
-        return
-    if await is_user_banned(message.from_user.id):
-        try:
-            await message.reply("🚫 <b>ʏᴏᴜ ᴀʀᴇ ᴘᴇʀᴍᴀɴᴇɴᴛʟʏ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴜsɪɴɢ ᴛʜɪs ʙᴏᴛ.</b>")
-        except Exception:
-            pass
-        raise StopPropagation
-
-
-@app.on_callback_query(group=-100)
-async def banned_callback_guard(_, query):
-    if not query.from_user or _panel_owner(query):
-        return
-    if await is_user_banned(query.from_user.id):
-        await query.answer("🚫 ʏᴏᴜ ᴀʀᴇ ᴘᴇʀᴍᴀɴᴇɴᴛʟʏ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴜsɪɴɢ ᴛʜɪs ʙᴏᴛ.", show_alert=True)
-        raise StopPropagation
+        state = "🟢 ᴄᴏɴɴᴇᴄᴛ
