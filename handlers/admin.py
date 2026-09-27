@@ -257,10 +257,10 @@ async def _show_users(query, page=0, banned_only=False):
     rows.append([InlineKeyboardButton("⬅️ PANEL", callback_data="adm:dash")])
     await _edit_panel(query, "\n".join(lines), InlineKeyboardMarkup(rows))
 
-@app.on_message(filters.command("adminpanel") & filters.user(config.OWNER_ID))
+@app.on_message(filters.command("adminpanel"))
 async def admin_panel(_, message):
     if not _panel_owner(message):
-        return
+        return await message.reply("⛔ <b>Owner only.</b>\n\nThis command is restricted to the bot owner.")
     try:
         stats = await get_user_stats()
         bc = await get_broadcast_count()
@@ -268,10 +268,10 @@ async def admin_panel(_, message):
     except Exception as e:
         await message.reply(f"❌ Admin panel error: <code>{type(e).__name__}</code>")
 
-@app.on_message(filters.command("adminuser") & filters.user(config.OWNER_ID))
+@app.on_message(filters.command("adminuser"))
 async def admin_user_lookup(_, message):
     if not _panel_owner(message):
-        return
+        return await message.reply("⛔ <b>Owner only.</b>")
     if len(message.command or []) < 2:
         return await message.reply("Usage: <code>/adminuser USER_ID</code>")
     try:
@@ -355,13 +355,17 @@ async def admin_panel_callback(_, query: CallbackQuery):
             "Send <code>/cancelbroadcast</code> to cancel."
         )
 
-@app.on_message(filters.command("cancelbroadcast") & filters.user(config.OWNER_ID))
+@app.on_message(filters.command("cancelbroadcast"))
 async def cancel_admin_broadcast(_, message):
+    if not _panel_owner(message):
+        return await message.reply("⛔ <b>Owner only.</b>")
     _ADMIN_BROADCAST_WAIT.discard(int(message.from_user.id))
     await message.reply("❌ Admin broadcast cancelled.")
 
-@app.on_message(filters.user(config.OWNER_ID), group=20)
+@app.on_message(filters.all, group=20)
 async def admin_broadcast_message(client, message):
+    if not _panel_owner(message):
+        return
     uid = int(message.from_user.id) if message.from_user else 0
     if uid not in _ADMIN_BROADCAST_WAIT:
         return
