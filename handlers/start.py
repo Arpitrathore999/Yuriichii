@@ -131,9 +131,9 @@ def _rich_welcome(user) -> str:
 
 </details>
 
-<blockquote>ᴘᴏᴡᴇʀᴇᴅ ʙʏ » <b>{bot}</b></blockquote>
+<blockquote>ᴘᴏᴡᴇʀᴇᴅ ʙʏ » <a href="{upd}"><b>{bot}</b></a></blockquote>
 
-🍬 <a href="{sup}"><b><code>sᴜᴘᴘᴏʀᴛ</code></b></a>   ·   🍹 <a href="{upd}"><b><code>ᴜᴘᴅᴀᴛᴇs</code></b></a>
+🍬 <a href="{sup}"><b>sᴜᴘᴘᴏʀᴛ</b></a>   ·   🍹 <a href="{upd}"><b>ᴜᴘᴅᴀᴛᴇs</b></a>
 """
 
 
@@ -313,14 +313,24 @@ def _kb_to_dict(kb):
 
 
 async def _send_rich(chat_id, html, kb, image=None):
-    """Send via Rich Message API. Fallback to photo/text."""
+    """Send the original rich UI and a reliable start image."""
+    if image:
+        try:
+            # Download the configured image ourselves, then upload its bytes.
+            req = Request(image, headers={"User-Agent": "Mozilla/5.0"})
+            def _download():
+                with urlopen(req, timeout=20) as r:
+                    return r.read()
+            image_bytes = await asyncio.to_thread(_download)
+            await bot.send_photo(chat_id, photo=image_bytes)
+        except Exception as e:
+            print(f"[start-image] failed: {e}")
+
     payload = {
         "chat_id": chat_id,
         "rich_message": {"html": html},
         "reply_markup": _kb_to_dict(kb),
     }
-    if image:
-        payload["rich_message"]["photo_url"] = image
 
     result = await _bot_api("sendRichMessage", payload)
     if result.get("ok"):
@@ -328,19 +338,14 @@ async def _send_rich(chat_id, html, kb, image=None):
 
     print(f"[rich] failed: {result.get('description')}")
 
-    if image:
-        try:
-            return await bot.send_photo(
-                chat_id, photo=image, caption=html,
-                reply_markup=kb, parse_mode=ParseMode.HTML,
-            )
-        except Exception:
-            pass
-
-    return await bot.send_message(
-        chat_id, html, reply_markup=kb, parse_mode=ParseMode.HTML,
-        link_preview_options=LinkPreviewOptions(is_disabled=True),
-    )
+    try:
+        return await bot.send_message(
+            chat_id, html, reply_markup=kb, parse_mode=ParseMode.HTML,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
+    except Exception as e:
+        print(f"[rich-fallback] failed: {e}")
+        return None
 
 
 async def _edit_rich(msg, html, kb):
