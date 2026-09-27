@@ -1,5 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from .mongo import users
+
 
 async def ensure_user(user):
     """Create/update a user record. Returns False when DB is unavailable."""
@@ -22,12 +23,14 @@ async def ensure_user(user):
     )
     return True
 
+
 async def is_user_banned(user_id: int) -> bool:
     col = users()
     if col is None:
         return False
     doc = await col.find_one({"_id": int(user_id)}, {"banned": 1})
     return bool(doc and doc.get("banned", False))
+
 
 async def set_user_banned(user_id: int, banned: bool, admin_id: int | None = None):
     col = users()
@@ -49,11 +52,13 @@ async def set_user_banned(user_id: int, banned: bool, admin_id: int | None = Non
     )
     return True
 
+
 async def get_user(user_id: int):
     col = users()
     if col is None:
         return None
     return await col.find_one({"_id": int(user_id)})
+
 
 async def get_user_stats():
     col = users()
@@ -62,6 +67,7 @@ async def get_user_stats():
     total = await col.count_documents({})
     banned = await col.count_documents({"banned": True})
     return {"total": total, "banned": banned, "active": total - banned}
+
 
 async def get_users_page(page: int = 0, page_size: int = 8, banned_only=False):
     col = users()
@@ -77,3 +83,22 @@ async def get_users_page(page: int = 0, page_size: int = 8, banned_only=False):
         .to_list(length=page_size)
     )
     return docs, total
+
+
+async def get_active_user_ids(days: int = 7, limit: int | None = None):
+    """Return user IDs active in the last `days` days (excludes banned)."""
+    col = users()
+    if col is None:
+        return []
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max(1, int(days)))
+    cursor = (
+        col.find(
+            {"banned": {"$ne": True}, "last_seen": {"$gte": cutoff}},
+            {"_id": 1},
+        )
+        .sort("last_seen", -1)
+    )
+    if limit:
+        cursor = cursor.limit(int(limit))
+    docs = await cursor.to_list(length=limit or 100000)
+    return [int(d["_id"]) for d in docs]
