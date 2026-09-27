@@ -1,7 +1,16 @@
-from pyrogram import filters
+# --------------------------------------------------------------------------------
+#  Elara © 2026
+#  handlers/admin.py — Premium Owner Panel + Social Admin
+# --------------------------------------------------------------------------------
+
+from pyrogram import enums, filters
 from pyrogram.enums import ChatMemberStatus, ChatType
-from core.bot import app
+from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from pyrogram import StopPropagation
+
 import config
+from core.bot import app
+
 from modules.social.settings import (
     COMMANDS,
     add_gif,
@@ -11,6 +20,32 @@ from modules.social.settings import (
     clear_captions,
 )
 
+from utils.rich_ui import (
+    rich_esc,
+    rich_heading,
+    rich_note,
+    rich_kv_table,
+    rich_table,
+    rich_send,
+    rich_edit,
+)
+
+import asyncio
+from database.mongo import db
+from database.users import (
+    is_user_banned,
+    set_user_banned,
+    get_user,
+    get_user_stats,
+    get_users_page,
+    get_active_user_ids,
+)
+from database.broadcast import get_broadcast_count, get_broadcast_chats
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  HELPERS
+# ══════════════════════════════════════════════════════════════════════════════
 
 def owner_only(message):
     return bool(message.from_user and config.OWNER_ID and message.from_user.id == config.OWNER_ID)
@@ -32,24 +67,38 @@ async def can_manage_social(message):
 
 
 async def deny(message):
-    await message.reply("❌ You must be the group owner/admin to use this command.")
+    await message.reply("🚫 <b>ᴀᴄᴄᴇss ᴅᴇɴɪᴇᴅ</b>\n\n<i>ʏᴏᴜ ᴍᴜsᴛ ʙᴇ ᴛʜᴇ ɢʀᴏᴜᴘ ᴏᴡɴᴇʀ/ᴀᴅᴍɪɴ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</i>")
 
+
+def _btn(text, callback_data, style=enums.ButtonStyle.PRIMARY):
+    return InlineKeyboardButton(text, callback_data=callback_data, style=style)
+
+
+def _user_name(doc):
+    first = (doc.get("first_name") or "Unknown").strip()
+    username = (doc.get("username") or "").strip()
+    return f"{first} (@{username})" if username else first
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SOCIAL ADMIN (unchanged logic)
+# ══════════════════════════════════════════════════════════════════════════════
 
 @app.on_message(filters.command("adminhelp"))
 async def admin_help(_, message):
     if not await can_manage_social(message):
         return await deny(message)
     await message.reply(
-        "🛠️ **Social Admin Commands**\n\n"
-        "🎞️ **GIFs**\n"
-        "• Reply to a GIF → `/addgif hug`\n"
-        "• `/socialgifs hug` — count GIFs/captions\n"
-        "• `/clearsocialgifs hug` — clear all GIFs\n\n"
-        "📝 **Captions**\n"
-        "• `/addcaption hug Your caption {a} {b}`\n"
-        "• `/socialcaptions hug` — show caption count\n"
-        "• `/clearsocialcaptions hug` — clear custom captions\n\n"
-        "Available actions: " + ", ".join(f"`/{x}`" for x in COMMANDS)
+        "🛠️ <b>sᴏᴄɪᴀʟ ᴀᴅᴍɪɴ ᴄᴏᴍᴍᴀɴᴅs</b>\n\n"
+        "🎞️ <b>ɢɪғs</b>\n"
+        "• ʀᴇᴘʟʏ ᴛᴏ ᴀ ɢɪғ → <code>/addgif hug</code>\n"
+        "• <code>/socialgifs hug</code> — ᴄᴏᴜɴᴛ ɢɪғs/ᴄᴀᴘᴛɪᴏɴs\n"
+        "• <code>/clearsocialgifs hug</code> — ᴄʟᴇᴀʀ ᴀʟʟ ɢɪғs\n\n"
+        "📝 <b>ᴄᴀᴘᴛɪᴏɴs</b>\n"
+        "• <code>/addcaption hug Your caption {a} {b}</code>\n"
+        "• <code>/socialcaptions hug</code> — sʜᴏᴡ ᴄᴀᴘᴛɪᴏɴ ᴄᴏᴜɴᴛ\n"
+        "• <code>/clearsocialcaptions hug</code> — ᴄʟᴇᴀʀ ᴄᴜsᴛᴏᴍ ᴄᴀᴘᴛɪᴏɴs\n\n"
+        "ᴀᴠᴀɪʟᴀʙʟᴇ ᴀᴄᴛɪᴏɴs: " + ", ".join(f"<code>/{x}</code>" for x in COMMANDS)
     )
 
 
@@ -57,7 +106,7 @@ async def admin_help(_, message):
 async def stats(_, message):
     if not await can_manage_social(message):
         return await deny(message)
-    await message.reply("📊 **Elara Stats**\n\nBot is online and modular.")
+    await message.reply("📊 <b>ᴇʟᴀʀᴀ sᴛᴀᴛs</b>\n\n<i>ʙᴏᴛ ɪs ᴏɴʟɪɴᴇ ᴀɴᴅ ᴍᴏᴅᴜʟᴀʀ.</i>")
 
 
 @app.on_message(filters.command("addgif"))
@@ -65,24 +114,24 @@ async def add_social_gif(_, message):
     if not await can_manage_social(message):
         return await deny(message)
     if not message.reply_to_message:
-        return await message.reply("❌ Reply to a GIF/animation with `/addgif hug`.")
+        return await message.reply("❌ ʀᴇᴘʟʏ ᴛᴏ ᴀ ɢɪғ/ᴀɴɪᴍᴀᴛɪᴏɴ ᴡɪᴛʜ <code>/addgif hug</code>.")
     if len(message.command or []) < 2:
-        return await message.reply("❌ Usage: reply to a GIF with `/addgif <command>`")
+        return await message.reply("❌ ᴜsᴀɢᴇ: ʀᴇᴘʟʏ ᴛᴏ ᴀ ɢɪғ ᴡɪᴛʜ <code>/addgif &lt;command&gt;</code>")
 
     command = message.command[1].lower().lstrip("/")
     if command not in COMMANDS:
-        return await message.reply("❌ Invalid social command. Use `/adminhelp` to see actions.")
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ. ᴜsᴇ <code>/adminhelp</code>.")
 
     replied = message.reply_to_message
     media = replied.animation or replied.video or replied.document
     if not media:
-        return await message.reply("❌ The replied message must contain a GIF/animation/video/document.")
+        return await message.reply("❌ ᴛʜᴇ ʀᴇᴘʟɪᴇᴅ ᴍᴇssᴀɢᴇ ᴍᴜsᴛ ᴄᴏɴᴛᴀɪɴ ᴀ ɢɪғ/ᴀɴɪᴍᴀᴛɪᴏɴ/ᴠɪᴅᴇᴏ/ᴅᴏᴄᴜᴍᴇɴᴛ.")
 
     if await add_gif(command, media.file_id):
         data = await get_social_data(command)
-        await message.reply(f"✅ GIF added to `/{command}`\n🎞️ Total GIFs: **{len(data['gifs'])}**")
+        await message.reply(f"✅ ɢɪғ ᴀᴅᴅᴇᴅ ᴛᴏ <code>/{command}</code>\n🎞️ ᴛᴏᴛᴀʟ ɢɪғs: <b>{len(data['gifs'])}</b>")
     else:
-        await message.reply("❌ MongoDB is unavailable. Check `MONGO_URI`.")
+        await message.reply("❌ ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ. ᴄʜᴇᴄᴋ <code>MONGO_URI</code>.")
 
 
 @app.on_message(filters.command("addcaption"))
@@ -90,18 +139,18 @@ async def add_social_caption(_, message):
     if not await can_manage_social(message):
         return await deny(message)
     if len(message.command or []) < 3:
-        return await message.reply("❌ Usage: `/addcaption hug {a} hugged {b}! ❤️`")
+        return await message.reply("❌ ᴜsᴀɢᴇ: <code>/addcaption hug {a} hugged {b}! ❤️</code>")
 
     command = message.command[1].lower().lstrip("/")
     caption = message.text.split(None, 2)[2].strip()
     if command not in COMMANDS:
-        return await message.reply("❌ Invalid social command. Use `/adminhelp`.")
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ. ᴜsᴇ <code>/adminhelp</code>.")
 
     if await add_caption(command, caption):
         data = await get_social_data(command)
-        await message.reply(f"✅ Caption added to `/{command}`\n📝 Total captions: **{len(data['captions'])}**")
+        await message.reply(f"✅ ᴄᴀᴘᴛɪᴏɴ ᴀᴅᴅᴇᴅ ᴛᴏ <code>/{command}</code>\n📝 ᴛᴏᴛᴀʟ ᴄᴀᴘᴛɪᴏɴs: <b>{len(data['captions'])}</b>")
     else:
-        await message.reply("❌ MongoDB is unavailable. Check `MONGO_URI`.")
+        return await message.reply("❌ ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ. ᴄʜᴇᴄᴋ <code>MONGO_URI</code>.")
 
 
 @app.on_message(filters.command("socialgifs"))
@@ -109,12 +158,12 @@ async def social_gifs(_, message):
     if not await can_manage_social(message):
         return await deny(message)
     if len(message.command or []) < 2:
-        return await message.reply("❌ Usage: `/socialgifs hug`")
+        return await message.reply("❌ ᴜsᴀɢᴇ: <code>/socialgifs hug</code>")
     command = message.command[1].lower().lstrip("/")
     if command not in COMMANDS:
-        return await message.reply("❌ Invalid social command.")
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ.")
     data = await get_social_data(command)
-    await message.reply(f"🎞️ `/{command}` GIFs: **{len(data['gifs'])}**\n📝 Captions: **{len(data['captions'])}**")
+    await message.reply(f"🎞️ <code>/{command}</code> ɢɪғs: <b>{len(data['gifs'])}</b>\n📝 ᴄᴀᴘᴛɪᴏɴs: <b>{len(data['captions'])}</b>")
 
 
 @app.on_message(filters.command("socialcaptions"))
@@ -122,12 +171,12 @@ async def social_captions(_, message):
     if not await can_manage_social(message):
         return await deny(message)
     if len(message.command or []) < 2:
-        return await message.reply("❌ Usage: `/socialcaptions hug`")
+        return await message.reply("❌ ᴜsᴀɢᴇ: <code>/socialcaptions hug</code>")
     command = message.command[1].lower().lstrip("/")
     if command not in COMMANDS:
-        return await message.reply("❌ Invalid social command.")
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ.")
     data = await get_social_data(command)
-    await message.reply(f"📝 `/{command}` has **{len(data['captions'])}** caption(s).")
+    await message.reply(f"📝 <code>/{command}</code> ʜᴀs <b>{len(data['captions'])}</b> ᴄᴀᴘᴛɪᴏɴ(s).")
 
 
 @app.on_message(filters.command("clearsocialgifs"))
@@ -135,12 +184,12 @@ async def clear_social_gifs(_, message):
     if not await can_manage_social(message):
         return await deny(message)
     if len(message.command or []) < 2:
-        return await message.reply("❌ Usage: `/clearsocialgifs hug`")
+        return await message.reply("❌ ᴜsᴀɢᴇ: <code>/clearsocialgifs hug</code>")
     command = message.command[1].lower().lstrip("/")
     if command not in COMMANDS:
-        return await message.reply("❌ Invalid social command.")
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ.")
     ok = await clear_gifs(command)
-    await message.reply("🗑️ Custom GIFs cleared." if ok else "❌ MongoDB is unavailable.")
+    await message.reply("🗑️ ᴄᴜsᴛᴏᴍ ɢɪғs ᴄʟᴇᴀʀᴇᴅ." if ok else "❌ ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.")
 
 
 @app.on_message(filters.command("clearsocialcaptions"))
@@ -148,273 +197,438 @@ async def clear_social_captions(_, message):
     if not await can_manage_social(message):
         return await deny(message)
     if len(message.command or []) < 2:
-        return await message.reply("❌ Usage: `/clearsocialcaptions hug`")
+        return await message.reply("❌ ᴜsᴀɢᴇ: <code>/clearsocialcaptions hug</code>")
     command = message.command[1].lower().lstrip("/")
     if command not in COMMANDS:
-        return await message.reply("❌ Invalid social command.")
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ.")
     ok = await clear_captions(command)
-    await message.reply("🗑️ Custom captions cleared." if ok else "❌ MongoDB is unavailable.")
+    await message.reply("🗑️ ᴄᴜsᴛᴏᴍ ᴄᴀᴘᴛɪᴏɴs ᴄʟᴇᴀʀᴇᴅ." if ok else "❌ ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  OWNER ADMIN PANEL
 # ══════════════════════════════════════════════════════════════════════════════
-import asyncio
-from datetime import datetime, timezone
-from pyrogram import StopPropagation
-from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
-from database.mongo import db
-from database.users import (
-    is_user_banned,
-    set_user_banned,
-    get_user,
-    get_user_stats,
-    get_users_page,
-)
-from database.broadcast import get_broadcast_count, get_broadcast_chats
+_ADMIN_BROADCAST_WAIT = {}
 
-_ADMIN_BROADCAST_WAIT = set()
 
 def _panel_owner(message_or_query):
     user = getattr(message_or_query, "from_user", None)
     return bool(user and config.OWNER_ID and int(user.id) == int(config.OWNER_ID))
 
+
 def _panel_kb():
     return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("📊 DASHBOARD", callback_data="adm:dash"),
-            InlineKeyboardButton("👥 USERS", callback_data="adm:users:0"),
-        ],
-        [
-            InlineKeyboardButton("🚫 BANNED", callback_data="adm:banned:0"),
-            InlineKeyboardButton("📢 BROADCAST", callback_data="adm:broadcast"),
-        ],
-        [
-            InlineKeyboardButton("📡 BC STATS", callback_data="adm:bcstats"),
-            InlineKeyboardButton("🗄 DATABASE", callback_data="adm:db"),
-        ],
-        [
-            InlineKeyboardButton("🔄 REFRESH", callback_data="adm:dash"),
-            InlineKeyboardButton("❌ CLOSE", callback_data="adm:close"),
-        ],
+        [_btn("📊 ᴅᴀsʜʙᴏᴀʀᴅ", "adm:dash", enums.ButtonStyle.PRIMARY),
+         _btn("👥 ᴜsᴇʀs", "adm:users:0", enums.ButtonStyle.SUCCESS)],
+        [_btn("🚫 ʙᴀɴɴᴇᴅ", "adm:banned:0", enums.ButtonStyle.DANGER),
+         _btn("📢 ʙʀᴏᴀᴅᴄᴀsᴛ", "adm:bcmenu", enums.ButtonStyle.PRIMARY)],
+        [_btn("📡 ʙᴄ sᴛᴀᴛs", "adm:bcstats", enums.ButtonStyle.SUCCESS),
+         _btn("🗄 ᴅᴀᴛᴀʙᴀsᴇ", "adm:db", enums.ButtonStyle.PRIMARY)],
+        [_btn("🔄 ʀᴇғʀᴇsʜ", "adm:dash", enums.ButtonStyle.PRIMARY),
+         _btn("❌ ᴄʟᴏsᴇ", "adm:close", enums.ButtonStyle.DANGER)],
     ])
 
-def _user_name(doc):
-    name = doc.get("first_name") or doc.get("username") or "Unknown"
-    if doc.get("username"):
-        return f"{name} (@{doc['username']})"
-    return str(name)
+
+def _broadcast_kb():
+    return InlineKeyboardMarkup([
+        [_btn("📣 ᴀʟʟ ᴄʜᴀᴛs", "adm:bcmode:all", enums.ButtonStyle.PRIMARY)],
+        [_btn("👤 ᴘʀɪᴠᴀᴛᴇ ᴜsᴇʀs", "adm:bcmode:private", enums.ButtonStyle.SUCCESS),
+         _btn("👥 ɢʀᴏᴜᴘs", "adm:bcmode:groups", enums.ButtonStyle.SUCCESS)],
+        [_btn("🟢 ᴀᴄᴛɪᴠᴇ 7ᴅ", "adm:bcmode:active", enums.ButtonStyle.PRIMARY),
+         _btn("🎯 sᴇʟᴇᴄᴛᴇᴅ ɪᴅs", "adm:bcmode:selected", enums.ButtonStyle.PRIMARY)],
+        [_btn("⬅️ ʜᴏᴍᴇ", "adm:dash", enums.ButtonStyle.PRIMARY)],
+    ])
+
 
 def _dashboard_text(stats, bc):
     return (
-        "╭━━━〔 👑 ᴇʟᴀʀᴀ ᴀᴅᴍɪɴ 〕━━━╮\n"
-        "┃\n"
-        f"┃ 👥 Users     : <code>{stats['total']}</code>\n"
-        f"┃ 🟢 Active    : <code>{stats['active']}</code>\n"
-        f"┃ 🚫 Banned    : <code>{stats['banned']}</code>\n"
-        f"┃ 💬 Chats     : <code>{bc['total']}</code>\n"
-        f"┃ 👥 Groups    : <code>{bc['groups']}</code>\n"
-        f"┃ 📩 Private   : <code>{bc['private']}</code>\n"
-        "┃\n"
-        "╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n"
-        "Select an option below."
+        rich_heading("👑 ᴇʟᴀʀᴀ ᴏᴡɴᴇʀ ᴘᴀɴᴇʟ", level=2)
+        + "<i>ᴘᴏᴡᴇʀ & ᴍᴀɴᴀɢᴇᴍᴇɴᴛ ᴄᴇɴᴛᴇʀ</i>\n\n"
+        + rich_kv_table([
+            ("👥 ᴜsᴇʀs",       f"<code>{stats['total']}</code>"),
+            ("🟢 ᴀᴄᴛɪᴠᴇ",       f"<code>{stats['active']}</code>"),
+            ("🚫 ʙᴀɴɴᴇᴅ",       f"<code>{stats['banned']}</code>"),
+            ("💬 ᴛᴏᴛᴀʟ ᴄʜᴀᴛs",  f"<code>{bc['total']}</code>"),
+            ("👥 ɢʀᴏᴜᴘs",        f"<code>{bc['groups']}</code>"),
+            ("📩 ᴘʀɪᴠᴀᴛᴇ",       f"<code>{bc['private']}</code>"),
+        ], headers=["sᴛᴀᴛᴜs", "ᴠᴀʟᴜᴇ"])
+        + "\n"
+        + rich_note("💡 ᴜsᴇ ᴛʜᴇ ʙᴜᴛᴛᴏɴs ʙᴇʟᴏᴡ ᴛᴏ ᴍᴀɴᴀɢᴇ ᴜsᴇʀs, ʙᴀɴs & ʙʀᴏᴀᴅᴄᴀsᴛs.")
     )
 
-async def _edit_panel(query, text, markup=_panel_kb()):
+
+async def _edit_panel(query, text, markup=None):
+    markup = markup or _panel_kb()
     try:
-        await query.message.edit_text(text, reply_markup=markup)
+        return await rich_edit(query, text, reply_markup=markup)
     except Exception:
         try:
-            await query.message.reply(text, reply_markup=markup)
+            return await query.message.edit_text(text, reply_markup=markup)
         except Exception:
-            pass
+            return None
+
 
 async def _show_users(query, page=0, banned_only=False):
     docs, total = await get_users_page(page, 8, banned_only=banned_only)
-    title = "🚫 BANNED USERS" if banned_only else "👥 ALL USERS"
-    lines = [f"<b>{title}</b>\n"]
+    title = "🚫 ʙᴀɴɴᴇᴅ ᴜsᴇʀs" if banned_only else "👥 ʙᴏᴛ ᴜsᴇʀs"
     rows = []
+    buttons = []
     for d in docs:
         uid = int(d["_id"])
-        name = _user_name(d)
-        status = "🚫" if d.get("banned") else "🟢"
-        lines.append(f"{status} <a href='tg://user?id={uid}'>{name}</a> — <code>{uid}</code>")
-        if d.get("banned"):
-            rows.append([InlineKeyboardButton(f"♻️ Unban {uid}", callback_data=f"adm:unban:{uid}")])
-        else:
-            rows.append([InlineKeyboardButton(f"🚫 Ban {uid}", callback_data=f"adm:ban:{uid}")])
-
+        name = rich_esc(_user_name(d))
+        status = "🚫 ʙᴀɴɴᴇᴅ" if d.get("banned") else "🟢 ᴀᴄᴛɪᴠᴇ"
+        rows.append((
+            f'<a href="tg://user?id={uid}">{name}</a>',
+            f"<code>{uid}</code>",
+            status,
+        ))
+        buttons.append([_btn(
+            f"♻️ ᴜɴʙᴀɴ {uid}" if d.get("banned") else f"🚫 ʙᴀɴ {uid}",
+            f"adm:{'unban' if d.get('banned') else 'ban'}:{uid}",
+            enums.ButtonStyle.SUCCESS if d.get("banned") else enums.ButtonStyle.DANGER,
+        )])
     if not docs:
-        lines.append("No users found.")
-    nav=[]
+        rows.append(("—", "—", "ɴᴏ ᴜsᴇʀs ғᴏᴜɴᴅ"))
+    text = (
+        rich_heading(title, level=3)
+        + f"<i>ᴛᴏᴛᴀʟ: {total} • ᴘᴀɢᴇ: {page + 1}</i>\n\n"
+        + rich_table(["ᴜsᴇʀ", "ɪᴅ", "sᴛᴀᴛᴜs"], rows)
+    )
+    nav = []
+    prefix = "banned" if banned_only else "users"
     if page > 0:
-        nav.append(InlineKeyboardButton("⬅️", callback_data=f"adm:{'banned' if banned_only else 'users'}:{page-1}"))
-    if (page+1)*8 < total:
-        nav.append(InlineKeyboardButton("➡️", callback_data=f"adm:{'banned' if banned_only else 'users'}:{page+1}"))
+        nav.append(_btn("‹ ᴘʀᴇᴠ", f"adm:{prefix}:{page-1}", enums.ButtonStyle.PRIMARY))
+    if (page + 1) * 8 < total:
+        nav.append(_btn("ɴᴇxᴛ ›", f"adm:{prefix}:{page+1}", enums.ButtonStyle.PRIMARY))
     if nav:
-        rows.append(nav)
-    rows.append([InlineKeyboardButton("⬅️ PANEL", callback_data="adm:dash")])
-    await _edit_panel(query, "\n".join(lines), InlineKeyboardMarkup(rows))
+        buttons.append(nav)
+    buttons.append([_btn("⬅️ ʜᴏᴍᴇ", "adm:dash", enums.ButtonStyle.PRIMARY)])
+    return await _edit_panel(query, text, InlineKeyboardMarkup(buttons))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  PANEL COMMANDS
+# ══════════════════════════════════════════════════════════════════════════════
 
 @app.on_message(filters.command("adminpanel"))
 async def admin_panel(_, message):
     if not _panel_owner(message):
-        return await message.reply("⛔ <b>Owner only.</b>\n\nThis command is restricted to the bot owner.")
-    try:
-        stats = await get_user_stats()
-        bc = await get_broadcast_count()
-        await message.reply(_dashboard_text(stats, bc), reply_markup=_panel_kb())
-    except Exception as e:
-        await message.reply(f"❌ Admin panel error: <code>{type(e).__name__}</code>")
+        return await message.reply("⛔ <b>ᴏᴡɴᴇʀ ᴏɴʟʏ</b>\n\n<i>ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ɪs ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴛᴏ ᴛʜᴇ ʙᴏᴛ ᴏᴡɴᴇʀ.</i>")
+    stats = await get_user_stats()
+    bc = await get_broadcast_count()
+    await rich_send(
+        app, message.chat.id,
+        _dashboard_text(stats, bc),
+        reply_markup=_panel_kb(),
+        reply_to_message_id=message.id,
+    )
+
 
 @app.on_message(filters.command("adminuser"))
 async def admin_user_lookup(_, message):
     if not _panel_owner(message):
-        return await message.reply("⛔ <b>Owner only.</b>")
+        return await message.reply("⛔ <b>ᴏᴡɴᴇʀ ᴏɴʟʏ</b>")
     if len(message.command or []) < 2:
-        return await message.reply("Usage: <code>/adminuser USER_ID</code>")
+        return await message.reply("ᴜsᴀɢᴇ: <code>/adminuser USER_ID</code>")
     try:
         uid = int(message.command[1])
     except ValueError:
-        return await message.reply("❌ Invalid user ID.")
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ ᴜsᴇʀ ɪᴅ.")
     doc = await get_user(uid)
     if not doc:
-        return await message.reply("❌ User is not in the bot database.")
+        return await message.reply("❌ ᴜsᴇʀ ɪs ɴᴏᴛ ɪɴ ᴛʜᴇ ʙᴏᴛ ᴅᴀᴛᴀʙᴀsᴇ.")
     banned = bool(doc.get("banned"))
+    joined = doc.get("joined_at")
+    last_seen = doc.get("last_seen")
     text = (
-        f"👤 <b>User Details</b>\n\n"
-        f"Name: <code>{doc.get('first_name','')}</code>\n"
-        f"Username: <code>@{doc.get('username','')}</code>\n"
-        f"ID: <code>{uid}</code>\n"
-        f"Status: {'🚫 BANNED' if banned else '🟢 ACTIVE'}"
+        rich_heading("👤 ᴜsᴇʀ ᴅᴇᴛᴀɪʟs", level=3)
+        + rich_kv_table([
+            ("ɴᴀᴍᴇ",      rich_esc(_user_name(doc))),
+            ("ɪᴅ",        f"<code>{uid}</code>"),
+            ("sᴛᴀᴛᴜs",    "🚫 ʙᴀɴɴᴇᴅ" if banned else "🟢 ᴀᴄᴛɪᴠᴇ"),
+            ("ᴊᴏɪɴᴇᴅ",     f"<code>{joined.strftime('%Y-%m-%d') if joined else '—'}</code>"),
+            ("ʟᴀsᴛ sᴇᴇɴ", f"<code>{last_seen.strftime('%Y-%m-%d %H:%M') if last_seen else '—'}</code>"),
+        ], headers=["ғɪᴇʟᴅ", "ᴠᴀʟᴜᴇ"])
     )
     buttons = [[InlineKeyboardButton(
-        "♻️ UNBAN" if banned else "🚫 PERMANENT BAN",
+        "♻️ ᴜɴʙᴀɴ" if banned else "🚫 ᴘᴇʀᴍᴀɴᴇɴᴛ ʙᴀɴ",
         callback_data=f"adm:{'unban' if banned else 'ban'}:{uid}"
-    )],[InlineKeyboardButton("⬅️ PANEL", callback_data="adm:dash")]]
-    await message.reply(text, reply_markup=InlineKeyboardMarkup(buttons))
+    )], [InlineKeyboardButton("⬅️ ᴘᴀɴᴇʟ", callback_data="adm:dash")]]
+    await rich_send(
+        app, message.chat.id, text,
+        reply_markup=InlineKeyboardMarkup(buttons),
+        reply_to_message_id=message.id,
+    )
+
+
+async def _direct_ban(message, banned: bool):
+    if not _panel_owner(message):
+        return await message.reply("⛔ <b>ᴏᴡɴᴇʀ ᴏɴʟʏ</b>")
+    if len(message.command or []) < 2:
+        return await message.reply(
+            f"ᴜsᴀɢᴇ: <code>/{'banbot' if banned else 'botunban'} USER_ID</code>"
+        )
+    try:
+        uid = int(message.command[1])
+    except ValueError:
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ ᴛᴇʟᴇɢʀᴀᴍ ᴜsᴇʀ ɪᴅ.")
+    if uid == int(config.OWNER_ID):
+        return await message.reply("❌ ʏᴏᴜ ᴄᴀɴɴᴏᴛ ʙᴀɴ/ᴜɴʙᴀɴ ᴛʜᴇ ʙᴏᴛ ᴏᴡɴᴇʀ.")
+    ok = await set_user_banned(uid, banned, message.from_user.id)
+    if not ok:
+        return await message.reply("❌ ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ. ᴄʜᴇᴄᴋ <code>MONGO_URI</code>.")
+    if banned:
+        return await message.reply(
+            f"🚫 <b>ᴜsᴇʀ ᴘᴇʀᴍᴀɴᴇɴᴛʟʏ ʙᴀɴɴᴇᴅ.</b>\n\n🆔 <code>{uid}</code>\n\n"
+            "<i>ᴛʜᴇ ʙᴀɴ ɪs sᴛᴏʀᴇᴅ ɪɴ ᴍᴏɴɢᴏᴅʙ ᴀɴᴅ sᴜʀᴠɪᴠᴇs ʙᴏᴛ ʀᴇsᴛᴀʀᴛs.</i>"
+        )
+    return await message.reply(f"♻️ <b>ᴜsᴇʀ ᴜɴʙᴀɴɴᴇᴅ.</b>\n\n🆔 <code>{uid}</code>")
+
+
+@app.on_message(filters.command("banbot"))
+async def banbot(_, message):
+    return await _direct_ban(message, True)
+
+
+@app.on_message(filters.command("botunban"))
+async def botunban(_, message):
+    return await _direct_ban(message, False)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  PANEL CALLBACKS
+# ══════════════════════════════════════════════════════════════════════════════
 
 @app.on_callback_query(filters.regex(r"^adm:"))
 async def admin_panel_callback(_, query: CallbackQuery):
     if not _panel_owner(query):
-        await query.answer("⛔ Owner only.", show_alert=True)
+        await query.answer("⛔ ᴏᴡɴᴇʀ ᴏɴʟʏ.", show_alert=True)
         return
     parts = query.data.split(":")
     action = parts[1] if len(parts) > 1 else "dash"
     await query.answer()
+
     if action == "close":
-        try: await query.message.delete()
-        except Exception: pass
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
         return
+
     if action == "dash":
-        stats = await get_user_stats()
-        bc = await get_broadcast_count()
-        return await _edit_panel(query, _dashboard_text(stats, bc))
+        return await _edit_panel(
+            query,
+            _dashboard_text(await get_user_stats(), await get_broadcast_count())
+        )
+
     if action == "users":
-        return await _show_users(query, int(parts[2]) if len(parts)>2 else 0, False)
+        return await _show_users(query, int(parts[2]) if len(parts) > 2 else 0, False)
+
     if action == "banned":
-        return await _show_users(query, int(parts[2]) if len(parts)>2 else 0, True)
+        return await _show_users(query, int(parts[2]) if len(parts) > 2 else 0, True)
+
     if action in ("ban", "unban"):
         uid = int(parts[2])
         if uid == int(config.OWNER_ID):
-            return await query.answer("You cannot ban the owner.", show_alert=True)
+            return await query.answer("ʏᴏᴜ ᴄᴀɴɴᴏᴛ ʙᴀɴ ᴛʜᴇ ᴏᴡɴᴇʀ.", show_alert=True)
         ok = await set_user_banned(uid, action == "ban", query.from_user.id)
         if not ok:
-            return await query.answer("MongoDB is unavailable.", show_alert=True)
-        await query.answer("User permanently banned." if action == "ban" else "User unbanned.", show_alert=True)
-        stats = await get_user_stats()
-        bc = await get_broadcast_count()
-        return await _edit_panel(query, _dashboard_text(stats, bc))
+            return await query.answer("ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.", show_alert=True)
+        await query.answer(
+            "ᴜsᴇʀ ᴘᴇʀᴍᴀɴᴇɴᴛʟʏ ʙᴀɴɴᴇᴅ." if action == "ban" else "ᴜsᴇʀ ᴜɴʙᴀɴɴᴇᴅ.",
+            show_alert=True,
+        )
+        return await _edit_panel(
+            query,
+            _dashboard_text(await get_user_stats(), await get_broadcast_count())
+        )
+
+    if action == "bcmenu":
+        return await _edit_panel(
+            query,
+            rich_heading("📢 ʙʀᴏᴀᴅᴄᴀsᴛ ᴄᴇɴᴛᴇʀ", level=3)
+            + rich_note(
+                "ᴄʜᴏᴏsᴇ ᴡʜᴇʀᴇ ᴛʜᴇ ɴᴇxᴛ ʙʀᴏᴀᴅᴄᴀsᴛ sʜᴏᴜʟᴅ ɢᴏ.\n\n"
+                "🎯 sᴇʟᴇᴄᴛᴇᴅ ɪᴅs ᴀᴄᴄᴇᴘᴛs ᴜsᴇʀ/ᴄʜᴀᴛ ɪᴅs sᴇᴘᴀʀᴀᴛᴇᴅ ʙʏ sᴘᴀᴄᴇs ᴏʀ ᴄᴏᴍᴍᴀs."
+            ),
+            _broadcast_kb(),
+        )
+
+    if action == "bcmode":
+        mode = parts[2] if len(parts) > 2 else "all"
+        uid = int(query.from_user.id)
+        if mode == "selected":
+            _ADMIN_BROADCAST_WAIT[uid] = {"mode": "selected_ids"}
+            return await _edit_panel(
+                query,
+                rich_heading("🎯 sᴇʟᴇᴄᴛᴇᴅ ɪᴅs", level=3)
+                + rich_note(
+                    "sᴇɴᴅ ᴛᴇʟᴇɢʀᴀᴍ ᴜsᴇʀ/ᴄʜᴀᴛ ɪᴅs sᴇᴘᴀʀᴀᴛᴇᴅ ʙʏ sᴘᴀᴄᴇs ᴏʀ ᴄᴏᴍᴍᴀs.\n\n"
+                    "ᴇxᴀᴍᴘʟᴇ: <code>123456789, 987654321</code>"
+                ),
+                InlineKeyboardMarkup([[
+                    _btn("❌ ᴄᴀɴᴄᴇʟ", "adm:bccancel", enums.ButtonStyle.DANGER)
+                ]]),
+            )
+        _ADMIN_BROADCAST_WAIT[uid] = {"mode": mode}
+        label = {
+            "all": "ᴀʟʟ ᴄʜᴀᴛs",
+            "private": "ᴘʀɪᴠᴀᴛᴇ ᴜsᴇʀs",
+            "groups": "ɢʀᴏᴜᴘs",
+            "active": "ᴀᴄᴛɪᴠᴇ ᴜsᴇʀs (ʟᴀsᴛ 7 ᴅᴀʏs)",
+        }.get(mode, mode)
+        return await _edit_panel(
+            query,
+            rich_heading(f"📢 {label.upper()}", level=3)
+            + rich_note(
+                "sᴇɴᴅ ᴛʜᴇ ᴍᴇssᴀɢᴇ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ʙʀᴏᴀᴅᴄᴀsᴛ.\n\n"
+                "ᴛᴇxᴛ, ᴘʜᴏᴛᴏ, ᴠɪᴅᴇᴏ, ᴅᴏᴄᴜᴍᴇɴᴛ, ᴀɴɪᴍᴀᴛɪᴏɴ & ғᴏʀᴡᴀʀᴅᴇᴅ ᴍᴇᴅɪᴀ sᴜᴘᴘᴏʀᴛᴇᴅ.\n\n"
+                "<code>/cancelbroadcast</code> ᴛᴏ ᴄᴀɴᴄᴇʟ."
+            ),
+            InlineKeyboardMarkup([[
+                _btn("❌ ᴄᴀɴᴄᴇʟ", "adm:bccancel", enums.ButtonStyle.DANGER)
+            ]]),
+        )
+
+    if action == "bccancel":
+        _ADMIN_BROADCAST_WAIT.pop(int(query.from_user.id), None)
+        return await _edit_panel(
+            query,
+            rich_heading("📢 ʙʀᴏᴀᴅᴄᴀsᴛ ᴄᴇɴᴛᴇʀ", level=3)
+            + rich_note("ʙʀᴏᴀᴅᴄᴀsᴛ ᴄᴀɴᴄᴇʟʟᴇᴅ."),
+            _broadcast_kb(),
+        )
+
     if action == "bcstats":
         bc = await get_broadcast_count()
-        text = (
-            "<b>📡 BROADCAST DATABASE</b>\n\n"
-            f"Total chats: <code>{bc['total']}</code>\n"
-            f"Groups: <code>{bc['groups']}</code>\n"
-            f"Private users: <code>{bc['private']}</code>\n\n"
-            "Use <code>/broadcast text</code> for the existing full broadcast system."
+        return await _edit_panel(
+            query,
+            rich_heading("📡 ʙʀᴏᴀᴅᴄᴀsᴛ sᴛᴀᴛs", level=3)
+            + rich_kv_table([
+                ("💬 ᴛᴏᴛᴀʟ",  f"<code>{bc['total']}</code>"),
+                ("👥 ɢʀᴏᴜᴘs", f"<code>{bc['groups']}</code>"),
+                ("📩 ᴘʀɪᴠᴀᴛᴇ", f"<code>{bc['private']}</code>"),
+            ], headers=["ᴍᴇᴛʀɪᴄ", "ᴠᴀʟᴜᴇ"])
         )
-        return await _edit_panel(query, text)
+
     if action == "db":
-        state = "🟢 CONNECTED" if db is not None else "🔴 NOT CONFIGURED"
+        state = "🟢 ᴄᴏɴɴᴇᴄᴛᴇᴅ" if db is not None else "🔴 ɴᴏᴛ ᴄᴏɴғɪɢᴜʀᴇᴅ"
         if db is not None:
             try:
                 await db.command("ping")
-                state = "🟢 CONNECTED"
             except Exception:
-                state = "🔴 CONNECTION ERROR"
-        return await _edit_panel(query, f"<b>🗄 DATABASE STATUS</b>\n\nMongoDB: {state}")
-    if action == "broadcast":
-        _ADMIN_BROADCAST_WAIT.add(int(query.from_user.id))
+                state = "🔴 ᴄᴏɴɴᴇᴄᴛɪᴏɴ ᴇʀʀᴏʀ"
         return await _edit_panel(
             query,
-            "<b>📢 ADMIN BROADCAST</b>\n\n"
-            "Send your next message here. Text, photo, video or document are supported.\n"
-            "The message will be sent to all tracked private users and groups.\n\n"
-            "Send <code>/cancelbroadcast</code> to cancel."
+            rich_heading("🗄 ᴅᴀᴛᴀʙᴀsᴇ sᴛᴀᴛᴜs", level=3)
+            + rich_kv_table([("ᴍᴏɴɢᴏᴅʙ", state)], headers=["sᴇʀᴠɪᴄᴇ", "sᴛᴀᴛᴜs"])
         )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  BROADCAST
+# ══════════════════════════════════════════════════════════════════════════════
 
 @app.on_message(filters.command("cancelbroadcast"))
 async def cancel_admin_broadcast(_, message):
     if not _panel_owner(message):
-        return await message.reply("⛔ <b>Owner only.</b>")
-    _ADMIN_BROADCAST_WAIT.discard(int(message.from_user.id))
-    await message.reply("❌ Admin broadcast cancelled.")
+        return await message.reply("⛔ <b>ᴏᴡɴᴇʀ ᴏɴʟʏ</b>")
+    _ADMIN_BROADCAST_WAIT.pop(int(message.from_user.id), None)
+    await message.reply("❌ <b>ʙʀᴏᴀᴅᴄᴀsᴛ ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>")
 
-@app.on_message(filters.all, group=20)
+
+async def _copy_or_send(client, target_id, message):
+    try:
+        if message.text:
+            return await client.send_message(target_id, message.text)
+        return await client.copy_message(target_id, message.chat.id, message.id)
+    except Exception:
+        raise
+
+
+@app.on_message(filters.all, group=-50)
 async def admin_broadcast_message(client, message):
     if not _panel_owner(message):
         return
     uid = int(message.from_user.id) if message.from_user else 0
-    if uid not in _ADMIN_BROADCAST_WAIT:
+    state = _ADMIN_BROADCAST_WAIT.get(uid)
+    if not state or state.get("mode") == "selected_ids":
+        if state and state.get("mode") == "selected_ids" and message.text and not message.text.startswith("/"):
+            raw_ids = message.text.replace(",", " ").split()
+            ids = []
+            for raw in raw_ids:
+                try:
+                    ids.append(int(raw))
+                except ValueError:
+                    pass
+            if not ids:
+                return await message.reply("❌ ɴᴏ ᴠᴀʟɪᴅ ᴛᴇʟᴇɢʀᴀᴍ ɪᴅs ғᴏᴜɴᴅ.")
+            state["ids"] = ids
+            state["mode"] = "selected_message"
+            return await message.reply(
+                "✅ ɪᴅs sᴀᴠᴇᴅ. ɴᴏᴡ sᴇɴᴅ ᴛʜᴇ ᴍᴇssᴀɢᴇ ᴛᴏ ʙʀᴏᴀᴅᴄᴀsᴛ.\n\n"
+                "<code>/cancelbroadcast</code> ᴛᴏ ᴄᴀɴᴄᴇʟ."
+            )
         return
-    if message.text and message.text.startswith("/cancelbroadcast"):
+    if state.get("mode") == "selected_message":
+        targets = state.get("ids", [])
+    else:
+        docs = await get_broadcast_chats()
+        mode = state.get("mode")
+        if mode == "groups":
+            targets = [int(d["chat_id"]) for d in docs if d.get("type") == "group"]
+        elif mode == "private":
+            targets = [int(d["chat_id"]) for d in docs if d.get("type") == "private"]
+        elif mode == "active":
+            targets = await get_active_user_ids(7)
+        else:
+            targets = [int(d["chat_id"]) for d in docs]
+    if message.text and message.text.startswith("/"):
         return
-    _ADMIN_BROADCAST_WAIT.discard(uid)
-    chats = await get_broadcast_chats()
+    _ADMIN_BROADCAST_WAIT.pop(uid, None)
+    if not targets:
+        return await message.reply("❌ ɴᴏ ᴛᴀʀɢᴇᴛs ғᴏᴜɴᴅ ғᴏʀ ᴛʜɪs ʙʀᴏᴀᴅᴄᴀsᴛ ᴍᴏᴅᴇ.")
+    status = await message.reply(
+        f"📢 <b>ʙʀᴏᴀᴅᴄᴀsᴛ sᴛᴀʀᴛᴇᴅ</b>\n\n"
+        f"🎯 ᴛᴀʀɢᴇᴛs: <code>{len(targets)}</code>\n⏳ sᴇɴᴅɪɴɢ..."
+    )
     sent = failed = 0
-    status = await message.reply("📢 Broadcasting started...")
-    for doc in chats:
-        cid = int(doc["chat_id"])
+    for cid in targets:
         try:
-            if message.text:
-                await client.send_message(cid, message.text)
-            elif message.photo:
-                await client.send_photo(cid, message.photo.file_id, caption=message.caption or "")
-            elif message.video:
-                await client.send_video(cid, message.video.file_id, caption=message.caption or "")
-            elif message.document:
-                await client.send_document(cid, message.document.file_id, caption=message.caption or "")
-            else:
-                await client.copy_message(cid, message.chat.id, message.id)
+            await _copy_or_send(client, cid, message)
             sent += 1
         except Exception:
             failed += 1
         await asyncio.sleep(0.05)
     await status.edit_text(
-        f"📢 <b>Broadcast finished</b>\n\n"
-        f"✅ Sent: <code>{sent}</code>\n"
-        f"❌ Failed: <code>{failed}</code>\n"
-        f"📦 Targets: <code>{len(chats)}</code>"
+        "<b>📢 ʙʀᴏᴀᴅᴄᴀsᴛ ᴄᴏᴍᴘʟᴇᴛᴇ</b>\n\n"
+        f"🎯 ᴛᴀʀɢᴇᴛs: <code>{len(targets)}</code>\n"
+        f"✅ sᴇɴᴛ: <code>{sent}</code>\n"
+        f"❌ ғᴀɪʟᴇᴅ: <code>{failed}</code>"
     )
 
-# Global ban guard. Owner is always exempt.
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  GLOBAL BAN GUARDS
+# ══════════════════════════════════════════════════════════════════════════════
+
 @app.on_message(filters.all, group=-100)
 async def banned_user_guard(_, message):
     if not message.from_user or _panel_owner(message):
         return
     if await is_user_banned(message.from_user.id):
         try:
-            await message.reply("🚫 <b>You are permanently banned from using this bot.</b>")
+            await message.reply("🚫 <b>ʏᴏᴜ ᴀʀᴇ ᴘᴇʀᴍᴀɴᴇɴᴛʟʏ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴜsɪɴɢ ᴛʜɪs ʙᴏᴛ.</b>")
         except Exception:
             pass
         raise StopPropagation
+
 
 @app.on_callback_query(group=-100)
 async def banned_callback_guard(_, query):
     if not query.from_user or _panel_owner(query):
         return
     if await is_user_banned(query.from_user.id):
-        await query.answer("🚫 You are permanently banned from using this bot.", show_alert=True)
+        await query.answer("🚫 ʏᴏᴜ ᴀʀᴇ ᴘᴇʀᴍᴀɴᴇɴᴛʟʏ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴜsɪɴɢ ᴛʜɪs ʙᴏᴛ.", show_alert=True)
         raise StopPropagation
