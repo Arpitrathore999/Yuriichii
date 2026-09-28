@@ -1,7 +1,6 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  management/control.py — Group Admin Management
-#  (promote / demote / add / remove / adminlist)
+#  management/control.py — Group Admin Management (fixed demote)
 # --------------------------------------------------------------------------------
 
 from pyrogram import enums, filters
@@ -13,7 +12,6 @@ from core.bot import app
 from database.mongo import db
 
 
-# ── Prefixes (/, !, .) all supported ──────────────────────────────────────────
 PREFIXES = ["/", "!", "."]
 
 ADMIN_RIGHTS = {
@@ -33,6 +31,57 @@ PROMOTE_MODES = {
     2: ("Aꜱꜱɪꜱᴛᴀɴᴛ Aᴅᴍɪɴ", {"delete", "invite", "pin", "info", "ban"}),
     3: ("Fᴜʟʟ Aᴅᴍɪɴ", set(ADMIN_RIGHTS.keys())),
 }
+
+
+# ── Empty privileges = full demote ────────────────────────────────────────────
+
+def _empty_privileges():
+    """Saare flags explicitly False — Telegram ko clearly demote signal jata hai."""
+    return ChatPrivileges(
+        can_manage_chat=False,
+        can_delete_messages=False,
+        can_manage_video_chats=False,
+        can_restrict_members=False,
+        can_promote_members=False,
+        can_change_info=False,
+        can_invite_users=False,
+        can_post_messages=False,
+        can_edit_messages=False,
+        can_pin_messages=False,
+        can_post_stories=False,
+        can_edit_stories=False,
+        can_delete_stories=False,
+        is_anonymous=False,
+    )
+
+
+async def _full_demote(chat_id, user_id):
+    """User ko poora normal member bana de."""
+    try:
+        await app.promote_chat_member(chat_id, user_id, privileges=_empty_privileges())
+    except TypeError:
+        # purane pyrogram me kuch fields nahi hote — fallback
+        try:
+            await app.promote_chat_member(
+                chat_id, user_id,
+                privileges=ChatPrivileges(
+                    can_manage_chat=False,
+                    can_delete_messages=False,
+                    can_manage_video_chats=False,
+                    can_restrict_members=False,
+                    can_promote_members=False,
+                    can_change_info=False,
+                    can_invite_users=False,
+                    can_pin_messages=False,
+                    is_anonymous=False,
+                ),
+            )
+        except Exception:
+            await app.promote_chat_member(chat_id, user_id, privileges=ChatPrivileges())
+    if db is not None:
+        await db["admin_rights"].delete_one(
+            {"chat_id": int(chat_id), "user_id": int(user_id)}
+        )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -110,7 +159,6 @@ def _mention(user, fallback="User"):
 
 
 async def _resolve_target(message, args):
-    """Reply → text-mention → @username → numeric ID."""
     reply = message.reply_to_message
     if reply and reply.from_user:
         return reply.from_user
@@ -173,10 +221,14 @@ def _rights_kwargs(rights):
 async def _apply_rights(chat_id, user_id, rights):
     available = await _bot_privilege_names(chat_id)
     granted = set(rights) & available
-    await app.promote_chat_member(
-        chat_id, user_id,
-        privileges=ChatPrivileges(**_rights_kwargs(granted))
-    )
+    try:
+        await app.promote_chat_member(
+            chat_id, user_id,
+            privileges=ChatPrivileges(**_rights_kwargs(granted))
+        )
+    except Exception as e:
+        print(f"[APPLY RIGHTS] {type(e).__name__}: {e}", flush=True)
+        raise
     return granted
 
 
@@ -236,7 +288,7 @@ async def cmd_promote(_, message):
     )
 
 
-# ── /demote ───────────────────────────────────────────────────────────────────
+# ── /demote (FIXED — full demote) ─────────────────────────────────────────────
 
 @app.on_message(filters.command("demote", prefixes=PREFIXES))
 async def cmd_demote(_, message):
@@ -253,15 +305,10 @@ async def cmd_demote(_, message):
         return await message.reply("❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴍᴏᴅɪғʏ ᴛʜɪs ᴜsᴇʀ.")
 
     try:
-        await app.promote_chat_member(
-            message.chat.id, target.id, privileges=ChatPrivileges()
-        )
-        if db is not None:
-            await db["admin_rights"].delete_one(
-                {"chat_id": int(message.chat.id), "user_id": int(target.id)}
-            )
+        await _full_demote(message.chat.id, target.id)
     except Exception as e:
-        return await message.reply(f"❌ ᴅᴇᴍᴏᴛᴇ ғᴀɪʟᴇᴅ: <code>{str(e)[:200]}</code>")
+        print(f"[DEMOTE] {type(e).__name__}: {e}", flush=True)
+        return await message.reply(f"❌ ᴅᴇᴍᴏᴛᴇ ғᴀɪʟᴇᴅ: <code>{str(e)[:300]}</code>")
 
     return await message.reply(f"{_mention(target)} 🕊 Dᴇᴍᴏᴛᴇᴅ ᴛᴏ 👤 Mᴇᴍʙᴇʀ.")
 
@@ -288,10 +335,11 @@ async def cmd_adminlist(_, message):
             lines.append(f"• {_mention(m.user)} — 🏅 {title}")
         return await message.reply("\n".join(lines))
     except Exception as e:
+        print(f"[ADMINLIST] {type(e).__name__}: {e}", flush=True)
         return await message.reply(f"❌ ᴇʀʀᴏʀ: <code>{str(e)[:200]}</code>")
 
 
-# ── .add / .remove ────────────────────────────────────────────────────────────
+# ── .add / .remove (FIXED — remove = full demote) ─────────────────────────────
 
 async def _handle_rights(message, action):
     if not _is_group(message):
@@ -318,23 +366,19 @@ async def _handle_rights(message, action):
     rights = {str(x).lower().lstrip("/!.") for x in args}
     rights = {r for r in rights if r in valid}
 
+    # ✅ No rights supplied
     if not rights:
         if action == "remove":
             try:
-                await app.promote_chat_member(
-                    message.chat.id, target.id, privileges=ChatPrivileges()
-                )
-                if db is not None:
-                    await db["admin_rights"].delete_one(
-                        {"chat_id": int(message.chat.id), "user_id": int(target.id)}
-                    )
+                await _full_demote(message.chat.id, target.id)
             except Exception as e:
-                return await message.reply(f"❌ ғᴀɪʟᴇᴅ: <code>{str(e)[:200]}</code>")
+                print(f"[REMOVE FULL] {type(e).__name__}: {e}", flush=True)
+                return await message.reply(f"❌ ғᴀɪʟᴇᴅ: <code>{str(e)[:300]}</code>")
             return await message.reply(f"{_mention(target)} 🕊 <b>Dᴇᴍᴏᴛᴇᴅ</b>.")
         rights = await _bot_privilege_names(message.chat.id)
         rights = {r for r in rights if r in ADMIN_RIGHTS}
 
-    # Get current from DB
+    # Current rights from DB
     current = set()
     if db is not None:
         doc = await db["admin_rights"].find_one(
@@ -348,15 +392,17 @@ async def _handle_rights(message, action):
     else:
         current.difference_update(rights)
 
-    applied = await _apply_rights(message.chat.id, target.id, current)
+    # ✅ If nothing remains → full demote
+    if not current:
+        try:
+            await _full_demote(message.chat.id, target.id)
+        except Exception as e:
+            print(f"[AUTO DEMOTE] {type(e).__name__}: {e}", flush=True)
+            return await message.reply(f"❌ ғᴀɪʟᴇᴅ: <code>{str(e)[:300]}</code>")
+        return await message.reply(f"{_mention(target)} 🕊 <b>Dᴇᴍᴏᴛᴇᴅ</b>.")
 
-    if db is not None:
-        if applied:
-            await _save_rights(message.chat.id, target.id, applied)
-        else:
-            await db["admin_rights"].delete_one(
-                {"chat_id": int(message.chat.id), "user_id": int(target.id)}
-            )
+    applied = await _apply_rights(message.chat.id, target.id, current)
+    await _save_rights(message.chat.id, target.id, applied)
 
     verb = "Aᴅᴅᴇᴅ" if action == "add" else "Rᴇᴍᴏᴠᴇᴅ"
     return await message.reply(
