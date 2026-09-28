@@ -299,16 +299,30 @@ async def _promote_target(message, target, mode):
 
 
 async def _parse_promote(message):
+    # Default: plain /promote = Level 2.
     parts = list(message.command or [])[1:]
-    if not parts:
-        return None, None, "usage"
-    try:
-        mode = int(parts[-1])
-    except (TypeError, ValueError):
-        return None, None, "mode"
-    if mode not in PROMOTE_MODES:
-        return None, mode, "invalid_mode"
-    target = await _resolve_target(message, parts[:-1])
+    mode = 2
+
+    # Preferred syntax:
+    # /promote [0/1/2/3] @username
+    # /promote [0/1/2/3] <reply>
+    # Also accept the older /promote @username 2 form.
+    if parts:
+        if str(parts[0]).isdigit():
+            mode = int(parts[0])
+            target_parts = parts[1:]
+        elif str(parts[-1]).isdigit():
+            mode = int(parts[-1])
+            target_parts = parts[:-1]
+        else:
+            target_parts = parts
+
+        if mode not in PROMOTE_MODES:
+            return None, mode, "invalid_mode"
+    else:
+        target_parts = []
+
+    target = await _resolve_target(message, target_parts)
     if not target:
         return None, mode, "target"
     return target, mode, None
@@ -323,7 +337,7 @@ async def group_promote(_, message):
 
     target, mode, error = await _parse_promote(message)
     if error == "usage":
-        return await message.reply("❌ ᴜsᴀɢᴇ: <code>.promote @username 0-3</code>")
+        return await message.reply("⚠️ ᴜꜱᴀɢᴇ: <code>/ᴘʀᴏᴍᴏᴛᴇ [0/1/2/3] ᴜꜱᴇʀɴᴀᴍᴇ/ʀᴇᴘʟʏ</code>")
     if error == "mode":
         return await message.reply("❌ ɪɴᴠᴀʟɪᴅ ᴍᴏᴅᴇ. ᴜsᴇ <code>0</code>, <code>1</code>, <code>2</code> ᴏʀ <code>3</code>.")
     if error == "invalid_mode":
