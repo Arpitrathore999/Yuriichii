@@ -239,11 +239,31 @@ async def _save_admin_rights(chat_id, user_id, rights, mode=None):
     return True
 
 
-async def _apply_telegram_rights(chat_id, user_id, rights):
-    """Apply rights that Telegram exposes as actual administrator privileges."""
-    from pyrogram.types import ChatPrivileges
+async def _bot_privilege_names(chat_id):
+    """Return the Telegram admin rights currently held by the bot."""
+    try:
+        me = await app.get_chat_member(chat_id, "me")
+        p = getattr(me, "privileges", None)
+        if me.status == ChatMemberStatus.OWNER or not p:
+            return {"info", "delete", "ban", "invite", "pin", "stream", "addadmins", "anon"}
+        mapping = {
+            "info": "can_change_info",
+            "delete": "can_delete_messages",
+            "ban": "can_restrict_members",
+            "invite": "can_invite_users",
+            "pin": "can_pin_messages",
+            "stream": "can_manage_video_chats",
+            "addadmins": "can_promote_members",
+            "anon": "is_anonymous",
+        }
+        return {name for name, attr in mapping.items() if bool(getattr(p, attr, False))}
+    except Exception as e:
+        print(f"[BOT RIGHTS] {type(e).__name__}: {e}", flush=True)
+        return set()
 
-    kwargs = {
+
+def _telegram_rights_kwargs(rights):
+    return {
         "can_change_info": "info" in rights,
         "can_delete_messages": "delete" in rights,
         "can_restrict_members": "ban" in rights,
@@ -253,29 +273,29 @@ async def _apply_telegram_rights(chat_id, user_id, rights):
         "can_promote_members": "addadmins" in rights,
         "is_anonymous": "anon" in rights,
     }
-    await app.promote_chat_member(chat_id, user_id, privileges=ChatPrivileges(**kwargs))
+
+
+async def _apply_telegram_rights(chat_id, user_id, rights):
+    """Apply only Telegram rights that the bot itself is allowed to grant."""
+    from pyrogram.types import ChatPrivileges
+    available = await _bot_privilege_names(chat_id)
+    telegram_rights = set(rights) & available
+    await app.promote_chat_member(
+        chat_id, user_id, privileges=ChatPrivileges(**_telegram_rights_kwargs(telegram_rights))
+    )
+    return telegram_rights
 
 
 async def _promote_target(message, target, mode):
-    rights = set(PROMOTE_MODES[mode][1])
-    # Mode 3 means every Elara right. Telegram receives the supported subset.
-    await app.promote_chat_member(
-        message.chat.id,
-        target.id,
-        privileges=__import__("pyrogram.types", fromlist=["ChatPrivileges"]).ChatPrivileges(
-            can_change_info="info" in rights,
-            can_delete_messages="delete" in rights,
-            can_restrict_members="ban" in rights,
-            can_invite_users="invite" in rights,
-            can_pin_messages="pin" in rights,
-            can_manage_video_chats="stream" in rights,
-            can_promote_members="addadmins" in rights,
-            is_anonymous="anon" in rights,
-        ),
-    )
-    if not await _save_admin_rights(message.chat.id, target.id, rights, mode):
-        return False
-    return True
+    requested = set(PROMOTE_MODES[mode][1])
+    available = await _bot_privilege_names(message.chat.id)
+    # Never grant a Telegram right that the bot does not currently possess.
+    rights = requested & available
+    applied = await _apply_telegram_rights(message.chat.id, target.id, rights)
+    # Keep only rights that are actually representable by the bot.
+    rights = set(applied)
+    await _save_admin_rights(message.chat.id, target.id, rights, mode)
+    return True, rights
 
 
 async def _parse_promote(message):
@@ -316,13 +336,15 @@ async def group_promote(_, message):
         return await message.reply("❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴍᴏᴅɪғʏ ᴛʜɪs ᴀᴅᴍɪɴ.")
 
     try:
-        await _promote_target(message, target, mode)
+        _, applied_rights = await _promote_target(message, target, mode)
     except Exception as e:
         print(f"[PROMOTE] {type(e).__name__}: {e}", flush=True)
         return await message.reply("❌ ᴄᴏᴜʟᴅɴ'ᴛ ᴘʀᴏᴍᴏᴛᴇ ᴛʜɪs ᴜsᴇʀ. ᴄʜᴇᴄᴋ ᴛʜᴇ ʙᴏᴛ's ᴀᴅᴍɪɴ ʀɪɢʜᴛs.")
 
     role = PROMOTE_MODES[mode][0]
-    return await message.reply(f"{_mention(target)} 🕊 Pʀᴏᴍᴏᴛᴇᴅ Tᴏ 🏅 {role}.")
+    if mode == 3 and not applied_rights:
+        return await message.reply("❌ ʙᴏᴛ ᴋᴇ ᴘᴀss ᴋᴏɪ ɢʀᴀɴᴛᴀʙʟᴇ ᴀᴅᴍɪɴ ʀɪɢʜᴛ ɴᴀʜɪɴ ʜᴀɪ. <b>Promote Members</b> permission check karo.")
+    return await message.reply(f"{_mention(target)} 🕊 Pʀᴏᴍᴏᴛᴇᴅ Tᴏ 🏅 {role}.\n🔐 Rights: <code>{', '.join(sorted(applied_rights)) or 'none'}</code>")
 
 
 @app.on_message(filters.command("demote", prefixes=ADMIN_PREFIXES))
@@ -427,8 +449,8 @@ async def group_rights(_, message):
         current.difference_update(rights)
 
     try:
-        await _apply_telegram_rights(message.chat.id, target.id, current)
-        await _save_admin_rights(message.chat.id, target.id, current, doc.get("mode") if doc else None)
+        applied = await _apply_telegram_rights(message.chat.id, target.id, current)
+        await _save_admin_rights(message.chat.id, target.id, applied, doc.get("mode") if doc else None)
     except Exception as e:
         print(f"[ADMIN RIGHTS] {type(e).__name__}: {e}", flush=True)
         return await message.reply(f"❌ ᴜᴘᴅᴀᴛᴇ ғᴀɪʟᴇᴅ: <code>{rich_esc(str(e))[:300]}</code>")
