@@ -419,3 +419,231 @@ async def cmd_add(_, message):
 @app.on_message(filters.command("remove", prefixes=PREFIXES))
 async def cmd_remove(_, message):
     await _handle_rights(message, "remove")
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ADD / REMOVE HELP MENU (Rich UI)
+# ══════════════════════════════════════════════════════════════════════════════
+
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from utils.rich_ui import (
+    rich_esc,
+    rich_heading,
+    rich_note,
+    rich_kv_table,
+    rich_table,
+    rich_send,
+    rich_edit,
+)
+
+
+# ── Menu builders ─────────────────────────────────────────────────────────────
+
+def _add_help_text():
+    return (
+        rich_heading("➕ ᴀᴅᴅ ᴄᴏᴍᴍᴀɴᴅ ɢᴜɪᴅᴇ", level=3)
+        + "<i>ᴜꜱᴇʀ ᴋᴏ ᴀᴅᴍɪɴ ʙᴀɴᴀɴᴇ ᴋᴇ ʟɪʏᴇ</i>\n\n"
+        + rich_kv_table([
+            ("📌 ᴜꜱᴀɢᴇ",   "<code>.add</code> <i>(reply)</i>"),
+            ("🔤 ᴘʀᴇꜰɪx",   "<code>.</code>  <code>/</code>  <code>!</code>"),
+            ("🎯 ᴛᴀʀɢᴇᴛ",  "ʀᴇᴘʟʏ • @ᴜꜱᴇʀɴᴀᴍᴇ • ɪᴅ"),
+        ], headers=["ɪɴꜰᴏ", "ᴠᴀʟᴜᴇ"])
+        + "\n"
+        + rich_heading("📖 ᴇxᴀᴍᴘʟᴇꜱ", level=4)
+        + rich_kv_table([
+            (".add",              "ꜰᴜʟʟ ᴀᴅᴍɪɴ ʀɪɢʜᴛꜱ"),
+            (".add delete ban",   "ꜱᴇʟᴇᴄᴛɪᴠᴇ ʀɪɢʜᴛꜱ"),
+            (".add @username",    "ᴜꜱᴇʀɴᴀᴍᴇ ꜱᴇ"),
+            (".add <reply>",      "ʀᴇᴘʟʏ ᴋᴀʀᴋᴇ"),
+        ], headers=["ᴄᴏᴍᴍᴀɴᴅ", "ᴋᴀᴀᴍ"])
+        + "\n"
+        + rich_heading("🔐 ᴀᴠᴀɪʟᴀʙʟᴇ ʀɪɢʜᴛꜱ", level=4)
+        + rich_kv_table([
+            ("info",      "ᴄʜᴀɴɢᴇ ɢʀᴏᴜᴘ ɪɴꜰᴏ"),
+            ("delete",    "ᴅᴇʟᴇᴛᴇ ᴍᴇꜱꜱᴀɢᴇꜱ"),
+            ("ban",       "ʙᴀɴ/ᴋɪᴄᴋ ᴜꜱᴇʀꜱ"),
+            ("invite",    "ɪɴᴠɪᴛᴇ ᴜꜱᴇʀꜱ"),
+            ("pin",       "ᴘɪɴ ᴍᴇꜱꜱᴀɢᴇꜱ"),
+            ("stream",    "ᴠɪᴅᴇᴏ ᴄʜᴀᴛꜱ"),
+            ("addadmins", "ᴀᴅᴅ ɴᴇᴡ ᴀᴅᴍɪɴꜱ"),
+            ("anon",      "ᴀɴᴏɴʏᴍᴏᴜꜱ ᴀᴅᴍɪɴ"),
+        ], headers=["ʀɪɢʜᴛ", "ᴋᴀᴀᴍ"])
+        + "\n"
+        + rich_note("💡 ʀᴇᴘʟʏ ᴋᴀʀᴋᴇ <code>.add</code> ʙʜᴇᴊɴᴇ ꜱᴇ ꜰᴜʟʟ ᴀᴅᴍɪɴ ʙᴀɴ ᴊᴀᴀᴛᴀ ʜᴀɪ.")
+    )
+
+
+def _remove_help_text():
+    return (
+        rich_heading("➖ ʀᴇᴍᴏᴠᴇ ᴄᴏᴍᴍᴀɴᴅ ɢᴜɪᴅᴇ", level=3)
+        + "<i>ᴀᴅᴍɪɴ ʀɪɢʜᴛꜱ ʜᴀᴛᴀɴᴇ ᴋᴇ ʟɪʏᴇ</i>\n\n"
+        + rich_kv_table([
+            ("📌 ᴜꜱᴀɢᴇ",   "<code>.remove</code> <i>(reply)</i>"),
+            ("🔤 ᴘʀᴇꜰɪx",   "<code>.</code>  <code>/</code>  <code>!</code>"),
+            ("🎯 ᴛᴀʀɢᴇᴛ",  "ʀᴇᴘʟʏ • @ᴜꜱᴇʀɴᴀᴍᴇ • ɪᴅ"),
+        ], headers=["ɪɴꜰᴏ", "ᴠᴀʟᴜᴇ"])
+        + "\n"
+        + rich_heading("📖 ᴇxᴀᴍᴘʟᴇꜱ", level=4)
+        + rich_kv_table([
+            (".remove",           "ꜰᴜʟʟ ᴅᴇᴍᴏᴛᴇ"),
+            (".remove delete",    "ꜱɪʀꜰ ᴅᴇʟᴇᴛᴇ ʜᴀᴛᴀᴏ"),
+            (".remove @username", "ᴜꜱᴇʀɴᴀᴍᴇ ꜱᴇ"),
+            (".remove <reply>",   "ʀᴇᴘʟʏ ᴋᴀʀᴋᴇ"),
+        ], headers=["ᴄᴏᴍᴍᴀɴᴅ", "ᴋᴀᴀᴍ"])
+        + "\n"
+        + rich_note("⚠️ ᴋᴏɪ ʀɪɢʜᴛ ɴᴀ ᴅᴇɴᴇ ᴘᴇ ꜰᴜʟʟ ᴅᴇᴍᴏᴛᴇ ʜᴏ ᴊᴀᴀʏᴇɢᴀ.")
+    )
+
+
+def _control_menu_kb():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("➕ ᴀᴅᴅ", callback_data="ctl:add",
+                                 style=enums.ButtonStyle.SUCCESS),
+            InlineKeyboardButton("➖ ʀᴇᴍᴏᴠᴇ", callback_data="ctl:remove",
+                                 style=enums.ButtonStyle.DANGER),
+        ],
+        [
+            InlineKeyboardButton("❌ ᴄʟᴏꜱᴇ", callback_data="ctl:close",
+                                 style=enums.ButtonStyle.DANGER),
+        ],
+    ])
+
+
+async def _show_control_help(message, action):
+    """`.add` / `.remove` help menu dikhaye."""
+    text = _add_help_text() if action == "add" else _remove_help_text()
+    return await rich_send(
+        app, message.chat.id,
+        text,
+        reply_markup=_control_menu_kb(),
+        reply_to_message_id=message.id,
+    )
+
+
+# ── Help commands ─────────────────────────────────────────────────────────────
+
+@app.on_message(filters.command(["addhelp", "removehelp", "controlhelp"], prefixes=PREFIXES))
+async def cmd_control_help(_, message):
+    if not _is_group(message):
+        return
+    cmd = (message.command[0] or "").lower().lstrip("/!.")
+    action = "remove" if cmd == "removehelp" else "add"
+    await _show_control_help(message, action)
+
+
+# ── Callback handler ──────────────────────────────────────────────────────────
+
+@app.on_callback_query(filters.regex(r"^ctl:"))
+async def _ctl_callback(_, query):
+    data = query.data.split(":")[1]
+    if data == "close":
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+        return
+    if data == "add":
+        return await rich_edit(query, _add_help_text(), reply_markup=_control_menu_kb())
+    if data == "remove":
+        return await rich_edit(query, _remove_help_text(), reply_markup=_control_menu_kb())
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  PATCH: _handle_rights ke top me help-check add karo
+# ══════════════════════════════════════════════════════════════════════════════
+#
+#  ⚠️  IMPORTANT:
+#  Neeche wala _handle_rights function ko REPLACE karo apne purane _handle_rights se.
+#  Isme help check add kiya gaya hai:
+#    - `.add` (no reply, no args) → menu
+#    - `.add galat_word` → menu
+#    - `.add` (reply ke saath) → actual promote
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def _handle_rights(message, action):
+    if not _is_group(message):
+        return
+
+    args = list(message.command or [])[1:]
+    has_reply = bool(message.reply_to_message and message.reply_to_message.from_user)
+
+    # ✅ Case 1: `.add` bina reply aur bina args → HELP
+    if not has_reply and not args:
+        return await _show_control_help(message, action)
+
+    # ✅ Case 2: `.add galat_word` bina reply → HELP
+    if not has_reply and args:
+        valid = set(ADMIN_RIGHTS)
+        given = {str(x).lower().lstrip("/!.") for x in args}
+        has_target = any(
+            a.startswith("@") or a.lstrip("+-").isdigit()
+            for a in args
+        )
+        has_valid_right = bool(given & valid)
+        # Agar na valid right, na target → help
+        if not has_valid_right and not has_target:
+            return await _show_control_help(message, action)
+
+    if not await _can_promote(message):
+        return await message.reply("❌ ʏᴏᴜ ɴᴇᴇᴅ <b>Promote Members</b> permission.")
+    if not await _bot_can_promote(message.chat.id):
+        return await message.reply("❌ ʙᴏᴛ ɴᴇᴇᴅs <b>Promote Members</b> permission.")
+
+    target = None
+    if has_reply:
+        target = message.reply_to_message.from_user
+    if not target:
+        target = await _resolve_target(message, args)
+
+    if not target:
+        return await message.reply("❌ ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜꜱᴇʀ ᴏʀ ᴜꜱᴇ @ᴜꜱᴇʀɴᴀᴍᴇ/ɪᴅ.")
+    if not await _can_edit_target(message, target.id):
+        return await message.reply("❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴍᴏᴅɪꜰʏ ᴛʜɪꜱ ᴜꜱᴇʀ.")
+
+    valid = set(ADMIN_RIGHTS)
+    rights = {str(x).lower().lstrip("/!.") for x in args}
+    rights = {r for r in rights if r in valid}
+
+    # ── No rights supplied ──
+    if not rights:
+        if action == "remove":
+            try:
+                await _full_demote(message.chat.id, target.id)
+            except Exception as e:
+                print(f"[REMOVE FULL] {type(e).__name__}: {e}", flush=True)
+                return await message.reply(f"❌ ꜰᴀɪʟᴇᴅ: <code>{str(e)[:300]}</code>")
+            return await message.reply(f"{_mention(target)} 🕊 <b>Dᴇᴍᴏᴛᴇᴅ</b>.")
+        rights = await _bot_privilege_names(message.chat.id)
+        rights = {r for r in rights if r in ADMIN_RIGHTS}
+
+    # ── Current rights from DB ──
+    current = set()
+    if db is not None:
+        doc = await db["admin_rights"].find_one(
+            {"chat_id": int(message.chat.id), "user_id": int(target.id)}
+        )
+        if doc:
+            current = set(doc.get("rights", []))
+
+    if action == "add":
+        current.update(rights)
+    else:
+        current.difference_update(rights)
+
+    # ── Auto full demote if nothing left ──
+    if not current:
+        try:
+            await _full_demote(message.chat.id, target.id)
+        except Exception as e:
+            print(f"[AUTO DEMOTE] {type(e).__name__}: {e}", flush=True)
+            return await message.reply(f"❌ ꜰᴀɪʟᴇᴅ: <code>{str(e)[:300]}</code>")
+        return await message.reply(f"{_mention(target)} 🕊 <b>Dᴇᴍᴏᴛᴇᴅ</b>.")
+
+    applied = await _apply_rights(message.chat.id, target.id, current)
+    await _save_rights(message.chat.id, target.id, applied)
+
+    verb = "Aᴅᴅᴇᴅ" if action == "add" else "Rᴇᴍᴏᴠᴇᴅ"
+    return await message.reply(
+        f"{_mention(target)} 🕊 <b>Rɪɢʜᴛs {verb}</b>\n"
+        f"🔐 <code>{', '.join(sorted(applied)) or 'none'}</code>"
+        )
