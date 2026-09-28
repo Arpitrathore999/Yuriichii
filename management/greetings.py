@@ -1,6 +1,6 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  management/greetings.py — Welcome / Goodbye (Media Support)
+#  management/greetings.py — Welcome / Goodbye (Media + Line Break Fix)
 # --------------------------------------------------------------------------------
 
 import asyncio
@@ -83,6 +83,7 @@ async def _update(chat_id, **values):
 
 
 def _fill(text, user, chat):
+    """Fill placeholders and convert newlines to <br> for proper Telegram rendering."""
     values = {
         "{name}": _name(user),
         "{mention}": _mention(user),
@@ -93,6 +94,11 @@ def _fill(text, user, chat):
     }
     for key, value in values.items():
         text = text.replace(key, value)
+
+    # ✅ Normalize line breaks → <br>
+    text = text.replace("\r\n", "\n")
+    text = text.replace("\n", "<br>")
+
     return text
 
 
@@ -125,10 +131,8 @@ async def _send_welcome(chat_id, reply_to_id, text, media):
         if media and media.get("type") == "document":
             return await app.send_document(chat_id, document=media["file_id"], caption=text, reply_to_message_id=reply_to_id, parse_mode=ParseMode.HTML)
         if media and media.get("type") == "sticker":
-            # Send sticker then text
             await app.send_sticker(chat_id, sticker=media["file_id"], reply_to_message_id=reply_to_id)
             return await app.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
-        # No media — plain text
         return await app.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
     except Exception as e:
         print(f"[welcome-send] {type(e).__name__}: {e}", flush=True)
@@ -170,7 +174,13 @@ async def greetings_settings(_, message):
     if not await _permission(message):
         return
     command = (message.command[0] or "").lower()
-    args = " ".join(message.command[1:]).strip()
+
+    # ── Args extract — preserve newlines ──
+    # message.text has full original text with newlines; strip command part
+    full = message.text or message.caption or ""
+    # Remove the command itself (first token)
+    parts = full.split(maxsplit=1)
+    args = parts[1].strip() if len(parts) > 1 else ""
 
     # ── Toggle commands ──
     if command in ("welcome", "goodbye", "cleanwelcome"):
@@ -179,7 +189,7 @@ async def greetings_settings(_, message):
             key = command
             await message.reply(f"✦ <b>{command.title()}:</b> {'ON' if doc.get(key) else 'OFF'}")
             return
-        value = args.lower()
+        value = args.lower().strip()
         if value not in ("yes", "no", "on", "off"):
             await message.reply("❌ Use <code>yes</code>, <code>no</code>, <code>on</code> or <code>off</code>.")
             return
@@ -192,7 +202,6 @@ async def greetings_settings(_, message):
     if command == "setwelcome":
         media_type, media_id = _extract_media(message.reply_to_message)
         if media_type:
-            # Media + optional caption
             caption = args if args else (message.reply_to_message.caption or DEFAULT_WELCOME)
             await _update(message.chat.id,
                           welcome_text=caption,
