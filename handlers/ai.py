@@ -19,8 +19,8 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     "addgif", "addcaption", "socialgifs", "socialcaptions",
     "clearsocialgifs", "clearsocialcaptions", "banbot", "botunban",
     # Management commands — never let the AI catch these.
-    "ban", "unban", "kick", "mute", "tmute", "unmute", "warn", "unwarn",
-    "warnings", "resetwarns", "filter", "filters", "stop", "stopall",
+    "ban", "unban", "kick", "mute", "tmute", "unmute", "warn", "rmwarn",
+    "warnings", "resetwarn", "dwarn", "swarn", "warns", "filter", "filters", "stop", "stopall",
     "welcome", "goodbye", "setwelcome", "setgoodbye", "lock", "unlock",
     "locks", "pin", "unpin", "purge", "del", "report", "reports",
     "promote", "demote", "admin", "admins", "setrules", "add", "remove", "adminlist",
