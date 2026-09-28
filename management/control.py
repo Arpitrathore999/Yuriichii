@@ -408,56 +408,110 @@ async def _parse_right_command(message, action):
 
 @app.on_message(filters.command(["add", "remove"], prefixes=ADMIN_PREFIXES))
 async def group_rights(_, message):
+    """Manage group admin status/rights.
+
+    .add /reply            -> promote using every Telegram admin right the bot can grant.
+    .add <rights> /reply   -> add only those rights.
+    .remove /reply         -> fully demote.
+    .remove <rights> /reply -> remove only those rights.
+    """
     if not _management_group(message):
         return
-    if not await _bot_can_promote(message.chat.id):
-        return await message.reply("❌ ʙᴏᴛ ᴋᴏ ɢʀᴏᴜᴘ ᴍᴇ ʙɪᴛʜ <b>Promote Members</b> permission ᴅᴏ.")
     if not await _can_promote(message):
-        return await message.reply("❌ ʏᴏᴜ/ᴛʜᴇ ʙᴏᴛ ᴅᴏ ɴᴏᴛ ʜᴀᴠᴇ <b>Promote Members</b> permission.")
+        return await message.reply(
+            "❌ ʏᴏᴜ ɴᴇᴇᴅ <b>Promote Members</b> permission ᴛᴏ ᴍᴀɴᴀɢᴇ ᴀᴅᴍɪɴs."
+        )
+    if not await _bot_can_promote(message.chat.id):
+        return await message.reply(
+            "❌ ʙᴏᴛ ɴᴇᴇᴅs <b>Promote Members</b> permission ᴛᴏ ᴀᴅᴅ/ʀᴇᴍᴏᴠᴇ ᴀᴅᴍɪɴs."
+        )
 
-    action = (message.command[0] or "").lower()
+    action = (message.command[0] or "").lower().lstrip("/!.")
     args = list(message.command or [])[1:]
     target = await _resolve_target(message, args)
     if not target:
-        return await message.reply("❌ ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜsᴇʀ ᴏʀ ᴜsᴇ <code>@username</code>/<code>user id</code>.")
+        return await message.reply(
+            "❌ ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜsᴇʀ ᴏʀ ᴜsᴇ <code>@username</code>/<code>user id</code>."
+        )
     if not await _can_edit_target(message, target.id):
         return await message.reply("❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴍᴏᴅɪғʏ ᴛʜɪs ᴜsᴇʀ.")
 
     valid = set(ADMIN_RIGHTS)
-    rights = {str(x).lower().lstrip("/") for x in args if str(x).lower().lstrip("/") in valid}
-    doc = await _admin_right_doc(message.chat.id, target.id)
-    current = set(doc.get("rights", [])) if doc else set()
-
-    # `.add @user` = full Telegram admin; `.remove @user` = demote.
-    if not rights:
-        if action == "add":
-            rights = set(ADMIN_RIGHTS.keys())
-        else:
-            try:
-                from pyrogram.types import ChatPrivileges
-                await app.promote_chat_member(message.chat.id, target.id, privileges=ChatPrivileges())
-                if db is not None:
-                    await db["admin_rights"].delete_one({"chat_id": int(message.chat.id), "user_id": int(target.id)})
-            except Exception as e:
-                print(f"[REMOVE ADMIN] {type(e).__name__}: {e}", flush=True)
-                return await message.reply(f"❌ ʀᴇᴍᴏᴠᴇ ғᴀɪʟᴇᴅ: <code>{rich_esc(str(e))[:300]}</code>")
-            return await message.reply(f"{_mention(target)} 🕊 Rᴇᴍᴏᴠᴇᴅ Fʀᴏᴍ Aᴅᴍɪɴs.")
-
-    if action == "add":
-        current.update(rights)
-    else:
-        current.difference_update(rights)
+    rights = {
+        str(x).lower().lstrip("/!.")
+        for x in args
+        if str(x).lower().lstrip("/!.") in valid
+    }
 
     try:
-        applied = await _apply_telegram_rights(message.chat.id, target.id, current)
-        await _save_admin_rights(message.chat.id, target.id, applied, doc.get("mode") if doc else None)
+        # No rights supplied:
+        # .add    = full promotion limited to rights the bot can actually grant.
+        # .remove = complete demotion.
+        if not rights:
+            if action == "remove":
+                from pyrogram.types import ChatPrivileges
+                await app.promote_chat_member(
+                    message.chat.id, target.id, privileges=ChatPrivileges()
+                )
+                if db is not None:
+                    await db["admin_rights"].delete_one(
+                        {"chat_id": int(message.chat.id), "user_id": int(target.id)}
+                    )
+                return await message.reply(
+                    f"{_mention(target)} 🕊 <b>Dᴇᴍᴏᴛᴇᴅ</b> — ɴᴏᴡ ᴀ ɴᴏʀᴍᴀʟ ᴍᴇᴍʙᴇʀ."
+                )
+
+            rights = await _bot_privilege_names(message.chat.id)
+            # Custom Mongo-only rights are not Telegram ChatPrivileges.
+            rights = {r for r in rights if r in ADMIN_RIGHTS and ADMIN_RIGHTS[r] is not None}
+
+        doc = await _admin_right_doc(message.chat.id, target.id)
+        current = set(doc.get("rights", [])) if doc else set()
+
+        if action == "add":
+            current.update(rights)
+        else:
+            current.difference_update(rights)
+
+        # Telegram only accepts actual ChatPrivileges. _apply_telegram_rights
+        # intersects with the bot's own grantable rights.
+        applied = await _apply_telegram_rights(
+            message.chat.id, target.id, current
+        )
+
+        if db is not None:
+            if applied:
+                await _save_admin_rights(
+                    message.chat.id,
+                    target.id,
+                    applied,
+                    doc.get("mode") if doc else None,
+                )
+            else:
+                await db["admin_rights"].delete_one(
+                    {"chat_id": int(message.chat.id), "user_id": int(target.id)}
+                )
+
+        label = " • ".join(r.title() for r in sorted(rights)) or "none"
+        verb = "Aᴅᴅᴇᴅ" if action == "add" else "Rᴇᴍᴏᴠᴇᴅ"
+
+        if action == "remove" and not applied:
+            return await message.reply(
+                f"{_mention(target)} 🕊 <b>Dᴇᴍᴏᴛᴇᴅ</b> — ɴᴏ ᴀᴅᴍɪɴ ʀɪɢʜᴛs ʀᴇᴍᴀɪɴ."
+            )
+
+        return await message.reply(
+            f"{_mention(target)} 🕊 <b>Rɪɢʜᴛs {verb}</b>\n"
+            f"🏅 {label}\n"
+            f"🔐 Current: <code>{', '.join(sorted(applied)) or 'none'}</code>"
+        )
+
     except Exception as e:
         print(f"[ADMIN RIGHTS] {type(e).__name__}: {e}", flush=True)
-        return await message.reply(f"❌ ᴜᴘᴅᴀᴛᴇ ғᴀɪʟᴇᴅ: <code>{rich_esc(str(e))[:300]}</code>")
-
-    label = " • ".join(r.title() for r in sorted(rights))
-    verb = "Aᴅᴅᴇᴅ" if action == "add" else "Rᴇᴍᴏᴠᴇᴅ"
-    return await message.reply(f"{_mention(target)} 🕊 Rɪɢʜᴛs {verb} — 🏅 {label}.")
+        return await message.reply(
+            f"❌ <b>{action.title()} ғᴀɪʟᴇᴅ</b>\n"
+            f"<code>{rich_esc(str(e))[:400]}</code>"
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
