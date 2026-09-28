@@ -23,7 +23,8 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     "warnings", "resetwarns", "filter", "filters", "stop", "stopall",
     "welcome", "goodbye", "setwelcome", "setgoodbye", "lock", "unlock",
     "locks", "pin", "unpin", "purge", "del", "report", "reports",
-    "promote", "demote", "admin", "admins", "setrules", "add", "remove", "adminlist"
+    "promote", "demote", "admin", "admins", "setrules", "add", "remove", "adminlist",
+    "sban", "tban", "dban", "smute", "dmute", "skick", "dkick"
 ]
 
 
