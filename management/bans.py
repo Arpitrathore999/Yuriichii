@@ -206,8 +206,6 @@ async def _remove_action(chat_id, user_id, action):
 async def _can_act_on(message, target):
     if not target:
         return False, "❌ <b>User not found.</b>"
-    if target.is_bot:
-        return False, "❌ <b>Bots cannot be managed with this command.</b>"
     if message.from_user and target.id == message.from_user.id:
         return False, "❌ <b>You can't use this command on yourself.</b>"
     try:
