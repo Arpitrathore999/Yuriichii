@@ -231,3 +231,12 @@ async def goodbye_member(_, message):
         await message.reply_text(text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
     except RPCError:
         pass
+
+@app.on_message(filters.group & filters.new_chat_members, group=-999)
+async def _debug_welcome(_, message):
+    print(f"[WELCOME EVENT FIRED] chat={message.chat.id} members={[u.id for u in message.new_chat_members]}", flush=True)
+
+
+@app.on_message(filters.group & filters.left_chat_member, group=-999)
+async def _debug_goodbye(_, message):
+    print(f"[GOODBYE EVENT FIRED] chat={message.chat.id} user={message.left_chat_member.id if message.left_chat_member else None}", flush=True)
