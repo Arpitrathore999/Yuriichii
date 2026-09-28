@@ -3,7 +3,7 @@ def load_handlers():
     modules = [
         "handlers.start", "handlers.ai", "handlers.social",
         "handlers.admin", "handlers.ping", "handlers.broadcast",
-        "management.admin", "management.bans", "management.filter",
+        "management.control", "management.bans", "management.filter",
         "management.greetings", "management.lock", "management.pin",
         "management.purge", "management.report", "management.warnings",
     ]
