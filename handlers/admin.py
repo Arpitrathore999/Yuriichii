@@ -3,6 +3,8 @@
 #  handlers/admin.py — Premium Owner Panel + Social Admin
 # --------------------------------------------------------------------------------
 
+PREFIXES = ["/", "!", "."]
+
 from pyrogram import enums, filters, StopPropagation
 from pyrogram.enums import ChatMemberStatus, ChatType
 from pyrogram.types import (
@@ -413,7 +415,7 @@ async def group_rights(_, message):
 #  SOCIAL ADMIN COMMANDS
 # ══════════════════════════════════════════════════════════════════════════════
 
-@app.on_message(filters.command("adminhelp"))
+@app.on_message(filters.command("adminhelp", prefixes=PREFIXES))
 async def admin_help(_, message):
     if not await can_manage_social(message):
         return await deny(message)
@@ -431,7 +433,7 @@ async def admin_help(_, message):
     )
 
 
-@app.on_message(filters.command("stats"))
+@app.on_message(filters.command("stats", prefixes=PREFIXES))
 async def stats(_, message):
     if not await can_manage_social(message):
         return await deny(message)
@@ -440,7 +442,7 @@ async def stats(_, message):
     )
 
 
-@app.on_message(filters.command("addgif"))
+@app.on_message(filters.command("addgif", prefixes=PREFIXES))
 async def add_social_gif(_, message):
     if not await can_manage_social(message):
         return await deny(message)
@@ -468,7 +470,7 @@ async def add_social_gif(_, message):
         await message.reply("❌ ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ. ᴄʜᴇᴄᴋ <code>MONGO_URI</code>.")
 
 
-@app.on_message(filters.command("addcaption"))
+@app.on_message(filters.command("addcaption", prefixes=PREFIXES))
 async def add_social_caption(_, message):
     if not await can_manage_social(message):
         return await deny(message)
@@ -490,7 +492,7 @@ async def add_social_caption(_, message):
         await message.reply("❌ ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ. ᴄʜᴇᴄᴋ <code>MONGO_URI</code>.")
 
 
-@app.on_message(filters.command("socialgifs"))
+@app.on_message(filters.command("socialgifs", prefixes=PREFIXES))
 async def social_gifs(_, message):
     if not await can_manage_social(message):
         return await deny(message)
@@ -506,7 +508,7 @@ async def social_gifs(_, message):
     )
 
 
-@app.on_message(filters.command("socialcaptions"))
+@app.on_message(filters.command("socialcaptions", prefixes=PREFIXES))
 async def social_captions(_, message):
     if not await can_manage_social(message):
         return await deny(message)
@@ -521,7 +523,7 @@ async def social_captions(_, message):
     )
 
 
-@app.on_message(filters.command("clearsocialgifs"))
+@app.on_message(filters.command("clearsocialgifs", prefixes=PREFIXES))
 async def clear_social_gifs(_, message):
     if not await can_manage_social(message):
         return await deny(message)
@@ -534,7 +536,7 @@ async def clear_social_gifs(_, message):
     await message.reply("🗑️ ᴄᴜsᴛᴏᴍ ɢɪғs ᴄʟᴇᴀʀᴇᴅ." if ok else "❌ ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.")
 
 
-@app.on_message(filters.command("clearsocialcaptions"))
+@app.on_message(filters.command("clearsocialcaptions", prefixes=PREFIXES))
 async def clear_social_captions(_, message):
     if not await can_manage_social(message):
         return await deny(message)
@@ -653,7 +655,7 @@ async def _show_users(query, page=0, banned_only=False):
 #  PANEL COMMANDS
 # ══════════════════════════════════════════════════════════════════════════════
 
-@app.on_message(filters.command("adminpanel"))
+@app.on_message(filters.command("adminpanel", prefixes=PREFIXES))
 async def admin_panel(_, message):
     if not _panel_owner(message):
         return await message.reply(
@@ -670,7 +672,7 @@ async def admin_panel(_, message):
     )
 
 
-@app.on_message(filters.command("adminuser"))
+@app.on_message(filters.command("adminuser", prefixes=PREFIXES))
 async def admin_user_lookup(_, message):
     if not _panel_owner(message):
         return await message.reply("⛔ <b>ᴏᴡɴᴇʀ ᴏɴʟʏ</b>")
@@ -731,12 +733,12 @@ async def _direct_ban(message, banned: bool):
     return await message.reply(f"♻️ <b>ᴜsᴇʀ ᴜɴʙᴀɴɴᴇᴅ.</b>\n\n🆔 <code>{uid}</code>")
 
 
-@app.on_message(filters.command("banbot"))
+@app.on_message(filters.command("banbot", prefixes=PREFIXES))
 async def banbot(_, message):
     return await _direct_ban(message, True)
 
 
-@app.on_message(filters.command("botunban"))
+@app.on_message(filters.command("botunban", prefixes=PREFIXES))
 async def botunban(_, message):
     return await _direct_ban(message, False)
 
@@ -875,7 +877,7 @@ async def admin_panel_callback(_, query: CallbackQuery):
 #  BROADCAST
 # ══════════════════════════════════════════════════════════════════════════════
 
-@app.on_message(filters.command("cancelbroadcast"))
+@app.on_message(filters.command("cancelbroadcast", prefixes=PREFIXES))
 async def cancel_admin_broadcast(_, message):
     if not _panel_owner(message):
         return await message.reply("⛔ <b>ᴏᴡɴᴇʀ ᴏɴʟʏ</b>")

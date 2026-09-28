@@ -3,6 +3,8 @@
 #  handlers/start.py  —  Rich HTML + Proper table + Colored pill links
 # --------------------------------------------------------------------------------
 
+PREFIXES = ["/", "!", "."]
+
 import asyncio
 import json
 from urllib.request import Request, urlopen
@@ -455,7 +457,7 @@ async def _edit_rich(msg, html, kb):
 #  HANDLERS
 # ══════════════════════════════════════════════════════════════════════════════
 
-@bot.on_message(filters.command("start"))
+@bot.on_message(filters.command("start", prefixes=PREFIXES))
 async def start_handler(_, message: Message):
     try:
         await message.delete()
@@ -484,7 +486,7 @@ async def start_handler(_, message: Message):
         )
 
 
-@bot.on_message(filters.command("help"))
+@bot.on_message(filters.command("help", prefixes=PREFIXES))
 async def help_handler(_, message: Message):
     try:
         await message.delete()

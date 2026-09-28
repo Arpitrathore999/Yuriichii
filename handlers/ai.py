@@ -5,6 +5,8 @@ from core.bot import app
 from database.users import ensure_user
 from modules.ai.companion import chat
 
+PREFIXES = ["/", "!", "."]
+
 SOCIAL_COMMANDS = [
     "hug", "kiss", "bite", "slap", "punch", "cuddle", "pat", "highfive",
     "flirt", "love", "crush", "couple", "propose", "marriage", "divorce"
@@ -16,13 +18,19 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     "cancelbroadcast", "adminhelp", "stats",
     "addgif", "addcaption", "socialgifs", "socialcaptions",
     "clearsocialgifs", "clearsocialcaptions", "banbot", "botunban",
+    # Management commands — never let the AI catch these.
+    "ban", "unban", "kick", "mute", "tmute", "unmute", "warn", "unwarn",
+    "warnings", "resetwarns", "filter", "filters", "stop", "stopall",
+    "welcome", "goodbye", "setwelcome", "setgoodbye", "lock", "unlock",
+    "locks", "pin", "unpin", "purge", "del", "report", "reports",
+    "promote", "demote", "admin", "admins", "setrules",
 ]
 
 
 @app.on_message(
     filters.private
     & filters.text
-    & ~filters.command(ALL_COMMANDS)
+    & ~filters.command(ALL_COMMANDS, prefixes=PREFIXES)
 )
 async def private_chat(_, message):
     if not message.from_user or not message.text:
@@ -32,7 +40,7 @@ async def private_chat(_, message):
     await message.reply(await chat(message.from_user.id, message.text))
 
 
-@app.on_message(filters.command("ai"))
+@app.on_message(filters.command("ai", prefixes=PREFIXES))
 async def ai_command(_, message):
     if not message.from_user:
         return
@@ -47,7 +55,7 @@ async def ai_command(_, message):
 @app.on_message(
     filters.group
     & filters.text
-    & ~filters.command(ALL_COMMANDS)   # 👈 ye update kiya
+    & ~filters.command(ALL_COMMANDS, prefixes=PREFIXES)   # 👈 ye update kiya
 )
 async def group_chat(_, message):
     if not message.from_user or not message.text:

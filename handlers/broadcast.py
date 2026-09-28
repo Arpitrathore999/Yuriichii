@@ -3,6 +3,8 @@
 #  handlers/broadcast.py — Music Bot style, Yuriichii compatible
 # --------------------------------------------------------------------------------
 
+PREFIXES = ["/", "!", "."]
+
 import asyncio
 import json
 import logging
@@ -261,7 +263,7 @@ async def _send(target_id: int, bm: Message, broadcast_type: str, text: str) -> 
 # ── Main command ──────────────────────────────────────────────────────────────
 
 @bot.on_message(
-    filters.command(["broadcast", "gcast"])
+    filters.command(["broadcast", "gcast"], prefixes=PREFIXES)
     & filters.user(getattr(config, "OWNER_ID", 0))
 )
 async def broadcast_cmd(_, message: Message) -> None:

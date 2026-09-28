@@ -3,6 +3,8 @@
 #  handlers/ping.py — Native Rich Message ping (kurigram)
 # --------------------------------------------------------------------------------
 
+PREFIXES = ["/", "!", "."]
+
 import os
 import time
 from datetime import timedelta
@@ -44,7 +46,7 @@ def supp_markup():
 
 # ── /ping ──────────────────────────────────────────────────────────────────────
 
-@app.on_message(filters.command("ping"))
+@app.on_message(filters.command("ping", prefixes=PREFIXES))
 async def ping_cmd(client, message: Message):
     chat_id = message.chat.id
     start   = time.perf_counter()
@@ -115,7 +117,7 @@ def _run_speedtest():
 
 
 @app.on_message(
-    filters.command(["speedtest", "spt"]) & filters.user(config.OWNER_ID)
+    filters.command(["speedtest", "spt"], prefixes=PREFIXES) & filters.user(config.OWNER_ID)
 )
 async def speedtest_cmd(client, message: Message):
     chat_id = message.chat.id
