@@ -1,6 +1,6 @@
 # --------------------------------------------------------------------------------
-# Elara © 2026
-# handlers/greetings.py — Welcome / Goodbye Management
+#  Elara © 2026
+#  management/greetings.py — Welcome / Goodbye Management (fixed)
 # --------------------------------------------------------------------------------
 
 import asyncio
@@ -149,12 +149,23 @@ async def _expire_welcome(chat_id, message_id):
         pass
 
 
-@app.on_message(filters.group & filters.incoming & filters.command(["welcome", "goodbye", "setwelcome", "resetwelcome", "setgoodbye", "resetgoodbye", "cleanwelcome"], PREFIXES))
+# ── Settings commands ─────────────────────────────────────────────────────────
+
+@app.on_message(
+    filters.group
+    & filters.incoming
+    & filters.command(
+        ["welcome", "goodbye", "setwelcome", "resetwelcome",
+         "setgoodbye", "resetgoodbye", "cleanwelcome"],
+        PREFIXES,
+    )
+)
 async def greetings_settings(_, message):
     if not await _permission(message):
         return
     command = (message.command[0] or "").lower()
     args = " ".join(message.command[1:]).strip()
+
     if command in ("welcome", "goodbye", "cleanwelcome"):
         if not args:
             doc = await _get(message.chat.id)
@@ -194,9 +205,12 @@ async def greetings_settings(_, message):
     if command == "resetgoodbye":
         await _update(message.chat.id, goodbye_text=DEFAULT_GOODBYE)
         await message.reply("✓ <b>Goodbye message reset.</b>")
+        return
 
 
-@app.on_message(filters.group & filters.new_chat_members)
+# ── Welcome handler ───────────────────────────────────────────────────────────
+
+@app.on_message(filters.group & filters.new_chat_members, group=-5)
 async def welcome_members(_, message):
     doc = await _get(message.chat.id)
     if not doc.get("welcome", True):
@@ -210,15 +224,17 @@ async def welcome_members(_, message):
             continue
         text = _fill(doc.get("welcome_text") or DEFAULT_WELCOME, user, message.chat)
         try:
-            sent = await message.reply_text(text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+            sent = await message.reply_text(text, parse_mode=ParseMode.HTML)
             await _remember_welcome(message.chat.id, sent.id)
             if doc.get("cleanwelcome"):
                 asyncio.create_task(_expire_welcome(message.chat.id, sent.id))
-        except RPCError:
-            pass
+        except Exception as e:
+            print(f"[welcome] {type(e).__name__}: {e}", flush=True)
 
 
-@app.on_message(filters.group & filters.left_chat_member)
+# ── Goodbye handler ───────────────────────────────────────────────────────────
+
+@app.on_message(filters.group & filters.left_chat_member, group=-5)
 async def goodbye_member(_, message):
     doc = await _get(message.chat.id)
     if not doc.get("goodbye", True):
@@ -228,15 +244,6 @@ async def goodbye_member(_, message):
         return
     text = _fill(doc.get("goodbye_text") or DEFAULT_GOODBYE, user, message.chat)
     try:
-        await message.reply_text(text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-    except RPCError:
-        pass
-
-@app.on_message(filters.group & filters.new_chat_members, group=-999)
-async def _debug_welcome(_, message):
-    print(f"[WELCOME EVENT FIRED] chat={message.chat.id} members={[u.id for u in message.new_chat_members]}", flush=True)
-
-
-@app.on_message(filters.group & filters.left_chat_member, group=-999)
-async def _debug_goodbye(_, message):
-    print(f"[GOODBYE EVENT FIRED] chat={message.chat.id} user={message.left_chat_member.id if message.left_chat_member else None}", flush=True)
+        await message.reply_text(text, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        print(f"[goodbye] {type(e).__name__}: {e}", flush=True)
