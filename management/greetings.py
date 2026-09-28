@@ -1,6 +1,6 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  management/greetings.py — Welcome / Goodbye (Media + Line Break Fix)
+#  management/greetings.py — Welcome / Goodbye (Media + Line Break Fixed)
 # --------------------------------------------------------------------------------
 
 import asyncio
@@ -20,7 +20,11 @@ COLLECTION = "greetings"
 DEFAULT_WELCOME = "👋 <b>Welcome {mention} to {chat}!</b>"
 DEFAULT_GOODBYE = "👋 <b>{mention} has left {chat}.</b>"
 
+# Caption limit (Telegram) — 1024. We use 900 to be safe.
+CAPTION_LIMIT = 900
 
+
+# ─── DB helpers ───────────────────────────────────────────────────────────────
 def _col():
     return db[COLLECTION] if db is not None else None
 
@@ -56,22 +60,18 @@ async def _permission(message):
 
 async def _get(chat_id):
     c = _col()
+    default = {
+        "chat_id": int(chat_id), "welcome": True, "goodbye": True,
+        "cleanwelcome": False, "welcome_text": DEFAULT_WELCOME,
+        "goodbye_text": DEFAULT_GOODBYE, "old_welcome_ids": [],
+        "welcome_media": None, "goodbye_media": None,
+    }
     if c is None:
-        return {
-            "chat_id": int(chat_id), "welcome": True, "goodbye": True,
-            "cleanwelcome": False, "welcome_text": DEFAULT_WELCOME,
-            "goodbye_text": DEFAULT_GOODBYE, "old_welcome_ids": [],
-            "welcome_media": None, "goodbye_media": None,
-        }
+        return default
     doc = await c.find_one({"chat_id": int(chat_id)})
     if not doc:
-        doc = {
-            "chat_id": int(chat_id), "welcome": True, "goodbye": True,
-            "cleanwelcome": False, "welcome_text": DEFAULT_WELCOME,
-            "goodbye_text": DEFAULT_GOODBYE, "old_welcome_ids": [],
-            "welcome_media": None, "goodbye_media": None,
-        }
-        await c.update_one({"chat_id": int(chat_id)}, {"$setOnInsert": doc}, upsert=True)
+        await c.update_one({"chat_id": int(chat_id)}, {"$setOnInsert": default}, upsert=True)
+        return default
     return doc
 
 
@@ -82,8 +82,9 @@ async def _update(chat_id, **values):
     await c.update_one({"chat_id": int(chat_id)}, {"$set": values}, upsert=True)
 
 
+# ─── Text / media helpers ─────────────────────────────────────────────────────
 def _fill(text, user, chat):
-    """Fill placeholders and convert newlines to <br> for proper Telegram rendering."""
+    """Replace placeholders. Preserve real line breaks for HTML captions."""
     values = {
         "{name}": _name(user),
         "{mention}": _mention(user),
@@ -95,10 +96,8 @@ def _fill(text, user, chat):
     for key, value in values.items():
         text = text.replace(key, value)
 
-    # ✅ Normalize line breaks → <br>
+    # Normalize CRLF
     text = text.replace("\r\n", "\n")
-    text = text.replace("\n", "<br>")
-
     return text
 
 
@@ -119,48 +118,57 @@ def _extract_media(replied):
     return None, None
 
 
-async def _send_welcome(chat_id, reply_to_id, text, media):
-    """Send welcome with optional media."""
+async def _send_with_media(chat_id, reply_to_id, text, media):
+    """Send media+text. Long text → media alag, text alag."""
     try:
-        if media and media.get("type") == "photo":
-            return await app.send_photo(chat_id, photo=media["file_id"], caption=text, reply_to_message_id=reply_to_id, parse_mode=ParseMode.HTML)
-        if media and media.get("type") == "video":
-            return await app.send_video(chat_id, video=media["file_id"], caption=text, reply_to_message_id=reply_to_id, parse_mode=ParseMode.HTML)
-        if media and media.get("type") == "gif":
-            return await app.send_animation(chat_id, animation=media["file_id"], caption=text, reply_to_message_id=reply_to_id, parse_mode=ParseMode.HTML)
-        if media and media.get("type") == "document":
-            return await app.send_document(chat_id, document=media["file_id"], caption=text, reply_to_message_id=reply_to_id, parse_mode=ParseMode.HTML)
-        if media and media.get("type") == "sticker":
-            await app.send_sticker(chat_id, sticker=media["file_id"], reply_to_message_id=reply_to_id)
+        if not media:
+            return await app.send_message(
+                chat_id, text,
+                parse_mode=ParseMode.HTML,
+                reply_to_message_id=reply_to_id,
+            )
+
+        mtype = media.get("type")
+        fid = media.get("file_id")
+        long_text = len(text) > CAPTION_LIMIT
+
+        if mtype == "photo":
+            if long_text:
+                await app.send_photo(chat_id, photo=fid, reply_to_message_id=reply_to_id)
+                return await app.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
+            return await app.send_photo(chat_id, photo=fid, caption=text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
+
+        if mtype == "video":
+            if long_text:
+                await app.send_video(chat_id, video=fid, reply_to_message_id=reply_to_id)
+                return await app.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
+            return await app.send_video(chat_id, video=fid, caption=text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
+
+        if mtype == "gif":
+            if long_text:
+                await app.send_animation(chat_id, animation=fid, reply_to_message_id=reply_to_id)
+                return await app.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
+            return await app.send_animation(chat_id, animation=fid, caption=text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
+
+        if mtype == "document":
+            if long_text:
+                await app.send_document(chat_id, document=fid, reply_to_message_id=reply_to_id)
+                return await app.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
+            return await app.send_document(chat_id, document=fid, caption=text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
+
+        if mtype == "sticker":
+            await app.send_sticker(chat_id, sticker=fid, reply_to_message_id=reply_to_id)
             return await app.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
+
+        # Unknown media type — text only
         return await app.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
+
     except Exception as e:
-        print(f"[welcome-send] {type(e).__name__}: {e}", flush=True)
+        print(f"[send-with-media] {type(e).__name__}: {e}", flush=True)
         return None
 
 
-async def _send_goodbye(chat_id, reply_to_id, text, media):
-    """Send goodbye with optional media."""
-    try:
-        if media and media.get("type") == "photo":
-            return await app.send_photo(chat_id, photo=media["file_id"], caption=text, reply_to_message_id=reply_to_id, parse_mode=ParseMode.HTML)
-        if media and media.get("type") == "video":
-            return await app.send_video(chat_id, video=media["file_id"], caption=text, reply_to_message_id=reply_to_id, parse_mode=ParseMode.HTML)
-        if media and media.get("type") == "gif":
-            return await app.send_animation(chat_id, animation=media["file_id"], caption=text, reply_to_message_id=reply_to_id, parse_mode=ParseMode.HTML)
-        if media and media.get("type") == "document":
-            return await app.send_document(chat_id, document=media["file_id"], caption=text, reply_to_message_id=reply_to_id, parse_mode=ParseMode.HTML)
-        if media and media.get("type") == "sticker":
-            await app.send_sticker(chat_id, sticker=media["file_id"], reply_to_message_id=reply_to_id)
-            return await app.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
-        return await app.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
-    except Exception as e:
-        print(f"[goodbye-send] {type(e).__name__}: {e}", flush=True)
-        return None
-
-
-# ── Settings commands ─────────────────────────────────────────────────────────
-
+# ─── Settings commands ────────────────────────────────────────────────────────
 @app.on_message(
     filters.group
     & filters.incoming
@@ -173,12 +181,11 @@ async def _send_goodbye(chat_id, reply_to_id, text, media):
 async def greetings_settings(_, message):
     if not await _permission(message):
         return
+
     command = (message.command[0] or "").lower()
 
-    # ── Args extract — preserve newlines ──
-    # message.text has full original text with newlines; strip command part
+    # Full raw text with newlines preserved (message.text keeps them)
     full = message.text or message.caption or ""
-    # Remove the command itself (first token)
     parts = full.split(maxsplit=1)
     args = parts[1].strip() if len(parts) > 1 else ""
 
@@ -186,27 +193,30 @@ async def greetings_settings(_, message):
     if command in ("welcome", "goodbye", "cleanwelcome"):
         if not args:
             doc = await _get(message.chat.id)
-            key = command
-            await message.reply(f"✦ <b>{command.title()}:</b> {'ON' if doc.get(key) else 'OFF'}")
-            return
+            state = "ON" if doc.get(command) else "OFF"
+            return await message.reply(f"✦ <b>{command.title()}:</b> {state}")
+
         value = args.lower().strip()
         if value not in ("yes", "no", "on", "off"):
-            await message.reply("❌ Use <code>yes</code>, <code>no</code>, <code>on</code> or <code>off</code>.")
-            return
+            return await message.reply("❌ Use <code>yes</code>, <code>no</code>, <code>on</code> or <code>off</code>.")
+
         enabled = value in ("yes", "on")
         await _update(message.chat.id, **{command: enabled})
-        await message.reply(f"✓ <b>{command.title()} messages {'enabled' if enabled else 'disabled'}.</b>")
-        return
+        return await message.reply(
+            f"✓ <b>{command.title()} messages {'enabled' if enabled else 'disabled'}.</b>"
+        )
 
-    # ── Set welcome (text or media) ──
+    # ── Setwelcome ──
     if command == "setwelcome":
-        media_type, media_id = _extract_media(message.reply_to_message)
-        if media_type:
+        mtype, fid = _extract_media(message.reply_to_message)
+        if mtype:
             caption = args if args else (message.reply_to_message.caption or DEFAULT_WELCOME)
-            await _update(message.chat.id,
-                          welcome_text=caption,
-                          welcome_media={"type": media_type, "file_id": media_id})
-            return await message.reply(f"✓ <b>Welcome media set</b> ({media_type}).")
+            await _update(
+                message.chat.id,
+                welcome_text=caption,
+                welcome_media={"type": mtype, "file_id": fid},
+            )
+            return await message.reply(f"✓ <b>Welcome media set</b> ({mtype}).")
         if not args:
             return await message.reply(
                 "❌ <b>Uꜱᴀɢᴇ:</b>\n"
@@ -216,20 +226,22 @@ async def greetings_settings(_, message):
         await _update(message.chat.id, welcome_text=args, welcome_media=None)
         return await message.reply("✓ <b>Welcome message updated.</b>")
 
-    # ── Reset welcome ──
+    # ── Resetwelcome ──
     if command == "resetwelcome":
         await _update(message.chat.id, welcome_text=DEFAULT_WELCOME, welcome_media=None)
         return await message.reply("✓ <b>Welcome message reset.</b>")
 
-    # ── Set goodbye (text or media) ──
+    # ── Setgoodbye ──
     if command == "setgoodbye":
-        media_type, media_id = _extract_media(message.reply_to_message)
-        if media_type:
+        mtype, fid = _extract_media(message.reply_to_message)
+        if mtype:
             caption = args if args else (message.reply_to_message.caption or DEFAULT_GOODBYE)
-            await _update(message.chat.id,
-                          goodbye_text=caption,
-                          goodbye_media={"type": media_type, "file_id": media_id})
-            return await message.reply(f"✓ <b>Goodbye media set</b> ({media_type}).")
+            await _update(
+                message.chat.id,
+                goodbye_text=caption,
+                goodbye_media={"type": mtype, "file_id": fid},
+            )
+            return await message.reply(f"✓ <b>Goodbye media set</b> ({mtype}).")
         if not args:
             return await message.reply(
                 "❌ <b>Uꜱᴀɢᴇ:</b>\n"
@@ -239,14 +251,13 @@ async def greetings_settings(_, message):
         await _update(message.chat.id, goodbye_text=args, goodbye_media=None)
         return await message.reply("✓ <b>Goodbye message updated.</b>")
 
-    # ── Reset goodbye ──
+    # ── Resetgoodbye ──
     if command == "resetgoodbye":
         await _update(message.chat.id, goodbye_text=DEFAULT_GOODBYE, goodbye_media=None)
         return await message.reply("✓ <b>Goodbye message reset.</b>")
 
 
-# ── Welcome handler ───────────────────────────────────────────────────────────
-
+# ─── Welcome handler ──────────────────────────────────────────────────────────
 @app.on_message(filters.group & filters.new_chat_members, group=-5)
 async def welcome_members(_, message):
     doc = await _get(message.chat.id)
@@ -259,32 +270,34 @@ async def welcome_members(_, message):
     for user in message.new_chat_members:
         if getattr(user, "is_bot", False):
             continue
+
         text = _fill(doc.get("welcome_text") or DEFAULT_WELCOME, user, message.chat)
         media = doc.get("welcome_media")
-        sent = await _send_welcome(message.chat.id, message.id, text, media)
+
+        sent = await _send_with_media(message.chat.id, message.id, text, media)
         if sent:
             await _remember_welcome(message.chat.id, sent.id)
             if doc.get("cleanwelcome"):
                 asyncio.create_task(_expire_welcome(message.chat.id, sent.id))
 
 
-# ── Goodbye handler ───────────────────────────────────────────────────────────
-
+# ─── Goodbye handler ──────────────────────────────────────────────────────────
 @app.on_message(filters.group & filters.left_chat_member, group=-5)
 async def goodbye_member(_, message):
     doc = await _get(message.chat.id)
     if not doc.get("goodbye", True):
         return
+
     user = message.left_chat_member
     if not user or getattr(user, "is_bot", False):
         return
+
     text = _fill(doc.get("goodbye_text") or DEFAULT_GOODBYE, user, message.chat)
     media = doc.get("goodbye_media")
-    await _send_goodbye(message.chat.id, message.id, text, media)
+    await _send_with_media(message.chat.id, message.id, text, media)
 
 
-# ── Cleanup helpers ───────────────────────────────────────────────────────────
-
+# ─── Cleanup ──────────────────────────────────────────────────────────────────
 async def _clean_old(chat_id, exclude=None):
     c = _col()
     if c is None:
