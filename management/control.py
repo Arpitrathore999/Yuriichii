@@ -321,20 +321,20 @@ async def group_demote(_, message):
         return
     if not await _can_promote(message):
         return await message.reply("❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴅᴇᴍᴏᴛᴇ ᴀᴅᴍɪɴs.")
-    args = list(message.command or [])[1:]
-    target = await _resolve_target(message, args)
+    target = await _resolve_target(message, list(message.command or [])[1:])
     if not target:
-        return await message.reply("❌ ᴜsᴇ ᴀ ʀᴇᴘʟʏ, <code>@username</code> ᴏʀ ᴜsᴇʀ ɪᴅ.")
+        return await message.reply("❌ ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴀᴅᴍɪɴ ᴏʀ ᴜsᴇ <code>@username</code>/<code>user id</code>.")
     if not await _can_edit_target(message, target.id):
         return await message.reply("❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴍᴏᴅɪғʏ ᴛʜɪs ᴀᴅᴍɪɴ.")
     try:
         from pyrogram.types import ChatPrivileges
+        # Empty privileges explicitly removes administrator status.
         await app.promote_chat_member(message.chat.id, target.id, privileges=ChatPrivileges())
         if db is not None:
             await db["admin_rights"].delete_one({"chat_id": int(message.chat.id), "user_id": int(target.id)})
     except Exception as e:
         print(f"[DEMOTE] {type(e).__name__}: {e}", flush=True)
-        return await message.reply("❌ ᴄᴏᴜʟᴅɴ'ᴛ ᴅᴇᴍᴏᴛᴇ ᴛʜɪs ᴜsᴇʀ.")
+        return await message.reply(f"❌ ᴅᴇᴍᴏᴛᴇ ғᴀɪʟᴇᴅ: <code>{rich_esc(str(e))[:300]}</code>")
     return await message.reply(f"{_mention(target)} 🕊 Dᴇᴍᴏᴛᴇᴅ Tᴏ 👤 Mᴇᴍʙᴇʀ.")
 
 
@@ -379,32 +379,49 @@ async def group_rights(_, message):
     if not _management_group(message):
         return
     if not await _can_promote(message):
-        return await message.reply("❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴍᴀɴᴀɢᴇ ᴀᴅᴍɪɴ ʀɪɢʜᴛs.")
-    action = (message.command[0] or "").lower()
-    target, rights, error = await _parse_right_command(message, action)
-    if error == "usage":
-        return await message.reply("❌ ᴜsᴀɢᴇ: <code>.add ban</code> ᴏɴ ᴀɴ ᴀᴅᴍɪɴ's ʀᴇᴘʟʏ.")
-    if error == "right":
-        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ ʀɪɢʜᴛ. ᴜsᴇ: <code>info delete ban invite pin tags welcome stream addadmins anon stories</code>")
-    if error == "target":
-        return await message.reply("❌ ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴀᴅᴍɪɴ ᴏʀ ᴀᴅᴅ <code>@username</code>/<code>user id</code>.")
-    if not await _can_edit_target(message, target.id):
-        return await message.reply("❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴍᴏᴅɪғʏ ᴛʜɪs ᴀᴅᴍɪɴ.")
+        return await message.reply("❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴍᴀɴᴀɢᴇ ᴀᴅᴍɪɴs.")
 
+    action = (message.command[0] or "").lower()
+    args = list(message.command or [])[1:]
+    target = await _resolve_target(message, args)
+    if not target:
+        return await message.reply("❌ ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜsᴇʀ ᴏʀ ᴜsᴇ <code>@username</code>/<code>user id</code>.")
+    if not await _can_edit_target(message, target.id):
+        return await message.reply("❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴍᴏᴅɪғʏ ᴛʜɪs ᴜsᴇʀ.")
+
+    valid = set(ADMIN_RIGHTS)
+    rights = {str(x).lower().lstrip("/") for x in args if str(x).lower().lstrip("/") in valid}
     doc = await _admin_right_doc(message.chat.id, target.id)
     current = set(doc.get("rights", [])) if doc else set()
+
+    # `.add @user` = full Telegram admin; `.remove @user` = demote.
+    if not rights:
+        if action == "add":
+            rights = set(ADMIN_RIGHTS.keys())
+        else:
+            try:
+                from pyrogram.types import ChatPrivileges
+                await app.promote_chat_member(message.chat.id, target.id, privileges=ChatPrivileges())
+                if db is not None:
+                    await db["admin_rights"].delete_one({"chat_id": int(message.chat.id), "user_id": int(target.id)})
+            except Exception as e:
+                print(f"[REMOVE ADMIN] {type(e).__name__}: {e}", flush=True)
+                return await message.reply(f"❌ ʀᴇᴍᴏᴠᴇ ғᴀɪʟᴇᴅ: <code>{rich_esc(str(e))[:300]}</code>")
+            return await message.reply(f"{_mention(target)} 🕊 Rᴇᴍᴏᴠᴇᴅ Fʀᴏᴍ Aᴅᴍɪɴs.")
+
     if action == "add":
         current.update(rights)
     else:
         current.difference_update(rights)
+
     try:
         await _apply_telegram_rights(message.chat.id, target.id, current)
         await _save_admin_rights(message.chat.id, target.id, current, doc.get("mode") if doc else None)
     except Exception as e:
         print(f"[ADMIN RIGHTS] {type(e).__name__}: {e}", flush=True)
-        return await message.reply("❌ ᴄᴏᴜʟᴅɴ'ᴛ ᴜᴘᴅᴀᴛᴇ ᴛʜᴇsᴇ ʀɪɢʜᴛs. ᴄʜᴇᴄᴋ ᴛʜᴇ ʙᴏᴛ's ᴀᴅᴍɪɴ ᴘᴇʀᴍɪssɪᴏɴs.")
+        return await message.reply(f"❌ ᴜᴘᴅᴀᴛᴇ ғᴀɪʟᴇᴅ: <code>{rich_esc(str(e))[:300]}</code>")
 
-    label = " • ".join(r.title() for r in rights)
+    label = " • ".join(r.title() for r in sorted(rights))
     verb = "Aᴅᴅᴇᴅ" if action == "add" else "Rᴇᴍᴏᴠᴇᴅ"
     return await message.reply(f"{_mention(target)} 🕊 Rɪɢʜᴛs {verb} — 🏅 {label}.")
 
