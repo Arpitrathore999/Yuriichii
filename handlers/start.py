@@ -1,6 +1,6 @@
 # --------------------------------------------------------------------------------
 #  Elara AI Bot © 2026
-#  handlers/start.py  —  Rich HTML + Proper table + Colored pill links
+#  handlers/start.py — Rich HTML + Tables + 3 Prefixes
 # --------------------------------------------------------------------------------
 
 PREFIXES = ["/", "!", "."]
@@ -27,7 +27,7 @@ from database.users import ensure_user
 bot = app
 
 
-# ─── Config ──────────────────────────────────────────────────────────────────
+# ─── Config ────────────────────────────────────────────────────────────────────
 BOT_NAME        = getattr(config, "BOT_NAME", "Elara")
 BOT_USERNAME    = (getattr(config, "BOT_USERNAME", "") or "").lstrip("@")
 BOT_TOKEN       = getattr(config, "BOT_TOKEN", "")
@@ -38,7 +38,7 @@ OWNER_ID        = getattr(config, "OWNER_ID", 0)
 START_IMAGE_URL = (getattr(config, "START_IMAGE_URL", "") or "").strip()
 
 
-# ─── Safe URL helpers ────────────────────────────────────────────────────────
+# ─── Helpers ──────────────────────────────────────────────────────────────────
 _FALLBACK = "https://t.me/telegram"
 
 def _safe_url(u, fb=_FALLBACK):
@@ -74,10 +74,7 @@ def _pick_image():
     return parts[0] if parts else None
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  BOT API CALLER
-# ══════════════════════════════════════════════════════════════════════════════
-
+# ─── Bot API caller ───────────────────────────────────────────────────────────
 async def _bot_api(method: str, payload: dict) -> dict:
     if not BOT_TOKEN:
         return {"ok": False, "description": "BOT_TOKEN missing"}
@@ -94,10 +91,7 @@ async def _bot_api(method: str, payload: dict) -> dict:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  RICH HTML — PROPER TABLE with borders
-#  ---------------------------------------------------------------
-#  Telegram Rich Message supports real HTML <table> with <tr>/<td>/<th>
-#  Renders exactly like OUTLAW X MUSIC.
+#  RICH HTML PAGES
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _rich_welcome(user) -> str:
@@ -107,61 +101,63 @@ def _rich_welcome(user) -> str:
     sup = _safe_url(SUPPORT_URL)
     upd = _safe_url(UPDATES_URL)
 
-    # ✅ PROPER TABLE: <table><tr><th>...</th></tr><tr><td>...</td></tr></table>
-    return f"""❍ ʜᴇʏ <a href="tg://user?id={uid}">{name}</a>, ᴡᴇʟᴄᴏᴍᴇ ᴀʙᴏᴀʀᴅ! 🎶
+    return f"""ᴡᴇʟᴄᴏᴍᴇ <a href="tg://user?id={uid}">{name}</a>, ᴡᴇʟᴄᴏᴍᴇ ʙᴀᴄᴋ! 🎉
 
-ɪ ᴀᴍ <b>「 {bot} 」</b> — ᴀ ғᴀsᴛ &amp; ᴘᴏᴡᴇʀғᴜʟ ᴛᴇʟᴇɢʀᴀᴍ <b>ᴀɪ ᴄᴏᴍᴘᴀɴɪᴏɴ ʙᴏᴛ</b> ᴡɪᴛʜ sᴏᴍᴇ ᴀᴡᴇsᴏᴍᴇ ғᴇᴀᴛᴜʀᴇs.
+ɪ ᴀᴍ <b>「 {bot} 」</b> — ᴀɴ ᴀɪ ɢʀᴏᴜᴘ ᴍᴀɴᴀɢᴇʀ ᴛʜᴀᴛ ᴋᴇᴇᴘꜱ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴄʟᴇᴀɴ.
 
 <details open>
-<summary>✦ ᴋᴇʏ ғᴇᴀᴛᴜʀᴇs ✦</summary>
+<summary>✨ ᴍʏ ᴛᴏᴘ ꜰᴇᴀᴛᴜʀᴇꜱ ✨</summary>
 
 <table>
-<tr><th>ғᴇᴀᴛᴜʀᴇ</th><th>ᴅᴇᴛᴀɪʟs</th></tr>
-<tr><td>🤖 <b>ᴀɪ ᴄʜᴀᴛ</b></td><td>ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴs ɪɴ ᴅᴍ &amp; ɢʀᴏᴜᴘs</td></tr>
-<tr><td>🧠 <b>ᴍᴇᴍᴏʀʏ</b></td><td>ᴋᴇᴇᴘs ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ ғᴏʀ ʙᴇᴛᴛᴇʀ ʀᴇᴘʟɪᴇs</td></tr>
-<tr><td>💕 <b>sᴏᴄɪᴀʟ</b></td><td>ʜᴜɢ, ᴋɪss, ᴍᴀʀʀɪᴀɢᴇ &amp; ᴍᴏʀᴇ ɢʀᴏᴜᴘ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs</td></tr>
-<tr><td>⚡ <b>ғᴀsᴛ</b></td><td>ǫᴜɪᴄᴋ ᴀɪ ʀᴇsᴘᴏɴsᴇs ᴘᴏᴡᴇʀᴇᴅ ʙʏ ɢʀᴏǫ</td></tr>
+<tr><th>ꜰᴇᴀᴛᴜʀᴇ</th><th>ᴅᴇᴛᴀɪʟꜱ</th></tr>
+<tr><td>🤖 <b>AI ᴄʜᴀᴛ</b></td><td>ɴᴀᴛᴜʀᴀʟ ᴀɪ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴꜱ</td></tr>
+<tr><td>🧠 <b>ᴍᴇᴍᴏʀʏ</b></td><td>ᴋᴇᴇᴘꜱ ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ</td></tr>
+<tr><td>💕 <b>ꜱᴏᴄɪᴀʟ</b></td><td>ʜᴜɢ, ᴋɪꜱꜱ, ᴀɴᴅ ᴍᴀɴʏ ᴍᴏʀᴇ</td></tr>
+<tr><td>⚡ <b>ꜰᴀꜱᴛ</b></td><td>ǫᴜɪᴄᴋ ʀᴇꜱᴘᴏɴꜱᴇꜱ</td></tr>
 </table>
 </details>
 
 <details open>
-<summary>✧ ᴡʜʏ ᴄʜᴏᴏsᴇ ɪᴛ? ✧</summary>
+<summary>🎯 ǫᴜɪᴄᴋ ꜱᴛᴀʀᴛ</summary>
 
-⭐ sɪᴍᴘʟᴇ sʟᴀsʜ ᴄᴏᴍᴍᴀɴᴅs, ɴᴏ sᴇᴛᴜᴘ ɴᴇᴇᴅᴇᴅ.
-🧠 sᴍᴀʀᴛ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴ ᴍᴇᴍᴏʀʏ.
-❍ ᴄʟɪᴄᴋ ʜᴇʟᴘ ʙᴇʟᴏᴡ ғᴏʀ ᴀʟʟ ᴄᴏᴍᴍᴀɴᴅs.
+❶ ᴛᴀᴘ <b>ᴀᴅᴅ ᴛᴏ ɢʀᴏᴜᴘ</b> ʙᴜᴛᴛᴏɴ
+❷ ᴀᴅᴅ ᴍᴇ ᴀꜱ ᴀᴅᴍɪɴ
+❸ ᴇɴᴊᴏʏ ᴘʀᴇᴍɪᴜᴍ ꜰᴇᴀᴛᴜʀᴇꜱ
 
 </details>
 
 <blockquote>ᴘᴏᴡᴇʀᴇᴅ ʙʏ » <a href="{upd}"><b>{bot}</b></a></blockquote>
 
-🍬 <a href="{sup}"><b>sᴜᴘᴘᴏʀᴛ</b></a>   ·   🍹 <a href="{upd}"><b>ᴜᴘᴅᴀᴛᴇs</b></a>
+🍬 <a href="{sup}"><b>ꜱᴜᴘᴘᴏʀᴛ</b></a>   ·   🍹 <a href="{upd}"><b>ᴜᴘᴅᴀᴛᴇꜱ</b></a>
 """
 
 
 def _rich_help() -> str:
-    return """📜 <b>ᴇʟᴀʀᴀ ʜᴇʟᴘ &amp; ᴄᴏᴍᴍᴀɴᴅs</b>
+    return """📜 <b>ʜᴇʟᴘ & ᴄᴏᴍᴍᴀɴᴅꜱ</b>
 
-❍ ᴄʜᴏᴏsᴇ ᴀ ᴄᴀᴛᴇɢᴏʀʏ ʙᴇʟᴏᴡ:
+ᴀʟʟ ᴄᴏᴍᴍᴀɴᴅꜱ ꜱᴜᴘᴘᴏʀᴛ <b>3 ᴘʀᴇꜰɪxᴇꜱ</b>:
+<code>.</code>  <code>/</code>  <code>!</code>
 
 <details open>
-<summary>✦ ᴄᴀᴛᴇɢᴏʀɪᴇs ✦</summary>
+<summary>📌 ᴘʀᴇꜰɪx ᴇxᴀᴍᴘʟᴇꜱ</summary>
 
 <table>
-<tr><th>ᴄᴀᴛᴇɢᴏʀʏ</th><th>ᴅᴇsᴄʀɪᴘᴛɪᴏɴ</th></tr>
-<tr><td>🤖 <b>ᴀɪ</b></td><td>ᴄʜᴀᴛ, ᴍᴇᴍᴏʀʏ &amp; ɢʀᴏᴜᴘ ᴀɪ ғᴇᴀᴛᴜʀᴇs</td></tr>
-<tr><td>💕 <b>sᴏᴄɪᴀʟ</b></td><td>ғᴜɴ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴs ғᴏʀ ɢʀᴏᴜᴘs</td></tr>
+<tr><th>ᴘʀᴇꜰɪx</th><th>ᴇxᴀᴍᴘʟᴇ</th><th>ꜱᴛᴀᴛᴜꜱ</th></tr>
+<tr><td><code>.</code>  ᴅᴏᴛ</td><td><code>.ban</code></td><td>✅ ᴡᴏʀᴋꜱ</td></tr>
+<tr><td><code>/</code>  ꜱʟᴀꜱʜ</td><td><code>/ban</code></td><td>✅ ᴡᴏʀᴋꜱ</td></tr>
+<tr><td><code>!</code>  ᴇxᴄʟᴀᴍᴀᴛɪᴏɴ</td><td><code>!ban</code></td><td>✅ ᴡᴏʀᴋꜱ</td></tr>
 </table>
 </details>
 
 <details open>
-<summary>🛡️ <b>ɢᴄ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ</b></summary>
+<summary>🤖 ᴀᴠᴀɪʟᴀʙʟᴇ ᴄᴀᴛᴇɢᴏʀɪᴇꜱ</summary>
 
-<code>/ban</code> <code>/unban</code> <code>/mute</code> <code>/tmute</code> <code>/kick</code>
-<code>/warn</code> <code>/warns</code> <code>/purge</code> <code>/pin</code> <code>/unpin</code>
-<code>/lock</code> <code>/unlock</code> <code>/locks</code> <code>/filter</code> <code>/filters</code>
-<code>/welcome</code> <code>/goodbye</code> <code>/report</code>
-
+<table>
+<tr><th>ᴄᴀᴛᴇɢᴏʀʏ</th><th>ᴅᴇꜱᴄʀɪᴘᴛɪᴏɴ</th></tr>
+<tr><td>🤖 <b>AI</b></td><td>ᴄʜᴀᴛ, ɪᴍᴀɢᴇ ɢᴇɴᴇʀᴀᴛɪᴏɴ</td></tr>
+<tr><td>💕 <b>ꜱᴏᴄɪᴀʟ</b></td><td>ꜰᴜɴ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴꜱ</td></tr>
+<tr><td>🛡️ <b>ᴍᴀɴᴀɢᴇᴍᴇɴᴛ</b></td><td>ɢʀᴏᴜᴘ ᴀᴅᴍɪɴ ᴛᴏᴏʟꜱ</td></tr>
+</table>
 </details>
 
 <i>ᴛᴀᴘ ᴀ ᴄᴀᴛᴇɢᴏʀʏ ʙᴇʟᴏᴡ ᴛᴏ ᴄᴏɴᴛɪɴᴜᴇ</i> 👇
@@ -169,196 +165,352 @@ def _rich_help() -> str:
 
 
 def _rich_ai() -> str:
-    return """🤖 <b>ᴇʟᴀʀᴀ ᴀɪ ᴄᴏᴍᴍᴀɴᴅs</b>
+    return """🤖 <b>ᴇʟᴀʀᴀ ᴀɪ ᴄᴏᴍᴍᴀɴᴅꜱ</b>
+
+<i>ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code></i>
 
 <details open>
-<summary>💬 ᴄʜᴀᴛ ᴄᴏᴍᴍᴀɴᴅs</summary>
+<summary>💬 ᴀʟʟ ᴄᴏᴍᴍᴀɴᴅꜱ</summary>
 
 <table>
-<tr><th>ᴄᴏᴍᴍᴀɴᴅ</th><th>ᴅᴇsᴄʀɪᴘᴛɪᴏɴ</th></tr>
-<tr><td><code>/ai &lt;msg&gt;</code></td><td>ᴄʜᴀᴛ ᴡɪᴛʜ ᴇʟᴀʀᴀ ᴀɪ</td></tr>
-<tr><td>ᴅᴍ ᴀɴʏ ᴍᴇssᴀɢᴇ</td><td>ᴀɪ ʀᴇᴘʟɪᴇs ᴀᴜᴛᴏᴍᴀᴛɪᴄᴀʟʟʏ</td></tr>
-<tr><td><code>ᴇʟᴀʀᴀ ʜᴇʟʟᴏ</code></td><td>ɢʀᴏᴜᴘ ᴛʀɪɢɢᴇʀ</td></tr>
+<tr><th>ᴄᴏᴍᴍᴀɴᴅ</th><th>ᴋᴀᴀᴍ</th></tr>
+<tr><td><code>.ai &lt;msg&gt;</code></td><td>ᴄʜᴀᴛ ᴡɪᴛʜ ᴇʟᴀʀᴀ ᴀɪ</td></tr>
+<tr><td>ᴅᴍ ᴍᴇꜱꜱᴀɢᴇ</td><td>ᴅɪʀᴇᴄᴛ ᴀɪ ᴄʜᴀᴛ</td></tr>
+<tr><td><code>ᴇʟᴀʀᴀ ʜᴇʟʟᴏ</code></td><td>ɢʀᴏᴜᴘ ᴛʀɪɢɢᴇʀ ᴡᴏʀᴅ</td></tr>
 <tr><td><code>@BotUsername ʜɪ</code></td><td>ᴍᴇɴᴛɪᴏɴ ᴛʀɪɢɢᴇʀ</td></tr>
 <tr><td>ʀᴇᴘʟʏ ᴛᴏ ᴇʟᴀʀᴀ</td><td>ᴄᴏɴᴛᴇxᴛ ᴄʜᴀᴛ</td></tr>
 </table>
 </details>
 
-<blockquote>🧠 ʀᴇᴄᴇɴᴛ ᴄᴏɴᴛᴇxᴛ ᴜsᴇᴅ ғᴏʀ ɴᴀᴛᴜʀᴀʟ ʀᴇᴘʟɪᴇs.</blockquote>
+<blockquote>🧠 ᴇʟᴀʀᴀ ʀᴇᴍᴇᴍʙᴇʀꜱ ʀᴇᴄᴇɴᴛ ᴄᴏɴᴛᴇxᴛ ꜰᴏʀ ɴᴀᴛᴜʀᴀʟ ᴄʜᴀᴛꜱ.</blockquote>
 """
 
 
 def _rich_social() -> str:
-    return """💕 <b>ᴇʟᴀʀᴀ sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅs</b>
+    return """💕 <b>ᴇʟᴀʀᴀ ꜱᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅꜱ</b>
 
-ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜsᴇʀ's ᴍᴇssᴀɢᴇ ᴛʜᴇɴ ᴜsᴇ ᴛʜᴇsᴇ:
+<i>ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code></i>
 
 <details open>
-<summary>💕 ᴀʟʟ sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅs</summary>
+<summary>💕 ᴀʟʟ ꜱᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅꜱ</summary>
 
 <table>
 <tr><th>ᴄᴏᴍᴍᴀɴᴅ</th><th>ᴀᴄᴛɪᴏɴ</th></tr>
-<tr><td>🫂 <code>/hug</code></td><td>ʜᴜɢ ᴀ ᴜsᴇʀ</td></tr>
-<tr><td>💋 <code>/kiss</code></td><td>ᴋɪss ᴀ ᴜsᴇʀ</td></tr>
-<tr><td>🧛 <code>/bite</code></td><td>ʙɪᴛᴇ ᴀ ᴜsᴇʀ</td></tr>
-<tr><td>👋 <code>/slap</code></td><td>sʟᴀᴘ ᴀ ᴜsᴇʀ</td></tr>
-<tr><td>🦵 <code>/kick</code></td><td>ᴋɪᴄᴋ ᴀ ᴜsᴇʀ</td></tr>
-<tr><td>🫶 <code>/cuddle</code></td><td>ᴄᴜᴅᴅʟᴇ ᴀ ᴜsᴇʀ</td></tr>
-<tr><td>🫳 <code>/pat</code></td><td>ᴘᴀᴛ ᴀ ᴜsᴇʀ</td></tr>
-<tr><td>✋ <code>/highfive</code></td><td>ʜɪɢʜ ғɪᴠᴇ</td></tr>
-<tr><td>😏 <code>/flirt</code></td><td>ғʟɪʀᴛ</td></tr>
-<tr><td>❤️ <code>/love</code></td><td>ʟᴏᴠᴇ ᴘᴇʀᴄᴇɴᴛᴀɢᴇ</td></tr>
-<tr><td>💘 <code>/crush</code></td><td>ᴄʀᴜsʜ</td></tr>
-<tr><td>💞 <code>/couple</code></td><td>ʀᴀɴᴅᴏᴍ ᴄᴏᴜᴘʟᴇ</td></tr>
-<tr><td>💍 <code>/propose</code></td><td>ᴘʀᴏᴘᴏsᴇ</td></tr>
-<tr><td>💒 <code>/marriage</code></td><td>ᴍᴀʀʀʏ</td></tr>
-<tr><td>💔 <code>/divorce</code></td><td>ᴅɪᴠᴏʀᴄᴇ</td></tr>
+<tr><td>🫂 <code>.hug</code></td><td>ʜᴜɢ ᴀ ᴜꜱᴇʀ</td></tr>
+<tr><td>💋 <code>.kiss</code></td><td>ᴋɪꜱꜱ ᴀ ᴜꜱᴇʀ</td></tr>
+<tr><td>🧛 <code>.bite</code></td><td>ʙɪᴛᴇ ᴀ ᴜꜱᴇʀ</td></tr>
+<tr><td>👋 <code>.slap</code></td><td>ꜱʟᴀᴘ ᴀ ᴜꜱᴇʀ</td></tr>
+<tr><td>🦵 <code>.kick</code></td><td>ᴋɪᴄᴋ ᴀ ᴜꜱᴇʀ</td></tr>
+<tr><td>🫶 <code>.cuddle</code></td><td>ᴄᴜᴅᴅʟᴇ ᴀ ᴜꜱᴇʀ</td></tr>
+<tr><td>🫳 <code>.pat</code></td><td>ᴘᴀᴛ ᴀ ᴜꜱᴇʀ</td></tr>
+<tr><td>✋ <code>.highfive</code></td><td>ʜɪɢʜ ꜰɪᴠᴇ</td></tr>
+<tr><td>😏 <code>.flirt</code></td><td>ꜰʟɪʀᴛ</td></tr>
+<tr><td>❤️ <code>.love</code></td><td>ʟᴏᴠᴇ ᴘᴇʀᴄᴇɴᴛᴀɢᴇ</td></tr>
+<tr><td>💘 <code>.crush</code></td><td>ᴄʀᴜꜱʜ</td></tr>
+<tr><td>💞 <code>.couple</code></td><td>ʀᴀɴᴅᴏᴍ ᴄᴏᴜᴘʟᴇ</td></tr>
+<tr><td>💍 <code>.propose</code></td><td>ᴘʀᴏᴘᴏꜱᴇ</td></tr>
+<tr><td>💒 <code>.marriage</code></td><td>ᴍᴀʀʀɪᴀɢᴇ</td></tr>
+<tr><td>💔 <code>.divorce</code></td><td>ᴅɪᴠᴏʀᴄᴇ</td></tr>
 </table>
 </details>
+
+<blockquote>💡 ᴜꜱᴇ <code>.hug @ᴜꜱᴇʀ</code> ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜꜱᴇʀ'ꜱ ᴍᴇꜱꜱᴀɢᴇ.</blockquote>
 """
 
 
 def _rich_management() -> str:
-    return """🛡️ <b>ɢᴄ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ</b>
+    return """🛡️ <b>ɢʀᴏᴜᴘ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ ᴄᴇɴᴛᴇʀ</b>
 
-❍ ᴄʜᴏᴏsᴇ ᴀ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ ᴄᴀᴛᴇɢᴏʀʏ ʙᴇʟᴏᴡ.
+<i>ᴀʟʟ ᴛʜᴇ ᴛᴏᴏʟꜱ ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ɢʀᴏᴜᴘ.</i>
 
-<i>ᴍᴏsᴛ ᴄᴏᴍᴍᴀɴᴅs ʀᴇǫᴜɪʀᴇ ɢʀᴏᴜᴘ ᴀᴅᴍɪɴ ᴘᴇʀᴍɪssɪᴏɴs.</i> 👇
+<details open>
+<summary>📂 ᴀᴠᴀɪʟᴀʙʟᴇ ᴄᴀᴛᴇɢᴏʀɪᴇꜱ</summary>
+
+<table>
+<tr><th>ᴄᴀᴛᴇɢᴏʀʏ</th><th>ᴋᴀᴀᴍ</th></tr>
+<tr><td>👑 <b>ᴀᴅᴍɪɴ</b></td><td>ᴘʀᴏᴍᴏᴛᴇ, ᴅᴇᴍᴏᴛᴇ, ᴀᴅᴍɪɴ ᴘᴀɴᴇʟ</td></tr>
+<tr><td>🔨 <b>ʙᴀɴꜱ</b></td><td>ʙᴀɴ, ᴍᴜᴛᴇ, ᴋɪᴄᴋ</td></tr>
+<tr><td>🔎 <b>ꜰɪʟᴛᴇʀꜱ</b></td><td>ᴀᴜᴛᴏ ʀᴇᴘʟʏ ᴛʀɪɢɢᴇʀꜱ</td></tr>
+<tr><td>👋 <b>ɢʀᴇᴇᴛɪɴɢꜱ</b></td><td>ᴡᴇʟᴄᴏᴍᴇ & ɢᴏᴏᴅʙʏᴇ</td></tr>
+<tr><td>🔒 <b>ʟᴏᴄᴋꜱ</b></td><td>ʟᴏᴄᴋ ᴄᴏɴᴛᴇɴᴛ ᴛʏᴘᴇꜱ</td></tr>
+<tr><td>📌 <b>ᴘɪɴꜱ</b></td><td>ᴘɪɴ & ᴜɴᴘɪɴ ᴍᴇꜱꜱᴀɢᴇꜱ</td></tr>
+<tr><td>🧹 <b>ᴘᴜʀɢᴇꜱ</b></td><td>ʙᴜʟᴋ ᴍᴇꜱꜱᴀɢᴇ ᴅᴇʟᴇᴛᴇ</td></tr>
+<tr><td>🚨 <b>ʀᴇᴘᴏʀᴛꜱ</b></td><td>ᴜꜱᴇʀ ʀᴇᴘᴏʀᴛꜱ</td></tr>
+<tr><td>⚠️ <b>ᴡᴀʀɴɪɴɢꜱ</b></td><td>ᴡᴀʀɴ ꜱʏꜱᴛᴇᴍ</td></tr>
+</table>
+</details>
+
+<blockquote>ᴛᴀᴘ ᴀ ᴄᴀᴛᴇɢᴏʀʏ ʙᴇʟᴏᴡ ᴛᴏ ᴠɪᴇᴡ ᴄᴏᴍᴍᴀɴᴅꜱ 👇</blockquote>
 """
 
 
-def _management_page(title: str, intro: str, commands: str) -> str:
-    return f"""🛡️ <b>{title}</b>\n\n{intro}\n\n<details open>\n<summary>✦ ᴄᴏᴍᴍᴀɴᴅs ✦</summary>\n\n{commands}\n\n</details>\n\n<i>ᴜsᴇ ᴛʜᴇ ʙᴀᴄᴋ ʙᴜᴛᴛᴏɴ ᴛᴏ ʀᴇᴛᴜʀɴ ᴛᴏ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ.</i>\n"""
+# ── Sub-page builder ──────────────────────────────────────────────────────────
+
+def _management_page(title: str, intro: str, rows_html: str, tip: str = "") -> str:
+    tip_block = f"\n<blockquote>{tip}</blockquote>\n" if tip else ""
+    return f"""🛡️ <b>{title}</b>
+
+<i>{intro}</i>
+
+<details open>
+<summary>📖 ᴀᴠᴀɪʟᴀʙʟᴇ ᴄᴏᴍᴍᴀɴᴅꜱ</summary>
+
+<table>
+<tr><th>ᴄᴏᴍᴍᴀɴᴅ</th><th>ᴋᴀᴀᴍ</th></tr>
+{rows_html}
+</table>
+</details>
+{tip_block}"""
 
 
-def _rich_admin():
-    return _management_page("👑 ᴀᴅᴍɪɴ", "ᴏᴡɴᴇʀ & ᴀᴅᴍɪɴ ᴛᴏᴏʟs", "<code>/promote</code> <code>/demote</code> <code>/adminlist</code> <code>/add</code> <code>/remove</code>\n<code>/adminpanel</code> <code>/adminuser</code> <code>/banbot</code> <code>/botunban</code>\n<code>/stats</code> <code>/broadcast</code> <code>/cancelbroadcast</code> <code>/adminhelp</code>")
+def _rich_admin() -> str:
+    return _management_page(
+        "ᴀᴅᴍɪɴ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ",
+        "ᴘʀᴏᴍᴏᴛᴇ, ᴅᴇᴍᴏᴛᴇ ᴀɴᴅ ᴍᴀɴᴀɢᴇ ɢʀᴏᴜᴘ ᴀᴅᴍɪɴꜱ. ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td><code>.promote [0-3]</code></td><td>ᴜꜱᴇʀ ᴋᴏ ᴀᴅᴍɪɴ ʙᴀɴᴀᴏ</td></tr>
+<tr><td><code>.demote</code></td><td>ᴀᴅᴍɪɴ ʜᴀᴛᴀᴏ</td></tr>
+<tr><td><code>.add &lt;rights&gt;</code></td><td>ꜱᴇʟᴇᴄᴛɪᴠᴇ ʀɪɢʜᴛꜱ ᴅᴏ</td></tr>
+<tr><td><code>.remove &lt;rights&gt;</code></td><td>ꜱᴇʟᴇᴄᴛɪᴠᴇ ʀɪɢʜᴛꜱ ʜᴀᴛᴀᴏ</td></tr>
+<tr><td><code>.adminlist</code></td><td>ᴀᴅᴍɪɴ ʟɪꜱᴛ ᴅᴇᴋʜᴏ</td></tr>
+<tr><td><code>.adminpanel</code></td><td>ᴏᴡɴᴇʀ ᴘᴀɴᴇʟ</td></tr>
+<tr><td><code>.adminuser &lt;id&gt;</code></td><td>ᴜꜱᴇʀ ᴅᴇᴛᴀɪʟꜱ</td></tr>
+<tr><td><code>.banbot &lt;id&gt;</code></td><td>ʙᴏᴛ ꜱᴇ ʙᴀɴ</td></tr>
+<tr><td><code>.botunban &lt;id&gt;</code></td><td>ʙᴏᴛ ꜱᴇ ᴜɴʙᴀɴ</td></tr>""",
+        "💡 ᴘʀᴏᴍᴏᴛᴇ ᴍᴏᴅᴇꜱ: <code>0</code> ᴛᴇᴍᴘ, <code>1</code> ᴊᴜɴɪᴏʀ, <code>2</code> ᴀꜱꜱɪꜱᴛᴀɴᴛ, <code>3</code> ꜰᴜʟʟ"
+    )
 
 
-def _rich_bans():
-    return _management_page("🔨 ʙᴀɴs", "ᴍᴀɴᴀɢᴇ ʙᴀɴs, ᴍᴜᴛᴇs & ᴋɪᴄᴋs", "<code>/ban</code> <code>/unban</code> <code>/tban</code> <code>/dban</code> <code>/sban</code>\n<code>/mute</code> <code>/unmute</code> <code>/tmute</code> <code>/dmute</code> <code>/smute</code>\n<code>/kick</code> <code>/dkick</code> <code>/skick</code>")
+def _rich_bans() -> str:
+    return _management_page(
+        "ʙᴀɴ & ᴍᴜᴛᴇ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ",
+        "ᴜꜱᴇʀꜱ ᴋᴏ ʀᴇꜱᴛʀɪᴄᴛ ᴋᴀʀɴᴇ ᴋᴇ ᴄᴏᴍᴍᴀɴᴅꜱ. ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td>🔨 <code>.ban</code></td><td>ᴘᴇʀᴍᴀɴᴇɴᴛ ʙᴀɴ</td></tr>
+<tr><td>⏱️ <code>.tban 4h</code></td><td>ᴛᴇᴍᴘᴏʀᴀʀʏ ʙᴀɴ</td></tr>
+<tr><td>🤫 <code>.sban</code></td><td>ꜱɪʟᴇɴᴛ ʙᴀɴ</td></tr>
+<tr><td>🗑️ <code>.dban</code></td><td>ᴅᴇʟᴇᴛᴇ + ʙᴀɴ</td></tr>
+<tr><td>🔇 <code>.mute</code></td><td>ᴍᴜᴛᴇ ᴜꜱᴇʀ</td></tr>
+<tr><td>⏱️ <code>.tmute 2h</code></td><td>ᴛᴇᴍᴘᴏʀᴀʀʏ ᴍᴜᴛᴇ</td></tr>
+<tr><td>👢 <code>.kick</code></td><td>ᴋɪᴄᴋ ᴜꜱᴇʀ</td></tr>
+<tr><td>🔓 <code>.unban</code></td><td>ᴜɴʙᴀɴ</td></tr>
+<tr><td>🔊 <code>.unmute</code></td><td>ᴜɴᴍᴜᴛᴇ</td></tr>""",
+        "⏱️ ᴛɪᴍᴇ ꜰᴏʀᴍᴀᴛ: <code>4m</code> <code>3h</code> <code>6d</code> <code>5w</code>"
+    )
 
 
-def _rich_filters():
-    return _management_page("🔎 ғɪʟᴛᴇʀs", "ᴄʀᴇᴀᴛᴇ ᴀɴᴅ ᴍᴀɴᴀɢᴇ ᴄʜᴀᴛ ғɪʟᴛᴇʀs", "<code>/filter &lt;trigger&gt; &lt;reply&gt;</code>\n<code>/filters</code> — ʟɪsᴛ ғɪʟᴛᴇʀs\n<code>/stop &lt;trigger&gt;</code> — ʀᴇᴍᴏᴠᴇ ᴀ ғɪʟᴛᴇʀ\n<code>/stopall</code> — ʀᴇᴍᴏᴠᴇ ᴀʟʟ ғɪʟᴛᴇʀs")
+def _rich_filters() -> str:
+    return _management_page(
+        "ꜰɪʟᴛᴇʀꜱ",
+        "ᴀᴜᴛᴏ ʀᴇᴘʟʏ ᴛʀɪɢɢᴇʀꜱ ꜱᴇᴛ ᴋᴀʀᴏ. ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td><code>.filter &lt;trigger&gt; &lt;reply&gt;</code></td><td>ɴᴀʏᴀ ꜰɪʟᴛᴇʀ</td></tr>
+<tr><td><code>.filters</code></td><td>ꜱᴀᴀʀᴇ ꜰɪʟᴛᴇʀꜱ ᴅᴇᴋʜᴏ</td></tr>
+<tr><td><code>.stop &lt;trigger&gt;</code></td><td>ᴇᴋ ʜᴀᴛᴀᴏ</td></tr>
+<tr><td><code>.stopall</code></td><td>ꜱᴀᴀʀᴇ ʜᴀᴛᴀᴏ</td></tr>""",
+        "💡 ᴛʀɪɢɢᴇʀ ᴋᴇꜱ-ɪɴꜱᴇɴꜱɪᴛɪᴠᴇ. ᴍᴜʟᴛɪ ᴡᴏʀᴅ: <code>.filter \"hello bro\" ʜɪ!</code>"
+    )
 
 
-def _rich_greetings():
-    return _management_page("👋 ɢʀᴇᴇᴛɪɴɢs", "ᴡᴇʟᴄᴏᴍᴇ & ɢᴏᴏᴅʙʏᴇ ᴍᴇssᴀɢᴇs", "<code>/welcome</code> <code>/goodbye</code>\n<code>/setwelcome</code> <code>/resetwelcome</code>\n<code>/setgoodbye</code> <code>/resetgoodbye</code>\n<code>/cleanwelcome</code>")
+def _rich_greetings() -> str:
+    return _management_page(
+        "ɢʀᴇᴇᴛɪɴɢꜱ",
+        "ᴡᴇʟᴄᴏᴍᴇ & ɢᴏᴏᴅʙʏᴇ ᴍᴇꜱꜱᴀɢᴇꜱ ᴍᴀɴᴀɢᴇ ᴋᴀʀᴏ. ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td><code>.welcome on/off</code></td><td>ᴡᴇʟᴄᴏᴍᴇ ᴛᴏɢɢʟᴇ</td></tr>
+<tr><td><code>.goodbye on/off</code></td><td>ɢᴏᴏᴅʙʏᴇ ᴛᴏɢɢʟᴇ</td></tr>
+<tr><td><code>.setwelcome &lt;text&gt;</code></td><td>ᴄᴜꜱᴛᴏᴍ ᴡᴇʟᴄᴏᴍᴇ</td></tr>
+<tr><td><code>.resetwelcome</code></td><td>ᴅᴇꜰᴀᴜʟᴛ ᴡᴇʟᴄᴏᴍᴇ</td></tr>
+<tr><td><code>.setgoodbye &lt;text&gt;</code></td><td>ᴄᴜꜱᴛᴏᴍ ɢᴏᴏᴅʙʏᴇ</td></tr>
+<tr><td><code>.resetgoodbye</code></td><td>ᴅᴇꜰᴀᴜʟᴛ ɢᴏᴏᴅʙʏᴇ</td></tr>
+<tr><td><code>.cleanwelcome on/off</code></td><td>5ᴍɪɴ ᴀᴜᴛᴏ ᴅᴇʟᴇᴛᴇ</td></tr>""",
+        "📝 ᴘʟᴀᴄᴇʜᴏʟᴅᴇʀꜱ: <code>{name}</code> <code>{mention}</code> <code>{id}</code> <code>{chat}</code>"
+    )
 
 
-def _rich_locks():
-    return _management_page("🔒 ʟᴏᴄᴋs", "ʟᴏᴄᴋ ᴄʜᴀᴛ ᴛʏᴘᴇs & ᴍᴇᴅɪᴀ", "<code>/lock &lt;type&gt;</code> <code>/unlock &lt;type&gt;</code>\n<code>/locks</code> — ᴄᴜʀʀᴇɴᴛ ʟᴏᴄᴋs\n<code>/locktypes</code> — ᴀᴠᴀɪʟᴀʙʟᴇ ᴛʏᴘᴇs\n<code>/lockwarns</code> — ʟᴏᴄᴋ ᴡᴀʀɴɪɴɢs")
+def _rich_locks() -> str:
+    return _management_page(
+        "ʟᴏᴄᴋꜱ",
+        "ɢʀᴏᴜᴘ ᴍᴇ ᴄᴏɴᴛᴇɴᴛ ᴛʏᴘᴇꜱ ʟᴏᴄᴋ ᴋᴀʀᴏ. ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td><code>.lock &lt;types&gt;</code></td><td>ᴛʏᴘᴇꜱ ʟᴏᴄᴋ ᴋᴀʀᴏ</td></tr>
+<tr><td><code>.unlock &lt;types&gt;</code></td><td>ᴛʏᴘᴇꜱ ᴜɴʟᴏᴄᴋ ᴋᴀʀᴏ</td></tr>
+<tr><td><code>.locks</code></td><td>ᴀᴄᴛɪᴠᴇ ʟᴏᴄᴋꜱ ᴅᴇᴋʜᴏ</td></tr>
+<tr><td><code>.locktypes</code></td><td>ꜱᴀᴀʀᴇ ᴛʏᴘᴇꜱ ʟɪꜱᴛ</td></tr>
+<tr><td><code>.lockwarns on/off</code></td><td>ᴡᴀʀɴ ᴛᴏɢɢʟᴇ</td></tr>""",
+        "🔐 ᴛʏᴘᴇꜱ: <code>stickers</code> <code>gif</code> <code>text</code> <code>photo</code> <code>video</code> <code>music</code> <code>files</code> <code>voice msg</code> <code>video msg</code> <code>link</code> <code>all</code>"
+    )
 
 
-def _rich_pins():
-    return _management_page("📌 ᴘɪɴs", "ᴍᴀɴᴀɢᴇ ᴘɪɴɴᴇᴅ ᴍᴇssᴀɢᴇs", "<code>/pin</code> — ᴘɪɴ ᴀ ᴍᴇssᴀɢᴇ\n<code>/unpin</code> — ᴜɴᴘɪɴ ᴀ ᴍᴇssᴀɢᴇ\n<code>/pinned</code> — sʜᴏᴡ ᴘɪɴɴᴇᴅ ᴍᴇssᴀɢᴇ\n<code>/unpinall</code> — ᴄʟᴇᴀʀ ᴘɪɴs")
+def _rich_pins() -> str:
+    return _management_page(
+        "ᴘɪɴꜱ",
+        "ᴍᴇꜱꜱᴀɢᴇꜱ ᴘɪɴ ᴋᴀʀᴏ. ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td><code>.pin</code></td><td>ʀᴇᴘʟʏ ᴡᴀʟɪ ᴘɪɴ</td></tr>
+<tr><td><code>.pin loud</code></td><td>ɴᴏᴛɪꜰʏ ᴋᴇ ꜱᴀᴀᴛʜ ᴘɪɴ</td></tr>
+<tr><td><code>.unpin</code></td><td>ᴘɪɴ ʜᴀᴛᴀᴏ</td></tr>
+<tr><td><code>.pinned</code></td><td>ᴄᴜʀʀᴇɴᴛ ᴘɪɴ ᴅᴇᴋʜᴏ</td></tr>
+<tr><td><code>.unpinall</code></td><td>ꜱᴀᴀʀᴇ ᴘɪɴꜱ ʜᴀᴛᴀᴏ</td></tr>""",
+        "📌 ᴘɪɴ ʀɪɢʜᴛ ᴡᴀʟᴇ ᴀᴅᴍɪɴꜱ ᴏɴʟʏ ᴜꜱᴇ ᴋᴀʀ ꜱᴀᴋᴛᴇ ʜᴀɪɴ."
+    )
 
 
-def _rich_purges():
-    return _management_page("🧹 ᴘᴜʀɢᴇs", "ᴅᴇʟᴇᴛᴇ ᴍᴜʟᴛɪᴘʟᴇ ᴍᴇssᴀɢᴇs", "<code>/purge</code> — ᴘᴜʀɢᴇ ʀᴇᴘʟɪᴇᴅ ᴍᴇssᴀɢᴇs\n<code>/spurge</code> — sɪʟᴇɴᴛ ᴘᴜʀɢᴇ\n<code>/del</code> <code>/d</code> <code>/delete</code> — ᴅᴇʟᴇᴛᴇ\n<code>/purgefrom</code> <code>/purgeto</code> — ᴘᴜʀɢᴇ ʀᴀɴɢᴇ")
+def _rich_purges() -> str:
+    return _management_page(
+        "ᴘᴜʀɢᴇꜱ",
+        "ʙᴜʟᴋ ᴍᴇꜱꜱᴀɢᴇ ᴅᴇʟᴇᴛᴇ ᴋᴀʀᴏ. ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td><code>.purge</code></td><td>ʀᴇᴘʟʏ ꜱᴇ ꜱᴀʙ ᴅᴇʟᴇᴛᴇ</td></tr>
+<tr><td><code>.purge 50</code></td><td>50 ᴍᴇꜱꜱᴀɢᴇꜱ</td></tr>
+<tr><td><code>.spurge</code></td><td>ꜱɪʟᴇɴᴛ ᴘᴜʀɢᴇ</td></tr>
+<tr><td><code>.del</code> / <code>.d</code></td><td>ꜱɪɴɢʟᴇ ᴅᴇʟᴇᴛᴇ</td></tr>
+<tr><td><code>.purgefrom</code></td><td>ꜱᴛᴀʀᴛ ᴍᴀʀᴋ</td></tr>
+<tr><td><code>.purgeto</code></td><td>ᴛɪʟʟ ᴍᴀʀᴋ ᴅᴇʟᴇᴛᴇ</td></tr>""",
+        "⚠️ ᴍᴀx 1000 ᴍᴇꜱꜱᴀɢᴇꜱ ᴇᴋ ʙᴀᴀʀ ᴍᴇ."
+    )
 
 
-def _rich_reports():
-    return _management_page("🚨 ʀᴇᴘᴏʀᴛs", "ʀᴇᴘᴏʀᴛ ᴍᴇᴍʙᴇʀs & ᴠɪᴇᴡ ʀᴇᴘᴏʀᴛs", "<code>/report</code> — ʀᴇᴘᴏʀᴛ ᴀ ᴜsᴇʀ\n<code>/reports</code> — ᴠɪᴇᴡ ʀᴇᴘᴏʀᴛs")
+def _rich_reports() -> str:
+    return _management_page(
+        "ʀᴇᴘᴏʀᴛꜱ",
+        "ᴜꜱᴇʀꜱ ᴀᴅᴍɪɴꜱ ᴋᴏ ʀᴇᴘᴏʀᴛ ᴋᴀʀ ꜱᴀᴋᴛᴇ ʜᴀɪɴ. ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td><code>.report</code></td><td>ʀᴇᴘʟʏ ᴡᴀʟɪ ʀᴇᴘᴏʀᴛ</td></tr>
+<tr><td><code>@admin</code></td><td>ᴍᴇɴᴛɪᴏɴ ꜱᴇ ʀᴇᴘᴏʀᴛ</td></tr>
+<tr><td><code>.reports on/off</code></td><td>ꜱʏꜱᴛᴇᴍ ᴛᴏɢɢʟᴇ</td></tr>
+<tr><td><code>.reports</code></td><td>ꜱᴛᴀᴛᴜꜱ ᴅᴇᴋʜᴏ</td></tr>""",
+        "🚨 ᴀᴅᴍɪɴꜱ ᴋᴏ ᴍᴇɴᴛɪᴏɴ ʜᴏᴛᴀ ʜᴀɪ ʀᴇᴘᴏʀᴛ ᴍᴇ."
+    )
 
 
-def _rich_warnings():
-    return _management_page("⚠️ ᴡᴀʀɴɪɴɢs", "ᴛʀᴀᴄᴋ ᴜsᴇʀ ᴡᴀʀɴɪɴɢs & ʟɪᴍɪᴛs", "<code>/warn</code> <code>/dwarn</code> <code>/swarn</code>\n<code>/warns</code> <code>/warnings</code> — ᴠɪᴇᴡ ᴡᴀʀɴs\n<code>/rmwarn</code> — ʀᴇᴍᴏᴠᴇ ᴡᴀʀɴ\n<code>/resetwarn</code> <code>/resetallwarns</code>\n<code>/warnmode</code> <code>/warnlimit</code> <code>/warntime</code>")
+def _rich_warnings() -> str:
+    return _management_page(
+        "ᴡᴀʀɴɪɴɢꜱ",
+        "ᴜꜱᴇʀ ᴡᴀʀɴ ꜱʏꜱᴛᴇᴍ. ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td><code>.warn</code></td><td>ᴡᴀʀɴ ᴅᴏ</td></tr>
+<tr><td><code>.dwarn</code></td><td>ᴅᴇʟᴇᴛᴇ + ᴡᴀʀɴ</td></tr>
+<tr><td><code>.swarn</code></td><td>ꜱɪʟᴇɴᴛ ᴡᴀʀɴ</td></tr>
+<tr><td><code>.warns</code></td><td>ᴡᴀʀɴ ʟɪꜱᴛ ᴅᴇᴋʜᴏ</td></tr>
+<tr><td><code>.rmwarn</code></td><td>ʟᴀᴛᴇꜱᴛ ᴡᴀʀɴ ʜᴀᴛᴀᴏ</td></tr>
+<tr><td><code>.resetwarn</code></td><td>ꜱᴀᴀʀᴇ ᴡᴀʀɴꜱ ʜᴀᴛᴀᴏ</td></tr>
+<tr><td><code>.warnings</code></td><td>ꜱᴇᴛᴛɪɴɢꜱ ᴅᴇᴋʜᴏ</td></tr>
+<tr><td><code>.warnmode &lt;mode&gt;</code></td><td>ᴘᴜɴɪꜱʜ ᴍᴏᴅᴇ ꜱᴇᴛ</td></tr>
+<tr><td><code>.warnlimit &lt;1-100&gt;</code></td><td>ᴍᴀx ᴡᴀʀɴꜱ</td></tr>
+<tr><td><code>.warntime 7d</code></td><td>ᴡᴀʀɴ ᴇxᴘɪʀʏ</td></tr>""",
+        "⚙️ ᴍᴏᴅᴇꜱ: <code>ban</code> <code>mute</code> <code>kick</code> <code>tban</code> <code>tmute</code>"
+    )
 
 
 def _rich_about() -> str:
     return f"""📖 <b>ᴀʙᴏᴜᴛ ᴇʟᴀʀᴀ</b>
 
-ᴇʟᴀʀᴀ ɪs ʏᴏᴜʀ ᴀɪ ᴄᴏᴍᴘᴀɴɪᴏɴ ғᴏʀ ᴇᴠᴇʀʏᴅᴀʏ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴs, ʀᴀɴᴅᴏᴍ ᴛʜᴏᴜɢʜᴛs ᴀɴᴅ ʟᴀᴛᴇ-ɴɪɢʜᴛ ᴄʜᴀᴛs. 🌙
+ᴇʟᴀʀᴀ ɪꜱ ʏᴏᴜʀ ᴀɪ ɢʀᴏᴜᴘ ᴍᴀɴᴀɢᴇʀ ꜰᴏʀ ᴇᴠᴇʀʏᴅᴀʏ ᴄᴏɴᴠᴇʀꜱᴀᴛɪᴏɴꜱ, ʀᴇᴀᴅʏ ᴛᴏ ʜᴀɴᴅʟᴇ ᴀɴʏ ᴄʜᴀᴛ. 🌙
 
 <details open>
-<summary>✦ ᴀʙᴏᴜᴛ ғᴇᴀᴛᴜʀᴇs ✦</summary>
+<summary>✨ ᴀʙᴏᴜᴛ ꜰᴇᴀᴛᴜʀᴇꜱ</summary>
 
 <table>
-<tr><th>ғᴇᴀᴛᴜʀᴇ</th><th>ᴅᴇᴛᴀɪʟs</th></tr>
-<tr><td>💬 ᴛᴀʟᴋ</td><td>ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀsᴀᴛɪᴏɴ</td></tr>
+<tr><th>ꜰᴇᴀᴛᴜʀᴇ</th><th>ᴅᴇᴛᴀɪʟꜱ</th></tr>
+<tr><td>💬 ᴄʜᴀᴛ</td><td>ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀꜱᴀᴛɪᴏɴ</td></tr>
 <tr><td>🧠 ᴍᴇᴍᴏʀʏ</td><td>ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ</td></tr>
-<tr><td>💕 sᴏᴄɪᴀʟ</td><td>ғᴜɴ ɢʀᴏᴜᴘ ᴄᴏᴍᴍᴀɴᴅs</td></tr>
-<tr><td>⚡ sᴘᴇᴇᴅ</td><td>ғᴀsᴛ ɢʀᴏǫ ᴀɪ ʀᴇsᴘᴏɴsᴇs</td></tr>
+<tr><td>💕 ꜱᴏᴄɪᴀʟ</td><td>ꜰᴜɴ ɢʀᴏᴜᴘ ᴄᴏᴍᴍᴀɴᴅꜱ</td></tr>
+<tr><td>⚡ ꜱᴘᴇᴇᴅ</td><td>ꜰᴀꜱᴛ ʀᴇꜱᴘᴏɴꜱᴇꜱ</td></tr>
 </table>
 </details>
 
-<blockquote><i>ᴊᴜsᴛ ᴛᴀʟᴋ ᴛᴏ ᴇʟᴀʀᴀ. ɴᴏ sᴇᴛᴜᴘ.</i></blockquote>
+<blockquote><i>ᴜꜱᴇ ᴛʜᴇ ᴍᴇɴᴜ ʙᴇʟᴏᴡ ᴛᴏ ᴇxᴘʟᴏʀᴇ.</i></blockquote>
 """
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  KEYBOARDS — Colored buttons (Kurigram)
+#  KEYBOARDS
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _welcome_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(
-            "⛩️ ᴀᴅᴅ ᴍᴇ ʙᴀʙʏ ⛩️",
+            "➕ ᴀᴅᴅ ᴍᴇ ᴛᴏ ɢʀᴏᴜᴘ ➕",
             url=_safe_startgroup_url(),
             style=enums.ButtonStyle.PRIMARY,
         )],
         [
-            InlineKeyboardButton(
-                "🍬 sᴜᴘᴘᴏʀᴛ 🍬",
-                url=_safe_url(SUPPORT_URL),
-                style=enums.ButtonStyle.SUCCESS,
-            ),
-            InlineKeyboardButton(
-                "🍹 ᴜᴘᴅᴀᴛᴇs 🍹",
-                url=_safe_url(UPDATES_URL),
-                style=enums.ButtonStyle.SUCCESS,
-            ),
+            InlineKeyboardButton("🍬 ꜱᴜᴘᴘᴏʀᴛ 🍬", url=_safe_url(SUPPORT_URL),
+                                 style=enums.ButtonStyle.SUCCESS),
+            InlineKeyboardButton("🍹 ᴜᴘᴅᴀᴛᴇꜱ 🍹", url=_safe_url(UPDATES_URL),
+                                 style=enums.ButtonStyle.SUCCESS),
         ],
-        [InlineKeyboardButton(
-            "🏩 ʜᴇʟᴘ & ᴄᴏᴍᴍᴀɴᴅs 🏩",
-            callback_data="elara:help",
-            style=enums.ButtonStyle.PRIMARY,
-        )],
+        [InlineKeyboardButton("🏩 ʜᴇʟᴘ & ᴄᴏᴍᴍᴀɴᴅꜱ 🏩",
+                              callback_data="elara:help",
+                              style=enums.ButtonStyle.PRIMARY)],
         [
-            InlineKeyboardButton(
-                "🫧 ᴏᴡɴᴇʀ 🫧",
-                url=_owner_link(),
-                style=enums.ButtonStyle.DANGER,   # 🔴 RED
-            ),
-            InlineKeyboardButton(
-                "📖 ᴀʙᴏᴜᴛ 📖",
-                callback_data="elara:about",
-                style=enums.ButtonStyle.DANGER,   # 🔴 RED
-            ),
+            InlineKeyboardButton("🫧 ᴏᴡɴᴇʀ 🫧", url=_owner_link(),
+                                 style=enums.ButtonStyle.DANGER),
+            InlineKeyboardButton("📖 ᴀʙᴏᴜᴛ 📖", callback_data="elara:about",
+                                 style=enums.ButtonStyle.DANGER),
         ],
     ])
 
 
 _HELP_KB = InlineKeyboardMarkup([
     [
-        InlineKeyboardButton("🤖 ᴀɪ", callback_data="elara:ai", style=enums.ButtonStyle.PRIMARY),
-        InlineKeyboardButton("💕 sᴏᴄɪᴀʟ", callback_data="elara:social", style=enums.ButtonStyle.SUCCESS),
+        InlineKeyboardButton("🤖 ᴀɪ", callback_data="elara:ai",
+                             style=enums.ButtonStyle.PRIMARY),
+        InlineKeyboardButton("💕 ꜱᴏᴄɪᴀʟ", callback_data="elara:social",
+                             style=enums.ButtonStyle.SUCCESS),
     ],
-    [InlineKeyboardButton("🛡️ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ", callback_data="elara:management", style=enums.ButtonStyle.PRIMARY)],
-    [InlineKeyboardButton("⌯ ʜᴏᴍᴇ ⌯", callback_data="elara:home", style=enums.ButtonStyle.PRIMARY)],
+    [InlineKeyboardButton("🛡️ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ", callback_data="elara:management",
+                          style=enums.ButtonStyle.PRIMARY)],
+    [InlineKeyboardButton("⌯ ʜᴏᴍᴇ ⌯", callback_data="elara:home",
+                          style=enums.ButtonStyle.PRIMARY)],
 ])
 
+
 _MANAGEMENT_KB = InlineKeyboardMarkup([
-    [InlineKeyboardButton("👑 ᴀᴅᴍɪɴ", callback_data="elara:mg_admin", style=enums.ButtonStyle.DANGER),
-     InlineKeyboardButton("🔨 ʙᴀɴs", callback_data="elara:mg_bans", style=enums.ButtonStyle.PRIMARY)],
-    [InlineKeyboardButton("🔎 ғɪʟᴛᴇʀs", callback_data="elara:mg_filters", style=enums.ButtonStyle.SUCCESS),
-     InlineKeyboardButton("👋 ɢʀᴇᴇᴛɪɴɢs", callback_data="elara:mg_greetings", style=enums.ButtonStyle.SUCCESS)],
-    [InlineKeyboardButton("🔒 ʟᴏᴄᴋs", callback_data="elara:mg_locks", style=enums.ButtonStyle.PRIMARY),
-     InlineKeyboardButton("📌 ᴘɪɴs", callback_data="elara:mg_pins", style=enums.ButtonStyle.PRIMARY)],
-    [InlineKeyboardButton("🧹 ᴘᴜʀɢᴇs", callback_data="elara:mg_purges", style=enums.ButtonStyle.DANGER),
-     InlineKeyboardButton("🚨 ʀᴇᴘᴏʀᴛs", callback_data="elara:mg_reports", style=enums.ButtonStyle.DANGER)],
-    [InlineKeyboardButton("⚠️ ᴡᴀʀɴɪɴɢs", callback_data="elara:mg_warnings", style=enums.ButtonStyle.PRIMARY)],
-    [InlineKeyboardButton("⬅️ ʙᴀᴄᴋ ᴛᴏ ʜᴇʟᴘ", callback_data="elara:help", style=enums.ButtonStyle.PRIMARY)],
+    [
+        InlineKeyboardButton("👑 ᴀᴅᴍɪɴ", callback_data="elara:mg_admin",
+                             style=enums.ButtonStyle.DANGER),
+        InlineKeyboardButton("🔨 ʙᴀɴꜱ", callback_data="elara:mg_bans",
+                             style=enums.ButtonStyle.PRIMARY),
+        InlineKeyboardButton("🔎 ꜰɪʟᴛᴇʀꜱ", callback_data="elara:mg_filters",
+                             style=enums.ButtonStyle.SUCCESS),
+    ],
+    [
+        InlineKeyboardButton("👋 ɢʀᴇᴇᴛ", callback_data="elara:mg_greetings",
+                             style=enums.ButtonStyle.SUCCESS),
+        InlineKeyboardButton("🔒 ʟᴏᴄᴋꜱ", callback_data="elara:mg_locks",
+                             style=enums.ButtonStyle.PRIMARY),
+        InlineKeyboardButton("📌 ᴘɪɴꜱ", callback_data="elara:mg_pins",
+                             style=enums.ButtonStyle.PRIMARY),
+    ],
+    [
+        InlineKeyboardButton("🧹 ᴘᴜʀɢᴇꜱ", callback_data="elara:mg_purges",
+                             style=enums.ButtonStyle.DANGER),
+        InlineKeyboardButton("🚨 ʀᴇᴘᴏʀᴛꜱ", callback_data="elara:mg_reports",
+                             style=enums.ButtonStyle.DANGER),
+        InlineKeyboardButton("⚠️ ᴡᴀʀɴꜱ", callback_data="elara:mg_warnings",
+                             style=enums.ButtonStyle.PRIMARY),
+    ],
+    [
+        InlineKeyboardButton("⬅️ ʙᴀᴄᴋ", callback_data="elara:help",
+                             style=enums.ButtonStyle.PRIMARY),
+        InlineKeyboardButton("✖ ᴄʟᴏꜱᴇ", callback_data="elara:close",
+                             style=enums.ButtonStyle.DANGER),
+    ],
 ])
+
 
 _BACK_KB = InlineKeyboardMarkup([
     [InlineKeyboardButton("⬅️ ʙᴀᴄᴋ", callback_data="elara:help",
                           style=enums.ButtonStyle.PRIMARY)],
-    [InlineKeyboardButton("⌯ ᴄʟᴏsᴇ ⌯", callback_data="elara:close",
+    [InlineKeyboardButton("⌯ ᴄʟᴏꜱᴇ ⌯", callback_data="elara:close",
                           style=enums.ButtonStyle.DANGER)],
 ])
+
+
+def _mg_subpage_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("⬅️ ʙᴀᴄᴋ", callback_data="elara:management",
+                                 style=enums.ButtonStyle.PRIMARY),
+            InlineKeyboardButton("🏠 ʜᴏᴍᴇ", callback_data="elara:home",
+                                 style=enums.ButtonStyle.SUCCESS),
+            InlineKeyboardButton("✖ ᴄʟᴏꜱᴇ", callback_data="elara:close",
+                                 style=enums.ButtonStyle.DANGER),
+        ],
+    ])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -384,10 +536,8 @@ def _kb_to_dict(kb):
 
 
 async def _send_rich(chat_id, html, kb, image=None):
-    """Send the original rich UI and a reliable start image."""
     if image:
         try:
-            # Download the configured image ourselves, then upload its bytes.
             req = Request(image, headers={"User-Agent": "Mozilla/5.0"})
             def _download():
                 with urlopen(req, timeout=20) as r:
@@ -543,23 +693,20 @@ async def cb(_, q: CallbackQuery):
         return
 
     management_pages = {
-        "mg_admin": _rich_admin,
-        "mg_bans": _rich_bans,
-        "mg_filters": _rich_filters,
+        "mg_admin":     _rich_admin,
+        "mg_bans":      _rich_bans,
+        "mg_filters":   _rich_filters,
         "mg_greetings": _rich_greetings,
-        "mg_locks": _rich_locks,
-        "mg_pins": _rich_pins,
-        "mg_purges": _rich_purges,
-        "mg_reports": _rich_reports,
-        "mg_warnings": _rich_warnings,
+        "mg_locks":     _rich_locks,
+        "mg_pins":      _rich_pins,
+        "mg_purges":    _rich_purges,
+        "mg_reports":   _rich_reports,
+        "mg_warnings":  _rich_warnings,
     }
 
     if d in management_pages:
         await q.answer()
-        await _edit_rich(q.message, management_pages[d](), InlineKeyboardMarkup([
-            [InlineKeyboardButton("⬅️ ʙᴀᴄᴋ ᴛᴏ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ", callback_data="elara:management", style=enums.ButtonStyle.PRIMARY)],
-            [InlineKeyboardButton("⌯ ʜᴏᴍᴇ ⌯", callback_data="elara:home", style=enums.ButtonStyle.DANGER)],
-        ]))
+        await _edit_rich(q.message, management_pages[d](), _mg_subpage_kb())
         return
 
     if d == "about":
