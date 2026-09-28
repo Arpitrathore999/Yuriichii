@@ -139,15 +139,24 @@ async def _management_admin(message):
 async def _can_promote(message):
     if not await _management_admin(message):
         return False
-    if int(message.from_user.id) == int(config.OWNER_ID):
-        return True
     try:
-        member = await app.get_chat_member(message.chat.id, message.from_user.id)
-        if member.status == ChatMemberStatus.OWNER:
+        actor = await app.get_chat_member(message.chat.id, message.from_user.id)
+        if actor.status == ChatMemberStatus.OWNER:
             return True
-        # Telegram's real permission is the final authority for promotion.
-        return bool(getattr(member, "privileges", None) and getattr(member.privileges, "can_promote_members", False))
-    except Exception:
+        return bool(getattr(actor, "privileges", None) and getattr(actor.privileges, "can_promote_members", False))
+    except Exception as e:
+        print(f"[CONTROL PERMISSION] {type(e).__name__}: {e}", flush=True)
+        return False
+
+
+async def _bot_can_promote(chat_id):
+    try:
+        me = await app.get_chat_member(chat_id, "me")
+        if me.status == ChatMemberStatus.OWNER:
+            return True
+        return bool(getattr(me, "privileges", None) and getattr(me.privileges, "can_promote_members", False))
+    except Exception as e:
+        print(f"[BOT PROMOTE PERMISSION] {type(e).__name__}: {e}", flush=True)
         return False
 
 
@@ -178,29 +187,30 @@ def _mention(user, fallback="User"):
 
 
 async def _resolve_target(message, args):
-    """Resolve reply, @username, Telegram ID, or text-mention target."""
+    """Resolve reply first, then text-mention, @username, or numeric Telegram ID."""
     reply = message.reply_to_message
     if reply and reply.from_user:
         return reply.from_user
 
-    text = message.text or ""
-    entities = list(message.entities or [])
-    for entity in entities:
-        if str(entity.type) in ("MessageEntityType.TEXT_MENTION", "text_mention") and getattr(entity, "user", None):
+    for entity in list(message.entities or []):
+        etype = str(getattr(entity, "type", ""))
+        if etype in ("MessageEntityType.TEXT_MENTION", "text_mention") and getattr(entity, "user", None):
             return entity.user
 
-    candidates = [str(x).strip() for x in args if str(x).strip()]
-    for raw in candidates:
+    for raw in (str(x).strip() for x in args if str(x).strip()):
+        if raw.startswith("@"):
+            raw = raw[1:]
         if raw.lstrip("+-").isdigit():
             try:
                 return await app.get_users(int(raw))
-            except Exception:
+            except Exception as e:
+                print(f"[TARGET ID] {type(e).__name__}: {e}", flush=True)
                 continue
-        if raw.startswith("@"):
+        if raw:
             try:
                 return await app.get_users(raw)
-            except Exception:
-                continue
+            except Exception as e:
+                print(f"[TARGET USERNAME] {type(e).__name__}: {e}", flush=True)
     return None
 
 
@@ -378,8 +388,10 @@ async def _parse_right_command(message, action):
 async def group_rights(_, message):
     if not _management_group(message):
         return
+    if not await _bot_can_promote(message.chat.id):
+        return await message.reply("❌ ʙᴏᴛ ᴋᴏ ɢʀᴏᴜᴘ ᴍᴇ ʙɪᴛʜ <b>Promote Members</b> permission ᴅᴏ.")
     if not await _can_promote(message):
-        return await message.reply("❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴍᴀɴᴀɢᴇ ᴀᴅᴍɪɴs.")
+        return await message.reply("❌ ʏᴏᴜ/ᴛʜᴇ ʙᴏᴛ ᴅᴏ ɴᴏᴛ ʜᴀᴠᴇ <b>Promote Members</b> permission.")
 
     action = (message.command[0] or "").lower()
     args = list(message.command or [])[1:]
