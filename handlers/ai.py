@@ -25,7 +25,8 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     "locks", "lockwarns", "locktpyes", "pin", "unpin", "pinned", "unpinall", "purge", "del", "report", "reports",
     "spurge", "purgefrom", "purgeto", "d", "delete",
     "promote", "demote", "admin", "admins", "setrules", "add", "remove", "adminlist",
-    "sban", "tban", "dban", "smute", "dmute", "skick", "dkick"
+    "sban", "tban", "dban", "smute", "dmute", "skick", "dkick",
+    "all", "call", "tagall", "cancel",
 ]
 
 
