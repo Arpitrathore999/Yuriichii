@@ -13,20 +13,37 @@ SOCIAL_COMMANDS = [
 ]
 
 ALL_COMMANDS = SOCIAL_COMMANDS + [
+    # Handlers
     "start", "ai", "ping", "speedtest", "spt",
     "broadcast", "gcast", "adminpanel", "adminuser",
     "cancelbroadcast", "adminhelp", "stats",
     "addgif", "addcaption", "socialgifs", "socialcaptions",
     "clearsocialgifs", "clearsocialcaptions", "banbot", "botunban",
-    # Management commands — never let the AI catch these.
-    "ban", "unban", "kick", "mute", "tmute", "unmute", "warn", "rmwarn",
-    "warnings", "resetwarn", "dwarn", "swarn", "warns", "filter", "filters", "stop", "stopall",
-    "welcome", "goodbye", "setwelcome", "setgoodbye", "lock", "unlock",
-    "locks", "lockwarns", "locktpyes", "pin", "unpin", "pinned", "unpinall", "purge", "del", "report", "reports",
-    "spurge", "purgefrom", "purgeto", "d", "delete",
-    "promote", "demote", "admin", "admins", "setrules", "add", "remove", "adminlist",
+    # Bans
+    "ban", "unban", "kick", "mute", "tmute", "unmute",
     "sban", "tban", "dban", "smute", "dmute", "skick", "dkick",
-    "all", "call", "tagall", "cancel",
+    # Warnings
+    "warn", "dwarn", "swarn", "warns", "warnings",
+    "rmwarn", "resetwarn", "resetallwarns",
+    "warnmode", "warnlimit", "warntime",
+    # Filters (renamed stop)
+    "filter", "filters", "stopfilter", "stopf", "stopall",
+    # Greetings
+    "welcome", "goodbye", "setwelcome", "setgoodbye",
+    "resetwelcome", "resetgoodbye", "cleanwelcome",
+    # Locks
+    "lock", "unlock", "locks", "lockwarns", "locktypes",
+    # Pins
+    "pin", "unpin", "pinned", "unpinall",
+    # Purge
+    "purge", "spurge", "purgefrom", "purgeto",
+    "del", "d", "delete",
+    # Reports
+    "report", "reports", "admin",
+    # Control
+    "promote", "demote", "adminlist", "add", "remove",
+    # Tagall
+    "all", "call", "tagall", "cancel", "stop",
 ]
 
 
@@ -58,14 +75,17 @@ async def ai_command(_, message):
 @app.on_message(
     filters.group
     & filters.text
-    & ~filters.command(ALL_COMMANDS, prefixes=PREFIXES)   # 👈 ye update kiya
+    & ~filters.command(ALL_COMMANDS, prefixes=PREFIXES)
 )
 async def group_chat(_, message):
     if not message.from_user or not message.text:
         return
 
-    # 👇 extra safety
-    if message.text.startswith("/"):
+    # Extra safety — skip any slash-prefixed message
+    try:
+        if message.text and message.text[0] in PREFIXES:
+            return
+    except Exception:
         return
 
     me = await app.get_me()
