@@ -1,19 +1,7 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  management/filter.py — Text + Media Filters
+#  management/filter.py — Text + Media Filters (crash-proof)
 # --------------------------------------------------------------------------------
-
-"""Elara GC Management - Filters module.
-
-Commands (prefixes /, !, .):
-  /filter <trigger> <reply>              → text filter
-  /filter <trigger>  (reply to media)    → media filter
-  /filters                                → list filters
-  /stop <trigger>                         → remove one
-  /stopall                                → remove all
-
-Filters are case-insensitive and are stored per chat in MongoDB.
-"""
 
 from pyrogram import filters
 from pyrogram.enums import ChatMemberStatus, ChatType
@@ -47,7 +35,6 @@ def _valid_chat(message) -> bool:
 # ── Media helpers ─────────────────────────────────────────────────────────────
 
 def _detect_media(replied):
-    """Return (media_type, file_id, caption) if replied message has media, else None."""
     if not replied:
         return None
     if replied.sticker:
@@ -70,7 +57,6 @@ def _detect_media(replied):
 
 
 async def _send_media(message, media_type, file_id, caption=None):
-    """Reply with the appropriate media type."""
     try:
         if media_type == "sticker":
             return await message.reply_sticker(file_id)
@@ -93,17 +79,9 @@ async def _send_media(message, media_type, file_id, caption=None):
     return None
 
 
-# ── Argument parser (text + media) ────────────────────────────────────────────
+# ── Argument parser ───────────────────────────────────────────────────────────
 
 def _parse_filter_args(message):
-    """Return (trigger, reply, media_info).
-
-    Supports:
-      /filter hi Hello              → text filter
-      /filter hi                    → media filter (reply to media)
-      /filter hi Nice!              → media filter + custom caption (reply to media)
-      /filter "hello bro" Hey!      → multi-word text trigger
-    """
     text = message.text or message.caption or ""
     parts = text.split(maxsplit=1)
     if len(parts) < 2:
@@ -113,7 +91,6 @@ def _parse_filter_args(message):
     if not rest:
         return None, None, None
 
-    # ── 1. Extract trigger and inline reply (if any) ──
     reply_text = None
     if rest.startswith('"'):
         end = rest.find('"', 1)
@@ -137,14 +114,10 @@ def _parse_filter_args(message):
     if not trigger:
         return None, None, None
 
-    # ── 2. Check if replied message has media ──
     media_info = _detect_media(message.reply_to_message)
-
-    # Media filter: reply_text optional (used as caption if given)
     if media_info:
         return trigger, reply_text, media_info
 
-    # Text filter: reply_text mandatory
     if not reply_text:
         return None, None, None
 
@@ -173,7 +146,6 @@ async def add_filter(_, message):
 
     normalized = trigger.casefold().strip()
 
-    # ── Media filter ──
     if media_info:
         media_type, file_id, orig_caption = media_info
         caption = reply if reply else orig_caption
@@ -199,7 +171,6 @@ async def add_filter(_, message):
             f"📎 Tʏᴘᴇ: <code>{media_type}</code>"
         )
 
-    # ── Text filter ──
     await col.update_one(
         {"chat_id": message.chat.id, "trigger": normalized},
         {
@@ -241,9 +212,9 @@ async def list_filters(_, message):
     await message.reply("\n".join(lines))
 
 
-# ── Stop one ──────────────────────────────────────────────────────────────────
+# ── Stop one (renamed to avoid .stop conflict) ────────────────────────────────
 
-@app.on_message(filters.command("stop", prefixes=PREFIXES) & filters.group)
+@app.on_message(filters.command(["stopfilter", "stopf"], prefixes=PREFIXES) & filters.group)
 async def stop_filter(_, message):
     if not message.from_user or not await _is_admin(message.chat.id, message.from_user.id):
         return
@@ -251,7 +222,7 @@ async def stop_filter(_, message):
     text = message.text or ""
     parts = text.split(maxsplit=1)
     if len(parts) < 2 or not parts[1].strip():
-        return await message.reply("❌ <b>Uꜱᴀɢᴇ:</b> <code>.stop &lt;trigger&gt;</code>")
+        return await message.reply("❌ <b>Uꜱᴀɢᴇ:</b> <code>.stopfilter &lt;trigger&gt;</code>")
 
     trigger = parts[1].strip()
     if len(trigger) >= 2 and trigger[0] == trigger[-1] and trigger[0] in ('"', "'"):
@@ -282,7 +253,7 @@ async def stop_all_filters(_, message):
     await message.reply(f"🗑 <b>Aʟʟ Fɪʟᴛᴇʀꜱ Rᴇᴍᴏᴠᴇᴅ.</b>\nRemoved: <code>{result.deleted_count}</code>")
 
 
-# ── Listener (text + media) ──────────────────────────────────────────────────
+# ── Listener (crash-proof) ────────────────────────────────────────────────────
 
 @app.on_message(
     filters.group
@@ -304,20 +275,27 @@ async def filter_listener(_, message):
     if not message.from_user or message.from_user.is_bot:
         return
 
-    # Commands ko trigger mat karo
-    if message.text and message.text[:1] in PREFIXES:
-        return
-    if message.caption and message.caption[:1] in PREFIXES:
+    # ✅ Safe prefix check — crash-proof (fixes UnicodeDecodeError)
+    try:
+        text_val = message.text or ""
+        caption_val = message.caption or ""
+        if text_val and text_val[0] in PREFIXES:
+            return
+        if caption_val and caption_val[0] in PREFIXES:
+            return
+    except Exception:
         return
 
-    # Match content
     content = ""
-    if message.text:
-        content = message.text.casefold()
-    elif message.caption:
-        content = message.caption.casefold()
-    else:
-        # Media without caption — koi trigger match nahi ho sakta
+    try:
+        if message.text:
+            content = message.text.casefold()
+        elif message.caption:
+            content = message.caption.casefold()
+    except Exception:
+        return
+
+    if not content:
         return
 
     col = _collection()
@@ -333,21 +311,28 @@ async def filter_listener(_, message):
         if not trigger or trigger not in content:
             continue
 
-        # ── Media filter ──
+        # Media filter
         if doc.get("type") == "media" and doc.get("file_id"):
-            await _send_media(
-                message,
-                doc.get("media_type"),
-                doc.get("file_id"),
-                doc.get("caption") or None,
-            )
+            try:
+                await _send_media(
+                    message,
+                    doc.get("media_type"),
+                    doc.get("file_id"),
+                    doc.get("caption") or None,
+                )
+            except Exception as e:
+                print(f"[media-filter] {type(e).__name__}: {e}", flush=True)
+                try:
+                    await col.delete_one({"_id": doc["_id"]})
+                except Exception:
+                    pass
             break
 
-        # ── Text filter ──
+        # Text filter
         reply = doc.get("reply")
         if reply:
             try:
                 await message.reply(str(reply))
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[text-filter] {type(e).__name__}: {e}", flush=True)
             break
