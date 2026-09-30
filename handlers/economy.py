@@ -1,4 +1,4 @@
-"""Telegram handlers for the isolated economy system. (Premium UI + GC Close/Open)"""
+"""Telegram handlers for the isolated economy system. (Premium UI + Elara Special)"""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -29,6 +29,7 @@ from core.economy import (
     tax_for,
     transfer,
     withdraw_wallet,
+    ELARA_BOT_ID,
 )
 
 PREFIXES = ["/", ".", "!"]
@@ -57,7 +58,7 @@ def _name(user):
 
 def _reply_target(message):
     reply = message.reply_to_message
-    if reply and reply.from_user and not reply.from_user.is_bot:
+    if reply and reply.from_user:
         return reply.from_user
     return None
 
@@ -74,11 +75,6 @@ async def _resolve_private_target(message, token):
         return await app.get_users(token.lstrip("@"))
     except Exception:
         return None
-
-
-def _protection_active(user):
-    until = user.get("protection_until") if user else None
-    return bool(until and until > datetime.now(timezone.utc))
 
 
 async def _is_owner(message):
@@ -221,10 +217,25 @@ async def economy_balance(_, message):
     if message.reply_to_message and message.reply_to_message.from_user:
         target = message.reply_to_message.from_user
     elif len(message.command or []) > 1:
-        return await message.reply("❌ <b>ᴜꜱᴀɢᴇ:</b> <code>/bal</code> ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜꜱᴇʀ.", parse_mode=ParseMode.HTML)
+        return await message.reply(
+            "❌ <b>ᴜꜱᴀɢᴇ:</b> <code>/bal</code> ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜꜱᴇʀ.",
+            parse_mode=ParseMode.HTML,
+        )
 
-    if not target or target.is_bot:
+    if not target:
         return await message.reply("❌ <b>ɪɴᴠᴀʟɪᴅ ᴜꜱᴇʀ.</b>")
+
+    # ✅ Bot check
+    if target.is_bot:
+        if int(target.id) == ELARA_BOT_ID:
+            await ensure_user(target)
+            await message.reply(await _profile_text(target), parse_mode=ParseMode.HTML)
+            return
+        return await message.reply(
+            "🤖 <b>ᴛʜɪꜱ ᴜꜱᴇʀ ɪꜱ ᴀ ʙᴏᴛ.</b>\n"
+            "<i>ʙᴏᴛꜱ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇᴄᴏɴᴏᴍʏ ᴀᴄᴄᴏᴜɴᴛꜱ.</i>",
+            parse_mode=ParseMode.HTML,
+        )
 
     await ensure_user(target)
     await message.reply(await _profile_text(target), parse_mode=ParseMode.HTML)
@@ -261,6 +272,9 @@ async def economy_kill(_, message):
     target = _reply_target(message)
     if not target:
         return await message.reply("❌ <b>ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜꜱᴇʀ ᴛᴏ ᴜꜱᴇ /kill.</b>")
+    if target.is_bot:
+        return await message.reply("🤖 <b>ʏᴏᴜ ᴄᴀɴ'ᴛ ᴋɪʟʟ ᴀ ʙᴏᴛ.</b>")
+
     result = await kill_user(message.from_user.id, target.id)
     reason = result.get("reason")
     if not result["ok"]:
@@ -271,10 +285,10 @@ async def economy_kill(_, message):
             "protected": "🛡️ ᴛʜᴀᴛ ᴜꜱᴇʀ ɪꜱ ᴘʀᴏᴛᴇᴄᴛᴇᴅ.",
             "killer_dead": "☠️ ᴅᴇᴀᴅ ᴜꜱᴇʀꜱ ᴄᴀɴɴᴏᴛ ᴋɪʟʟ.",
             "robber_dead": "☠️ ᴅᴇᴀᴅ ᴜꜱᴇʀꜱ ᴄᴀɴɴᴏᴛ ᴋɪʟʟ.",
-            "killer_unavailable": "❌ ʏᴏᴜʀ ᴋɪʟʟ ꜰᴀɪʟᴇᴅ ꜱᴀꜰᴇʟʏ.",
+            "killer_unavailable": "❌ ʏᴏᴜʀ ᴋɪʟʟ ᴄᴏᴜʟᴅ ɴᴏᴛ ʙᴇ ᴄᴏᴍᴘʟᴇᴛᴇᴅ ꜱᴀꜰᴇʟʏ.",
             "not_available": "❌ ᴛᴀʀɢᴇᴛ ᴀʟʀᴇᴀᴅʏ ᴘʀᴏᴄᴇꜱꜱᴇᴅ.",
             "transaction_unavailable": "❌ ᴛʀᴀɴꜱᴀᴄᴛɪᴏɴ ꜰᴀɪʟᴇᴅ.",
-        }.get(reason, f"❌ <b>ᴋɪʟʟ ꜰᴀɪʟᴇᴅ.</b>\n<i>ʀᴇᴀꜱᴏɴ — <code>{reason or 'unknown'}</code></i>"), parse_mode=ParseMode.HTML)
+        }.get(reason, f"❌ <b>ᴋɪʟʟ ꜰᴀɪʟᴇᴅ.</b>"), parse_mode=ParseMode.HTML)
 
     level_info = result.get("level", {})
     level_note = f"\n💠 <b>ʟᴇᴠᴇʟ ᴜᴘ</b> — <code>{level_info['level']}</code>" if level_info.get("levels") else ""
@@ -312,7 +326,7 @@ async def economy_revive(_, message):
         return await message.reply(f"❌ {_mention(target.id, _name(target))} ɪꜱ ɴᴏᴛ ᴅᴇᴀᴅ.")
 
     if str(reviver.get("status", "alive")).lower() != "alive":
-        return await message.reply("☠️ <b>ᴅᴇᴀᴅ ᴜꜱᴇʀꜱ ᴄᴀɴɴᴏᴛ ʀᴇᴠɪᴠᴇ.</b>")
+        return await message.reply("☠️ <b>ᴅᴇᴀᴅ ᴜꜱᴇʀꜱ ᴄᴀɴɴᴏᴛ ʀᴇᴠɪᴠᴇ ᴏᴛʜᴇʀꜱ.</b>")
 
     if int(reviver.get("coins", 0)) < REVIVE_FEE:
         return await message.reply(
@@ -360,24 +374,23 @@ async def economy_rob(_, message):
 
     result = await rob_user(message.from_user.id, target.id)
     reason = result.get("reason")
-    print(f"[ROB DEBUG] {result}", flush=True)
+
+    # ✅ Elara roast case
+    if reason == "elara_roast":
+        return await message.reply(
+            f"😎 <b>{result.get('roast', 'Nice try.')}</b>",
+            parse_mode=ParseMode.HTML,
+        )
 
     if not result.get("ok"):
         return await message.reply({
             "self": "❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ʀᴏʙ ʏᴏᴜʀꜱᴇʟꜰ.",
-            "dead": "☠️ ᴛʜᴀᴛ ᴜꜱᴇʀ ɪꜱ ᴅᴇᴀᴅ.",
-            "target_dead": "☠️ ᴛʜᴀᴛ ᴜꜱᴇʀ ɪꜱ ᴅᴇᴀᴅ.",
-            "killer_dead": "☠️ ᴅᴇᴀᴅ ᴜꜱᴇʀꜱ ᴄᴀɴɴᴏᴛ ʀᴏʙ.",
-            "robber_dead": "☠️ ᴅᴇᴀᴅ ᴜꜱᴇʀꜱ ᴄᴀɴɴᴏᴛ ʀᴏʙ.",
             "protected": "🛡️ ᴛʜᴀᴛ ᴜꜱᴇʀ ɪꜱ ᴘʀᴏᴛᴇᴄᴛᴇᴅ.",
             "cooldown": "⏳ ʏᴏᴜ'ʀᴇ ʀᴏʙʙɪɴɢ ᴛᴏᴏ ꜰᴀꜱᴛ.\n<i>ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.</i>",
             "insufficient": "❌ ᴛᴀʀɢᴇᴛ ʜᴀꜱ ɴᴏ ʟɪQᴜɪᴅ ᴇᴅᴏʟʟᴇʀꜱ.",
             "not_available": "❌ ᴛᴀʀɢᴇᴛ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.",
             "transaction_unavailable": "❌ ᴛʀᴀɴꜱᴀᴄᴛɪᴏɴ ꜰᴀɪʟᴇᴅ.",
-        }.get(reason, f"❌ <b>ʀᴏʙ ꜰᴀɪʟᴇᴅ.</b>\n<i>ʀᴇᴀꜱᴏɴ — <code>{reason or 'unknown'}</code></i>"), parse_mode=ParseMode.HTML)
-
-    if not result.get("success"):
-        return await message.reply("🚨 <b>ʀᴏʙ ꜰᴀɪʟᴇᴅ!</b>\n<i>ʏᴏᴜ ɢᴏᴛ ɴᴏᴛʜɪɴɢ.</i>", parse_mode=ParseMode.HTML)
+        }.get(reason, f"❌ <b>ʀᴏʙ ꜰᴀɪʟᴇᴅ.</b>"), parse_mode=ParseMode.HTML)
 
     await message.reply(
         "💸 <b>ʀᴏʙ ꜱᴜᴄᴄᴇꜱꜱ</b>\n\n"
@@ -441,6 +454,8 @@ async def economy_give(_, message):
     target = _reply_target(message)
     if not target:
         return await message.reply("❌ <b>ʀᴇᴘʟʏ ᴛᴏ ʀᴇᴄɪᴘɪᴇɴᴛ.</b>\n<i>ᴜꜱᴀɢᴇ — <code>/give &lt;amount&gt;</code></i>", parse_mode=ParseMode.HTML)
+    if target.is_bot:
+        return await message.reply("🤖 <b>ʏᴏᴜ ᴄᴀɴ'ᴛ ᴛʀᴀɴꜱꜰᴇʀ ᴛᴏ ᴀ ʙᴏᴛ.</b>")
     if len(message.command or []) != 2:
         return await message.reply("❌ <b>ᴜꜱᴀɢᴇ:</b> <code>/give &lt;amount&gt;</code>", parse_mode=ParseMode.HTML)
     try:
@@ -513,6 +528,8 @@ async def economy_check(_, message):
             return await message.reply("❌ <b>ɪɴ ɢʀᴏᴜᴘꜱ ʀᴇᴘʟʏ ᴏɴʟʏ.</b>")
     if not target:
         return await message.reply("❌ <b>ᴛᴀʀɢᴇᴛ ɴᴏᴛ ꜰᴏᴜɴᴅ.</b>")
+    if target.is_bot:
+        return await message.reply("🤖 <b>ʙᴏᴛꜱ ᴄᴀɴɴᴏᴛ ʙᴇ ᴄʜᴇᴄᴋᴇᴅ.</b>")
     if target.id == message.from_user.id:
         return await message.reply("❌ <b>ᴋʜᴜᴅ ᴋᴏ ᴄʜᴇᴄᴋ ɴᴀʜɪ.</b>")
 
@@ -649,10 +666,9 @@ async def economy_addcoins(_, message):
     users_col = db["users"]
     result = await users_col.update_one(
         {"_id": target.id},
-        {"$inc": {"coins": amount}},
+        {"$inc": {"coins": amount}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+        upsert=True,
     )
-    if result.modified_count != 1:
-        return await message.reply("❌ <b>ᴜꜱᴇʀ ɴᴏᴛ ꜰᴏᴜɴᴅ.</b>")
     await message.reply(
         f"✅ <b>ᴀᴅᴅᴇᴅ</b>\n\n"
         f"<blockquote>"
@@ -683,10 +699,10 @@ async def economy_removecoins(_, message):
     users_col = db["users"]
     result = await users_col.update_one(
         {"_id": target.id, "coins": {"$gte": amount}},
-        {"$inc": {"coins": -amount}},
+        {"$inc": {"coins": -amount}, "$set": {"updated_at": datetime.now(timezone.utc)}},
     )
     if result.modified_count != 1:
-        return await message.reply("❌ <b>ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ᴏʀ ᴜꜱᴇʀ ɴᴏᴛ ꜰᴏᴜɴᴅ.</b>")
+        return await message.reply("❌ <b>ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ᴏʀ ɴᴏᴛ ꜰᴏᴜɴᴅ.</b>")
     await message.reply(
         f"✅ <b>ʀᴇᴍᴏᴠᴇᴅ</b>\n\n"
         f"<blockquote>"
@@ -790,6 +806,8 @@ async def economy_gift(_, message):
     target = _reply_target(message)
     if not target:
         return await message.reply("❌ <b>ʀᴇᴘʟʏ ᴛᴏ ʀᴇᴄɪᴘɪᴇɴᴛ.</b>\n<i>ᴜꜱᴀɢᴇ — <code>/gift &lt;item_id&gt;</code></i>", parse_mode=ParseMode.HTML)
+    if target.is_bot:
+        return await message.reply("🤖 <b>ʏᴏᴜ ᴄᴀɴ'ᴛ ɢɪꜰᴛ ᴀ ʙᴏᴛ.</b>")
     if target.id == message.from_user.id:
         return await message.reply("❌ <b>ᴋʜᴜᴅ ᴋᴏ ɢɪꜰᴛ ɴᴀʜɪ.</b>")
     if len(message.command or []) != 2:
