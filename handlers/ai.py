@@ -48,7 +48,8 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     # Economy
     "bal", "balance", "daily", "kill", "rob", "give",
     "wallet", "protect", "check", "toprich", "topkillers",
-    "shop", "buy", "gift", "setemoji", "revive", "open", "close"
+    "shop", "buy", "gift", "setemoji", "revive", "open", "close",
+    "inventory", "setgifttext", "sell", "inv", "items", "cleargifttext",
 
     # Economy admin/shop management
     "shopadd", "shopedit", "shopmedia", "shopremove",
