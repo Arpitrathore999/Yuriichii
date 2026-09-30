@@ -86,6 +86,23 @@ def _shop_collection():
     return economy_shop()
 
 
+def _format_remaining(seconds: int) -> str:
+    """Format seconds → '23ʜ 45ᴍ 12ꜱ'."""
+    if seconds <= 0:
+        return "—"
+    h = seconds // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+    parts = []
+    if h:
+        parts.append(f"{h}ʜ")
+    if m:
+        parts.append(f"{m}ᴍ")
+    if s or not parts:
+        parts.append(f"{s}ꜱ")
+    return " ".join(parts)
+
+
 # ─── Economy Close/Open per GC ────────────────────────────────────────────────
 async def _is_economy_enabled(chat_id):
     if db is None:
@@ -298,7 +315,6 @@ async def economy_kill(_, message):
             parse_mode=ParseMode.HTML,
         )
 
-    # ✅ Protected case
     if reason == "protected":
         return await message.reply(
             "🛡️ <b>ᴠɪᴄᴛɪᴍ ɪꜱ ᴘʀᴏᴛᴇᴄᴛᴇᴅ ʀɪɢʜᴛ ɴᴏᴡ.</b>\n\n"
@@ -310,7 +326,6 @@ async def economy_kill(_, message):
         return await message.reply({
             "self": "❌ ᴋɪʟʟ ʏᴏᴜʀꜱᴇʟꜰ ɴᴀʜɪ ᴋᴀʀ ꜱᴀᴋᴛᴇ.",
             "dead": "☠️ ᴛʜᴀᴛ ᴜꜱᴇʀ ɪꜱ ᴀʟʀᴇᴀᴅʏ ᴅᴇᴀᴅ.",
-            "target_dead": "☠️ ᴛʜᴀᴛ ᴜꜱᴇʀ ɪꜱ ᴀʟʀᴇᴀᴅʏ ᴅᴇᴀᴅ.",
             "killer_dead": "☠️ ᴅᴇᴀᴅ ᴜꜱᴇʀꜱ ᴄᴀɴɴᴏᴛ ᴋɪʟʟ.",
             "killer_unavailable": "❌ ʏᴏᴜʀ ᴋɪʟʟ ꜰᴀɪʟᴇᴅ.",
             "not_available": "❌ ᴛᴀʀɢᴇᴛ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.",
@@ -352,7 +367,10 @@ async def economy_revive(_, message):
         return await message.reply("❌ <b>ᴇᴄᴏɴᴏᴍʏ ᴅᴀᴛᴀʙᴀꜱᴇ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.</b>")
 
     if str(victim_doc.get("status", "alive")).lower() != "dead":
-        return await message.reply(f"❌ {_mention(target.id, _name(target))} ɪꜱ ɴᴏᴛ ᴅᴇᴀᴅ.", parse_mode=ParseMode.HTML)
+        return await message.reply(
+            f"❌ {_mention(target.id, _name(target))} ɪꜱ ɴᴏᴛ ᴅᴇᴀᴅ.",
+            parse_mode=ParseMode.HTML,
+        )
 
     if not is_self:
         if str(reviver.get("status", "alive")).lower() != "alive":
@@ -430,7 +448,6 @@ async def economy_rob(_, message):
             parse_mode=ParseMode.HTML,
         )
 
-    # ✅ Protected case
     if reason == "protected":
         return await message.reply(
             "🛡️ <b>ᴠɪᴄᴛɪᴍ ɪꜱ ᴘʀᴏᴛᴇᴄᴛᴇᴅ ʀɪɢʜᴛ ɴᴏᴡ.</b>\n\n"
@@ -445,7 +462,7 @@ async def economy_rob(_, message):
             "insufficient": "❌ ᴛᴀʀɢᴇᴛ ʜᴀꜱ ɴᴏ ʟɪQᴜɪᴅ ᴇᴅᴏʟʟᴇʀꜱ.",
             "not_available": "❌ ᴛᴀʀɢᴇᴛ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.",
             "transaction_unavailable": "❌ ᴛʀᴀɴꜱᴀᴄᴛɪᴏɴ ꜰᴀɪʟᴇᴅ.",
-        }.get(reason, f"❌ <b>ʀᴏʙ ꜰᴀɪʟᴇᴅ.</b>"), parse_mode=ParseMode.HTML)
+        }.get(reason, "❌ <b>ʀᴏʙ ꜰᴀɪʟᴇᴅ.</b>"), parse_mode=ParseMode.HTML)
 
     await message.reply(
         "💸 <b>ʀᴏʙ ꜱᴜᴄᴄᴇꜱꜱ</b>\n\n"
@@ -512,7 +529,6 @@ async def economy_give(_, message):
     if not target:
         return await message.reply("❌ <b>ʀᴇᴘʟʏ ᴛᴏ ʀᴇᴄɪᴘɪᴇɴᴛ.</b>\n<i>ᴜꜱᴀɢᴇ — <code>/give &lt;amount&gt;</code></i>", parse_mode=ParseMode.HTML)
 
-    # ✅ Bot check — sirf Elara ko allow
     if target.is_bot and int(target.id) != ELARA_BOT_ID:
         return await message.reply(
             "🤖 <b>ʏᴏᴜ ᴄᴀɴ'ᴛ ᴛʀᴀɴꜱꜰᴇʀ ᴛᴏ ᴀ ʙᴏᴛ.</b>",
@@ -603,43 +619,28 @@ async def economy_check(_, message):
         return await message.reply("❌ <b>ᴄʜᴇᴄᴋ ꜰᴀɪʟᴇᴅ.</b>")
 
     doc = result["target"]
-protected = "🟢 ᴀᴄᴛɪᴠᴇ" if result["protected"] else "🔴 ɪɴᴀᴄᴛɪᴠᴇ"
+    protected = "🟢 ᴀᴄᴛɪᴠᴇ" if result["protected"] else "🔴 ɪɴᴀᴄᴛɪᴠᴇ"
 
-# ✅ Protection remaining time format
-protection_line = ""
-if result["protected"]:
-    secs = int(result.get("protection_remaining", 0))
-    if secs > 0:
-        h = secs // 3600
-        m = (secs % 3600) // 60
-        s = secs % 60
-        parts = []
-        if h:
-            parts.append(f"{h}ʜ")
-        if m:
-            parts.append(f"{m}ᴍ")
-        if s or not parts:
-            parts.append(f"{s}ꜱ")
-        time_str = " ".join(parts)
-        protection_line = f"\n⏳ <b>ᴇxᴘɪʀᴇꜱ ɪɴ</b> — <code>{time_str}</code>"
-    else:
-        protection_line = "\n⏳ <b>ᴇxᴘɪʀᴇꜱ</b> — <code>—</code>"
+    protection_line = ""
+    if result["protected"]:
+        secs = int(result.get("protection_remaining", 0))
+        if secs > 0:
+            protection_line = f"\n⏳ <b>ᴇxᴘɪʀᴇꜱ ɪɴ</b> — <code>{_format_remaining(secs)}</code>"
 
-details = (
-    f"🔎 <b>ᴄʜᴇᴄᴋ — {_esc(_name(target))}</b>\n\n"
-    f"<blockquote>"
-    f"👤 <b>ᴜꜱᴇʀ</b> — {_mention(target.id, _name(target))}\n"
-    f"💰 <b>ᴇᴅᴏʟʟᴇʀꜱ</b> — <code>{int(doc.get('coins', 0))}</code> $\n"
-    f"🔐 <b>ᴡᴀʟʟᴇᴛ</b> — <code>{int(doc.get('wallet', 0))}</code> $\n"
-    f"💠 <b>ʟᴇᴠᴇʟ</b> — <code>{int(doc.get('level', 1))}</code>\n"
-    f"⚔️ <b>ᴋɪʟʟꜱ</b> — <code>{int(doc.get('kills', 0))}</code>\n"
-    f"🔓 <b>ꜱᴛᴀᴛᴜꜱ</b> — {_esc(doc.get('status', 'alive')).upper()}\n"
-    f"🛡️ <b>ᴘʀᴏᴛᴇᴄᴛɪᴏɴ</b> — {protected}"
-    f"{protection_line}"
-    f"</blockquote>"
-)
-   
-try:
+    details = (
+        f"🔎 <b>ᴄʜᴇᴄᴋ — {_esc(_name(target))}</b>\n\n"
+        f"<blockquote>"
+        f"👤 <b>ᴜꜱᴇʀ</b> — {_mention(target.id, _name(target))}\n"
+        f"💰 <b>ᴇᴅᴏʟʟᴇʀꜱ</b> — <code>{int(doc.get('coins', 0))}</code> $\n"
+        f"🔐 <b>ᴡᴀʟʟᴇᴛ</b> — <code>{int(doc.get('wallet', 0))}</code> $\n"
+        f"💠 <b>ʟᴇᴠᴇʟ</b> — <code>{int(doc.get('level', 1))}</code>\n"
+        f"⚔️ <b>ᴋɪʟʟꜱ</b> — <code>{int(doc.get('kills', 0))}</code>\n"
+        f"🔓 <b>ꜱᴛᴀᴛᴜꜱ</b> — {_esc(doc.get('status', 'alive')).upper()}\n"
+        f"🛡️ <b>ᴘʀᴏᴛᴇᴄᴛɪᴏɴ</b> — {protected}"
+        f"{protection_line}"
+        f"</blockquote>"
+    )
+    try:
         await app.send_message(message.from_user.id, details, parse_mode=ParseMode.HTML)
         if message.chat.type != ChatType.PRIVATE:
             return await message.reply(
@@ -888,7 +889,6 @@ async def economy_buy(_, message):
                     await session.abort_transaction()
                     return await message.reply("❌ <b>ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ.</b>")
 
-                # ✅ Shop ka paisa Elara ko
                 await ucol.update_one(
                     {"_id": ELARA_BOT_ID},
                     {"$inc": {"coins": price}, "$set": {"updated_at": datetime.now(timezone.utc)}},
@@ -1079,7 +1079,6 @@ async def economy_gift(_, message):
                     await session.abort_transaction()
                     return await message.reply("❌ <b>ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ.</b>")
 
-                # ✅ Tax Elara ko
                 await ucol.update_one(
                     {"_id": ELARA_BOT_ID},
                     {"$inc": {"coins": price}, "$set": {"updated_at": datetime.now(timezone.utc)}},
