@@ -3,25 +3,9 @@ from .mongo import users
 
 
 async def ensure_user(user):
-    """Create/update a user record. Returns False when DB is unavailable."""
-    col = users()
-    if col is None or not user:
-        return False
-    await col.update_one(
-        {"_id": int(user.id)},
-        {"$setOnInsert": {
-            "_id": int(user.id),
-            "joined_at": datetime.now(timezone.utc),
-            "warnings": 0,
-            "banned": False,
-        }, "$set": {
-            "username": user.username or "",
-            "first_name": user.first_name or "",
-            "last_seen": datetime.now(timezone.utc),
-        }},
-        upsert=True,
-    )
-    return True
+    """Create/update a user while preserving existing economy values."""
+    from core.database import ensure_user as _economy_ensure_user
+    return bool(await _economy_ensure_user(user))
 
 
 async def is_user_banned(user_id: int) -> bool:
