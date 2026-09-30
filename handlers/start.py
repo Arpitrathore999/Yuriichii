@@ -1,12 +1,13 @@
 # --------------------------------------------------------------------------------
 #  Elara AI Bot © 2026
-#  handlers/start.py — Rich HTML + Tables + 3 Prefixes
+#  handlers/start.py — Rich HTML + Tables + 3 Prefixes + Local Assets
 # --------------------------------------------------------------------------------
 
 PREFIXES = ["/", "!", "."]
 
 import asyncio
 import json
+import os
 from urllib.request import Request, urlopen
 
 from pyrogram import enums, filters
@@ -68,6 +69,7 @@ def _esc(v):
     return str(v or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 def _pick_image():
+    """Return local file path, file_id, or URL."""
     if not START_IMAGE_URL:
         return None
     parts = [u.strip() for u in START_IMAGE_URL.split(",") if u.strip()]
@@ -289,7 +291,7 @@ def _rich_management() -> str:
 
 <table>
 <tr><th>ᴄᴀᴛᴇɢᴏʀʏ</th><th>ᴋᴀᴀᴍ</th></tr>
-<tr><td>👑 <b>ᴀᴅᴍɪɴ</b></td><td>ᴘʀᴏᴍᴏᴛᴇ, ᴅᴇᴍᴏᴛᴇ, ᴀᴅᴍɪɴ ᴘᴀɴᴇʟ</td></tr>
+<tr><td>👑 <b>ᴀᴅᴍɪɴ</b></td><td>ᴘʀᴏᴍᴏᴛᴇ, ᴅᴇᴍᴏᴛᴇ, ᴀᴅᴍɪɴ ʟɪꜱᴛ</td></tr>
 <tr><td>🔨 <b>ʙᴀɴꜱ</b></td><td>ʙᴀɴ, ᴍᴜᴛᴇ, ᴋɪᴄᴋ</td></tr>
 <tr><td>🔎 <b>ꜰɪʟᴛᴇʀꜱ</b></td><td>ᴀᴜᴛᴏ ʀᴇᴘʟʏ ᴛʀɪɢɢᴇʀꜱ</td></tr>
 <tr><td>👋 <b>ɢʀᴇᴇᴛɪɴɢꜱ</b></td><td>ᴡᴇʟᴄᴏᴍᴇ & ɢᴏᴏᴅʙʏᴇ</td></tr>
@@ -617,12 +619,31 @@ def _kb_to_dict(kb):
 async def _send_rich(chat_id, html, kb, image=None):
     if image:
         try:
-            req = Request(image, headers={"User-Agent": "Mozilla/5.0"})
-            def _download():
-                with urlopen(req, timeout=20) as r:
-                    return r.read()
-            image_bytes = await asyncio.to_thread(_download)
-            await bot.send_photo(chat_id, photo=image_bytes)
+            # ✅ 1. Local file path (assets folder)
+            if not str(image).startswith(("http://", "https://")) and len(str(image)) < 200:
+                if os.path.exists(image):
+                    await bot.send_photo(chat_id, photo=image)
+                else:
+                    # Try relative to /app
+                    alt = os.path.join(os.getcwd(), image)
+                    if os.path.exists(alt):
+                        await bot.send_photo(chat_id, photo=alt)
+                    else:
+                        print(f"[start-image] file not found: {image}")
+
+            # ✅ 2. URL — download and send
+            elif str(image).startswith(("http://", "https://")):
+                req = Request(image, headers={"User-Agent": "Mozilla/5.0"})
+                def _download():
+                    with urlopen(req, timeout=20) as r:
+                        return r.read()
+                image_bytes = await asyncio.to_thread(_download)
+                await bot.send_photo(chat_id, photo=image_bytes)
+
+            # ✅ 3. Telegram file_id
+            else:
+                await bot.send_photo(chat_id, photo=image)
+
         except Exception as e:
             print(f"[start-image] failed: {e}")
 
