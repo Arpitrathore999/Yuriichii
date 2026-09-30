@@ -52,7 +52,7 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
 
     # Economy admin/shop management
     "shopadd", "shopedit", "shopmedia", "shopremove",
-    "shopstock", "shoptoggle", "shopgift", "addcoin", "removecoin",
+    "shopstock", "shoptoggle", "shopgift", "addcoins", "removecoins",
 ]
 
 
