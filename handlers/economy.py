@@ -638,7 +638,8 @@ details = (
     f"{protection_line}"
     f"</blockquote>"
 )
-    try:
+   
+try:
         await app.send_message(message.from_user.id, details, parse_mode=ParseMode.HTML)
         if message.chat.type != ChatType.PRIVATE:
             return await message.reply(
