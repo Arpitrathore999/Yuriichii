@@ -603,19 +603,41 @@ async def economy_check(_, message):
         return await message.reply("❌ <b>ᴄʜᴇᴄᴋ ꜰᴀɪʟᴇᴅ.</b>")
 
     doc = result["target"]
-    protected = "🟢 ᴀᴄᴛɪᴠᴇ" if result["protected"] else "🔴 ɪɴᴀᴄᴛɪᴠᴇ"
-    details = (
-        f"🔎 <b>ᴄʜᴇᴄᴋ — {_esc(_name(target))}</b>\n\n"
-        f"<blockquote>"
-        f"👤 <b>ᴜꜱᴇʀ</b> — {_mention(target.id, _name(target))}\n"
-        f"💰 <b>ᴇᴅᴏʟʟᴇʀꜱ</b> — <code>{int(doc.get('coins', 0))}</code> $\n"
-        f"🔐 <b>ᴡᴀʟʟᴇᴛ</b> — <code>{int(doc.get('wallet', 0))}</code> $\n"
-        f"💠 <b>ʟᴇᴠᴇʟ</b> — <code>{int(doc.get('level', 1))}</code>\n"
-        f"⚔️ <b>ᴋɪʟʟꜱ</b> — <code>{int(doc.get('kills', 0))}</code>\n"
-        f"🔓 <b>ꜱᴛᴀᴛᴜꜱ</b> — {_esc(doc.get('status', 'alive')).upper()}\n"
-        f"🛡️ <b>ᴘʀᴏᴛᴇᴄᴛɪᴏɴ</b> — {protected}"
-        f"</blockquote>"
-    )
+protected = "🟢 ᴀᴄᴛɪᴠᴇ" if result["protected"] else "🔴 ɪɴᴀᴄᴛɪᴠᴇ"
+
+# ✅ Protection remaining time format
+protection_line = ""
+if result["protected"]:
+    secs = int(result.get("protection_remaining", 0))
+    if secs > 0:
+        h = secs // 3600
+        m = (secs % 3600) // 60
+        s = secs % 60
+        parts = []
+        if h:
+            parts.append(f"{h}ʜ")
+        if m:
+            parts.append(f"{m}ᴍ")
+        if s or not parts:
+            parts.append(f"{s}ꜱ")
+        time_str = " ".join(parts)
+        protection_line = f"\n⏳ <b>ᴇxᴘɪʀᴇꜱ ɪɴ</b> — <code>{time_str}</code>"
+    else:
+        protection_line = "\n⏳ <b>ᴇxᴘɪʀᴇꜱ</b> — <code>—</code>"
+
+details = (
+    f"🔎 <b>ᴄʜᴇᴄᴋ — {_esc(_name(target))}</b>\n\n"
+    f"<blockquote>"
+    f"👤 <b>ᴜꜱᴇʀ</b> — {_mention(target.id, _name(target))}\n"
+    f"💰 <b>ᴇᴅᴏʟʟᴇʀꜱ</b> — <code>{int(doc.get('coins', 0))}</code> $\n"
+    f"🔐 <b>ᴡᴀʟʟᴇᴛ</b> — <code>{int(doc.get('wallet', 0))}</code> $\n"
+    f"💠 <b>ʟᴇᴠᴇʟ</b> — <code>{int(doc.get('level', 1))}</code>\n"
+    f"⚔️ <b>ᴋɪʟʟꜱ</b> — <code>{int(doc.get('kills', 0))}</code>\n"
+    f"🔓 <b>ꜱᴛᴀᴛᴜꜱ</b> — {_esc(doc.get('status', 'alive')).upper()}\n"
+    f"🛡️ <b>ᴘʀᴏᴛᴇᴄᴛɪᴏɴ</b> — {protected}"
+    f"{protection_line}"
+    f"</blockquote>"
+)
     try:
         await app.send_message(message.from_user.id, details, parse_mode=ParseMode.HTML)
         if message.chat.type != ChatType.PRIVATE:
