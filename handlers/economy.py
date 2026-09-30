@@ -1,11 +1,10 @@
 """Telegram handlers for the isolated economy system. (Premium UI + Elara Special)"""
-from pyrogram import StopPropagation
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from html import escape
 
-from pyrogram import filters
+from pyrogram import filters, StopPropagation
 from pyrogram.enums import ChatMemberStatus, ChatType, ParseMode
 from pyrogram.errors import RPCError
 
@@ -126,7 +125,8 @@ async def economy_close(_, message):
 
     await message.reply(
         "🔒 <b>ᴇᴄᴏɴᴏᴍʏ ᴄʟᴏꜱᴇᴅ</b>\n\n"
-        "<i>ᴀʟʟ ᴇᴄᴏɴᴏᴍʏ ᴄᴏᴍᴍᴀɴᴅꜱ ᴀʀᴇ ɴᴏᴡ ᴅɪꜱᴀʙʟᴇᴅ ɪɴ ᴛʜɪꜱ ɢʀᴏᴜᴘ.</i>",
+        "<i>ᴀʟʟ ᴇᴄᴏɴᴏᴍʏ ᴄᴏᴍᴍᴀɴᴅꜱ ᴀʀᴇ ɴᴏᴡ ᴅɪꜱᴀʙʟᴇᴅ ɪɴ ᴛʜɪꜱ ɢʀᴏᴜᴘ.</i>\n\n"
+        "🔄 <b>ꜰᴏʀ ʀᴇᴏᴘᴇɴɪɴɢ :</b> <code>/open</code>",
         parse_mode=ParseMode.HTML,
     )
 
@@ -292,26 +292,25 @@ async def economy_kill(_, message):
     result = await kill_user(message.from_user.id, target.id)
     reason = result.get("reason")
 
-    # ✅ Elara kill roast
     if reason == "elara_kill_roast":
         return await message.reply(
             f"😎 <b>{result.get('roast', 'Nice try.')}</b>",
             parse_mode=ParseMode.HTML,
         )
-        # ✅ Protected case
-if reason == "protected":
-    return await message.reply(
-        "🛡️ <b>ᴠɪᴄᴛɪᴍ ɪꜱ ᴘʀᴏᴛᴇᴄᴛᴇᴅ ʀɪɢʜᴛ ɴᴏᴡ.</b>\n\n"
-        "🔒 <b>ᴄʜᴇᴄᴋ ᴘʀᴏᴛᴇᴄᴛɪᴏɴ ᴛɪᴍᴇ :</b> <code>/check</code> <i>(reply)</i>",
-        parse_mode=ParseMode.HTML,
-    )
+
+    # ✅ Protected case
+    if reason == "protected":
+        return await message.reply(
+            "🛡️ <b>ᴠɪᴄᴛɪᴍ ɪꜱ ᴘʀᴏᴛᴇᴄᴛᴇᴅ ʀɪɢʜᴛ ɴᴏᴡ.</b>\n\n"
+            "🔒 <b>ᴄʜᴇᴄᴋ ᴘʀᴏᴛᴇᴄᴛɪᴏɴ ᴛɪᴍᴇ :</b> <code>/check</code> <i>(reply)</i>",
+            parse_mode=ParseMode.HTML,
+        )
 
     if not result["ok"]:
         return await message.reply({
             "self": "❌ ᴋɪʟʟ ʏᴏᴜʀꜱᴇʟꜰ ɴᴀʜɪ ᴋᴀʀ ꜱᴀᴋᴛᴇ.",
             "dead": "☠️ ᴛʜᴀᴛ ᴜꜱᴇʀ ɪꜱ ᴀʟʀᴇᴀᴅʏ ᴅᴇᴀᴅ.",
             "target_dead": "☠️ ᴛʜᴀᴛ ᴜꜱᴇʀ ɪꜱ ᴀʟʀᴇᴀᴅʏ ᴅᴇᴀᴅ.",
-            "protected": "🛡️ ᴛʜᴀᴛ ᴜꜱᴇʀ ɪꜱ ᴘʀᴏᴛᴇᴄᴛᴇᴅ.",
             "killer_dead": "☠️ ᴅᴇᴀᴅ ᴜꜱᴇʀꜱ ᴄᴀɴɴᴏᴛ ᴋɪʟʟ.",
             "killer_unavailable": "❌ ʏᴏᴜʀ ᴋɪʟʟ ꜰᴀɪʟᴇᴅ.",
             "not_available": "❌ ᴛᴀʀɢᴇᴛ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.",
@@ -430,18 +429,18 @@ async def economy_rob(_, message):
             f"😎 <b>{result.get('roast', 'Nice try.')}</b>",
             parse_mode=ParseMode.HTML,
         )
-        # ✅ Protected case
-if reason == "protected":
-    return await message.reply(
-        "🛡️ <b>ᴠɪᴄᴛɪᴍ ɪꜱ ᴘʀᴏᴛᴇᴄᴛᴇᴅ ʀɪɢʜᴛ ɴᴏᴡ.</b>\n\n"
-        "🔒 <b>ᴄʜᴇᴄᴋ ᴘʀᴏᴛᴇᴄᴛɪᴏɴ ᴛɪᴍᴇ :</b> <code>/check</code> <i>(reply)</i>",
-        parse_mode=ParseMode.HTML,
-    )
+
+    # ✅ Protected case
+    if reason == "protected":
+        return await message.reply(
+            "🛡️ <b>ᴠɪᴄᴛɪᴍ ɪꜱ ᴘʀᴏᴛᴇᴄᴛᴇᴅ ʀɪɢʜᴛ ɴᴏᴡ.</b>\n\n"
+            "🔒 <b>ᴄʜᴇᴄᴋ ᴘʀᴏᴛᴇᴄᴛɪᴏɴ ᴛɪᴍᴇ :</b> <code>/check</code> <i>(reply)</i>",
+            parse_mode=ParseMode.HTML,
+        )
 
     if not result.get("ok"):
         return await message.reply({
             "self": "❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ʀᴏʙ ʏᴏᴜʀꜱᴇʟꜰ.",
-            "protected": "🛡️ ᴛʜᴀᴛ ᴜꜱᴇʀ ɪꜱ ᴘʀᴏᴛᴇᴄᴛᴇᴅ.",
             "cooldown": "⏳ ʏᴏᴜ'ʀᴇ ʀᴏʙʙɪɴɢ ᴛᴏᴏ ꜰᴀꜱᴛ.\n<i>ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.</i>",
             "insufficient": "❌ ᴛᴀʀɢᴇᴛ ʜᴀꜱ ɴᴏ ʟɪQᴜɪᴅ ᴇᴅᴏʟʟᴇʀꜱ.",
             "not_available": "❌ ᴛᴀʀɢᴇᴛ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.",
@@ -514,12 +513,11 @@ async def economy_give(_, message):
         return await message.reply("❌ <b>ʀᴇᴘʟʏ ᴛᴏ ʀᴇᴄɪᴘɪᴇɴᴛ.</b>\n<i>ᴜꜱᴀɢᴇ — <code>/give &lt;amount&gt;</code></i>", parse_mode=ParseMode.HTML)
 
     # ✅ Bot check — sirf Elara ko allow
-    if target.is_bot:
-        if int(target.id) != ELARA_BOT_ID:
-            return await message.reply(
-                "🤖 <b>ʏᴏᴜ ᴄᴀɴ'ᴛ ᴛʀᴀɴꜱꜰᴇʀ ᴛᴏ ᴀ ʙᴏᴛ.</b>",
-                parse_mode=ParseMode.HTML,
-            )
+    if target.is_bot and int(target.id) != ELARA_BOT_ID:
+        return await message.reply(
+            "🤖 <b>ʏᴏᴜ ᴄᴀɴ'ᴛ ᴛʀᴀɴꜱꜰᴇʀ ᴛᴏ ᴀ ʙᴏᴛ.</b>",
+            parse_mode=ParseMode.HTML,
+        )
 
     if len(message.command or []) != 2:
         return await message.reply("❌ <b>ᴜꜱᴀɢᴇ:</b> <code>/give &lt;amount&gt;</code>", parse_mode=ParseMode.HTML)
@@ -619,19 +617,19 @@ async def economy_check(_, message):
         f"</blockquote>"
     )
     try:
-    await app.send_message(message.from_user.id, details, parse_mode=ParseMode.HTML)
-    if message.chat.type != ChatType.PRIVATE:
+        await app.send_message(message.from_user.id, details, parse_mode=ParseMode.HTML)
+        if message.chat.type != ChatType.PRIVATE:
+            return await message.reply(
+                "🔎 <b>ᴄʜᴇᴄᴋ ᴅᴇᴛᴀɪʟꜱ ꜱᴇɴᴛ ɪɴ ᴅᴍ.</b>\n\n"
+                f"<blockquote>💰 <b>ᴄʜᴀʀɢᴇᴅ</b> — <code>500</code> $</blockquote>",
+                parse_mode=ParseMode.HTML,
+            )
+    except Exception:
         return await message.reply(
-            "🔎 <b>ᴄʜᴇᴄᴋ ᴅᴇᴛᴀɪʟꜱ ꜱᴇɴᴛ ɪɴ ᴅᴍ.</b>\n\n"
-            f"<blockquote>💰 <b>ᴄʜᴀʀɢᴇᴅ</b> — <code>500</code> $</blockquote>",
+            "❌ <b>ᴅᴍ ɴᴀʜɪ ʙʜᴇᴊ ꜱᴀᴋᴀ.</b>\n"
+            "<i>ᴘʟᴇᴀꜱᴇ ꜱᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ ɪɴ ᴅᴍ ꜰɪʀꜱᴛ.</i>",
             parse_mode=ParseMode.HTML,
         )
-except Exception:
-    return await message.reply(
-        "❌ <b>ᴅᴍ ɴᴀʜɪ ʙʜᴇᴊ ꜱᴀᴋᴀ.</b>\n"
-        "<i>ᴘʟᴇᴀꜱᴇ ꜱᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ ɪɴ ᴅᴍ ꜰɪʀꜱᴛ.</i>",
-        parse_mode=ParseMode.HTML,
-    )
 
 
 # ─── Set Custom Emoji ─────────────────────────────────────────────────────────
@@ -671,7 +669,6 @@ async def economy_setemoji(_, message):
     if result.modified_count != 1:
         return await message.reply("❌ <b>ꜰᴀɪʟᴇᴅ ᴛᴏ ꜱᴇᴛ ᴇᴍᴏᴊɪ.</b>")
 
-    # ✅ Fee Elara ko
     await users_col.update_one(
         {"_id": ELARA_BOT_ID},
         {"$inc": {"coins": SET_EMOJI_FEE}, "$set": {"updated_at": datetime.now(timezone.utc)}},
@@ -743,7 +740,7 @@ async def economy_addcoins(_, message):
     if db is None:
         return await message.reply("❌ <b>ᴅᴀᴛᴀʙᴀꜱᴇ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.</b>")
     users_col = db["users"]
-    result = await users_col.update_one(
+    await users_col.update_one(
         {"_id": target.id},
         {"$inc": {"coins": amount}, "$set": {"updated_at": datetime.now(timezone.utc)}},
         upsert=True,
@@ -896,11 +893,9 @@ async def economy_buy(_, message):
 @app.on_message(filters.command(["inventory", "inv", "items"], prefixes=PREFIXES))
 async def economy_inventory(_, message):
     await _ensure_from_message(message)
-
     target = message.from_user
     if message.reply_to_message and message.reply_to_message.from_user:
         target = message.reply_to_message.from_user
-
     if not target:
         return await message.reply("❌ <b>ɪɴᴠᴀʟɪᴅ ᴜꜱᴇʀ.</b>")
     if db is None:
@@ -918,7 +913,6 @@ async def economy_inventory(_, message):
 
     shop_col = _shop_collection()
     lines = [f"🎒 <b>ɪɴᴠᴇɴᴛᴏʀʏ — {_esc(_name(target))}</b>\n"]
-
     for doc in docs:
         item_id = doc.get("item_id", "?")
         name = doc.get("name", item_id)
@@ -932,10 +926,7 @@ async def economy_inventory(_, message):
             f"{emoji} <b>{_esc(name)}</b>\n"
             f"   🆔 <code>{_esc(item_id)}</code>  |  📦 <code>×{qty}</code>"
         )
-
-    lines.append(
-        "\n<blockquote><i>ᴜꜱᴇ <code>/sell &lt;item_id&gt;</code> ᴛᴏ ꜱᴇʟʟ ʙᴀᴄᴋ.</i></blockquote>"
-    )
+    lines.append("\n<blockquote><i>ᴜꜱᴇ <code>/sell &lt;item_id&gt;</code> ᴛᴏ ꜱᴇʟʟ ʙᴀᴄᴋ.</i></blockquote>")
     await message.reply("\n\n".join(lines), parse_mode=ParseMode.HTML)
 
 
@@ -1017,14 +1008,12 @@ async def economy_gift(_, message):
         return await message.reply("❌ <b>ᴅᴀᴛᴀʙᴀꜱᴇ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.</b>")
 
     item = await col.find_one({"item_id": query, "enabled": True, "gift": True})
-
     if not item and query.isdigit():
         idx = int(query) - 1
         if idx >= 0:
             all_items = await col.find({"enabled": True, "gift": True}).sort("item_id", 1).to_list(length=100)
             if idx < len(all_items):
                 item = all_items[idx]
-
     if not item:
         all_items = await col.find({"enabled": True, "gift": True}).to_list(length=100)
         q_lower = query.lower()
@@ -1107,7 +1096,6 @@ async def economy_gift(_, message):
             if key in item_lower:
                 emoji = e
                 break
-
         gift_caption = (
             f"<b>{_esc(sender_name)}</b> ɢɪꜰᴛᴇᴅ "
             f"{emoji} <b>{_esc(item_display)}</b> "
