@@ -81,6 +81,11 @@ async def _is_owner(message):
     return bool(message.from_user and int(message.from_user.id) == OWNER_ID)
 
 
+def _shop_collection():
+    from database.mongo import economy_shop
+    return economy_shop()
+
+
 # ─── Economy Close/Open per GC ────────────────────────────────────────────────
 async def _is_economy_enabled(chat_id):
     if db is None:
@@ -153,6 +158,7 @@ ECONOMY_COMMANDS = {
     "bal", "balance", "daily", "kill", "revive", "rob",
     "wallet", "give", "protect", "check", "setemoji",
     "toprich", "topkillers", "shop", "buy", "gift",
+    "inventory", "inv", "items", "sell",
 }
 
 
@@ -186,6 +192,13 @@ async def _profile_text(user):
     coin_rank = await get_coin_rank(user.id)
     kill_rank = await get_kill_rank(user.id)
 
+    inv_count = 0
+    if db is not None:
+        try:
+            inv_count = await db["economy_inventory"].count_documents({"user_id": user.id})
+        except Exception:
+            inv_count = 0
+
     level = int(doc.get("level", 1))
     xp = int(doc.get("xp", 0))
     required = level * 1000
@@ -200,6 +213,7 @@ async def _profile_text(user):
         f"<blockquote>"
         f"💰 <b>ᴇᴅᴏʟʟᴇʀꜱ</b> — <code>{int(doc.get('coins', 0))}</code> $\n"
         f"🏆 <b>ɢʟᴏʙᴀʟ ʀᴀɴᴋ</b> — <code>#{coin_rank or '—'}</code>\n"
+        f"🎒 <b>ɪɴᴠᴇɴᴛᴏʀʏ</b> — <code>{inv_count}</code> ɪᴛᴇᴍꜱ\n"
         f"🔓 <b>ꜱᴛᴀᴛᴜꜱ</b> — {status_icon}\n"
         f"⚔️ <b>ᴋɪʟʟꜱ</b> — <code>{int(doc.get('kills', 0))}</code> (#{kill_rank or '—'})\n"
         f"💠 <b>ʟᴇᴠᴇʟ</b> — <code>{level}</code> • <code>{xp}/{required}</code> xᴘ"
@@ -225,7 +239,6 @@ async def economy_balance(_, message):
     if not target:
         return await message.reply("❌ <b>ɪɴᴠᴀʟɪᴅ ᴜꜱᴇʀ.</b>")
 
-    # ✅ Bot check
     if target.is_bot:
         if int(target.id) == ELARA_BOT_ID:
             await ensure_user(target)
@@ -272,11 +285,17 @@ async def economy_kill(_, message):
     target = _reply_target(message)
     if not target:
         return await message.reply("❌ <b>ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜꜱᴇʀ ᴛᴏ ᴜꜱᴇ /kill.</b>")
-    if target.is_bot:
-        return await message.reply("🤖 <b>ʏᴏᴜ ᴄᴀɴ'ᴛ ᴋɪʟʟ ᴀ ʙᴏᴛ.</b>")
 
     result = await kill_user(message.from_user.id, target.id)
     reason = result.get("reason")
+
+    # ✅ Elara kill roast
+    if reason == "elara_kill_roast":
+        return await message.reply(
+            f"😎 <b>{result.get('roast', 'Nice try.')}</b>",
+            parse_mode=ParseMode.HTML,
+        )
+
     if not result["ok"]:
         return await message.reply({
             "self": "❌ ᴋɪʟʟ ʏᴏᴜʀꜱᴇʟꜰ ɴᴀʜɪ ᴋᴀʀ ꜱᴀᴋᴛᴇ.",
@@ -284,11 +303,10 @@ async def economy_kill(_, message):
             "target_dead": "☠️ ᴛʜᴀᴛ ᴜꜱᴇʀ ɪꜱ ᴀʟʀᴇᴀᴅʏ ᴅᴇᴀᴅ.",
             "protected": "🛡️ ᴛʜᴀᴛ ᴜꜱᴇʀ ɪꜱ ᴘʀᴏᴛᴇᴄᴛᴇᴅ.",
             "killer_dead": "☠️ ᴅᴇᴀᴅ ᴜꜱᴇʀꜱ ᴄᴀɴɴᴏᴛ ᴋɪʟʟ.",
-            "robber_dead": "☠️ ᴅᴇᴀᴅ ᴜꜱᴇʀꜱ ᴄᴀɴɴᴏᴛ ᴋɪʟʟ.",
-            "killer_unavailable": "❌ ʏᴏᴜʀ ᴋɪʟʟ ᴄᴏᴜʟᴅ ɴᴏᴛ ʙᴇ ᴄᴏᴍᴘʟᴇᴛᴇᴅ ꜱᴀꜰᴇʟʏ.",
-            "not_available": "❌ ᴛᴀʀɢᴇᴛ ᴀʟʀᴇᴀᴅʏ ᴘʀᴏᴄᴇꜱꜱᴇᴅ.",
+            "killer_unavailable": "❌ ʏᴏᴜʀ ᴋɪʟʟ ꜰᴀɪʟᴇᴅ.",
+            "not_available": "❌ ᴛᴀʀɢᴇᴛ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.",
             "transaction_unavailable": "❌ ᴛʀᴀɴꜱᴀᴄᴛɪᴏɴ ꜰᴀɪʟᴇᴅ.",
-        }.get(reason, f"❌ <b>ᴋɪʟʟ ꜰᴀɪʟᴇᴅ.</b>"), parse_mode=ParseMode.HTML)
+        }.get(reason, "❌ <b>ᴋɪʟʟ ꜰᴀɪʟᴇᴅ.</b>"), parse_mode=ParseMode.HTML)
 
     level_info = result.get("level", {})
     level_note = f"\n💠 <b>ʟᴇᴠᴇʟ ᴜᴘ</b> — <code>{level_info['level']}</code>" if level_info.get("levels") else ""
@@ -326,7 +344,7 @@ async def economy_revive(_, message):
         return await message.reply(f"❌ {_mention(target.id, _name(target))} ɪꜱ ɴᴏᴛ ᴅᴇᴀᴅ.")
 
     if str(reviver.get("status", "alive")).lower() != "alive":
-        return await message.reply("☠️ <b>ᴅᴇᴀᴅ ᴜꜱᴇʀꜱ ᴄᴀɴɴᴏᴛ ʀᴇᴠɪᴠᴇ ᴏᴛʜᴇʀꜱ.</b>")
+        return await message.reply("☠️ <b>ᴅᴇᴀᴅ ᴜꜱᴇʀꜱ ᴄᴀɴɴᴏᴛ ʀᴇᴠɪᴠᴇ.</b>")
 
     if int(reviver.get("coins", 0)) < REVIVE_FEE:
         return await message.reply(
@@ -350,6 +368,14 @@ async def economy_revive(_, message):
         {"_id": target.id},
         {"$set": {"status": "alive"}},
     )
+
+    # ✅ Revive fee Elara ko
+    await users_col.update_one(
+        {"_id": ELARA_BOT_ID},
+        {"$inc": {"coins": REVIVE_FEE}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+
     new_balance = int(reviver.get("coins", 0)) - REVIVE_FEE
 
     await message.reply(
@@ -372,10 +398,18 @@ async def economy_rob(_, message):
     if not target:
         return await message.reply("❌ <b>ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜꜱᴇʀ ᴛᴏ ᴜꜱᴇ /rob.</b>")
 
-    result = await rob_user(message.from_user.id, target.id)
+    requested = None
+    if len(message.command or []) == 2:
+        try:
+            requested = int(message.command[1])
+            if requested <= 0:
+                requested = None
+        except ValueError:
+            requested = None
+
+    result = await rob_user(message.from_user.id, target.id, requested)
     reason = result.get("reason")
 
-    # ✅ Elara roast case
     if reason == "elara_roast":
         return await message.reply(
             f"😎 <b>{result.get('roast', 'Nice try.')}</b>",
@@ -396,7 +430,9 @@ async def economy_rob(_, message):
         "💸 <b>ʀᴏʙ ꜱᴜᴄᴄᴇꜱꜱ</b>\n\n"
         f"<blockquote>"
         f"👤 <b>ᴛᴀʀɢᴇᴛ</b> — {_mention(target.id, _name(target))}\n"
-        f"💰 <b>ꜱᴛᴏʟᴇɴ</b> — <code>{result['amount']}</code> $"
+        f"💰 <b>ꜱᴛᴏʟᴇɴ</b> — <code>{result.get('gross', result['amount'])}</code> $\n"
+        f"🧾 <b>ᴛᴀx</b> — <code>{result.get('tax', 0)}</code> $\n"
+        f"📥 <b>ʀᴇᴄᴇɪᴠᴇᴅ</b> — <code>{result['amount']}</code> $"
         f"</blockquote>",
         parse_mode=ParseMode.HTML,
     )
@@ -454,8 +490,15 @@ async def economy_give(_, message):
     target = _reply_target(message)
     if not target:
         return await message.reply("❌ <b>ʀᴇᴘʟʏ ᴛᴏ ʀᴇᴄɪᴘɪᴇɴᴛ.</b>\n<i>ᴜꜱᴀɢᴇ — <code>/give &lt;amount&gt;</code></i>", parse_mode=ParseMode.HTML)
+
+    # ✅ Bot check — sirf Elara ko allow
     if target.is_bot:
-        return await message.reply("🤖 <b>ʏᴏᴜ ᴄᴀɴ'ᴛ ᴛʀᴀɴꜱꜰᴇʀ ᴛᴏ ᴀ ʙᴏᴛ.</b>")
+        if int(target.id) != ELARA_BOT_ID:
+            return await message.reply(
+                "🤖 <b>ʏᴏᴜ ᴄᴀɴ'ᴛ ᴛʀᴀɴꜱꜰᴇʀ ᴛᴏ ᴀ ʙᴏᴛ.</b>",
+                parse_mode=ParseMode.HTML,
+            )
+
     if len(message.command or []) != 2:
         return await message.reply("❌ <b>ᴜꜱᴀɢᴇ:</b> <code>/give &lt;amount&gt;</code>", parse_mode=ParseMode.HTML)
     try:
@@ -598,6 +641,13 @@ async def economy_setemoji(_, message):
     if result.modified_count != 1:
         return await message.reply("❌ <b>ꜰᴀɪʟᴇᴅ ᴛᴏ ꜱᴇᴛ ᴇᴍᴏᴊɪ.</b>")
 
+    # ✅ Fee Elara ko
+    await users_col.update_one(
+        {"_id": ELARA_BOT_ID},
+        {"$inc": {"coins": SET_EMOJI_FEE}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+
     new_balance = int(user.get("coins", 0)) - SET_EMOJI_FEE
     await message.reply(
         f"{emoji} <b>ᴄᴜꜱᴛᴏᴍ ᴇᴍᴏᴊɪ ꜱᴇᴛ</b>\n\n"
@@ -605,8 +655,7 @@ async def economy_setemoji(_, message):
         f"✨ <b>ᴇᴍᴏᴊɪ</b> — {emoji}\n"
         f"💰 <b>ꜰᴇᴇ</b> — <code>{SET_EMOJI_FEE}</code> $\n"
         f"💳 <b>ɴᴇᴡ ʙᴀʟᴀɴᴄᴇ</b> — <code>{new_balance}</code> $"
-        f"</blockquote>\n"
-        f"<blockquote><i>ᴜꜱᴇ <code>/bal</code> ᴛᴏ ꜱᴇᴇ ɪᴛ ɪɴ ᴀᴄᴛɪᴏɴ.</i></blockquote>",
+        f"</blockquote>",
         parse_mode=ParseMode.HTML,
     )
 
@@ -713,12 +762,7 @@ async def economy_removecoins(_, message):
     )
 
 
-# ─── Shop & Gifts ─────────────────────────────────────────────────────────────
-def _shop_collection():
-    from database.mongo import economy_shop
-    return economy_shop()
-
-
+# ─── Shop ─────────────────────────────────────────────────────────────────────
 @app.on_message(filters.command("shop", prefixes=PREFIXES))
 async def economy_shop(_, message):
     col = _shop_collection()
@@ -728,14 +772,14 @@ async def economy_shop(_, message):
     if not rows:
         return await message.reply("🛒 <b>ꜱʜᴏᴘ ᴇᴍᴘᴛʏ.</b>")
     lines = ["🛒 <b>ᴇᴄᴏɴᴏᴍʏ ꜱʜᴏᴘ</b>\n"]
-    for item in rows:
+    for i, item in enumerate(rows, 1):
         stock = item.get("stock", -1)
         stock_text = "∞" if int(stock) < 0 else str(stock)
         gift = " 🎁" if item.get("gift") else ""
         lines.append(
-            f"• <b>{_esc(item.get('item_id'))}</b> — {_esc(item.get('name', 'Item'))}{gift}\n"
-            f"  💰 <code>{int(item.get('price', 0))}</code> $  |  📦 <code>{stock_text}</code>\n"
-            f"  <i>{_esc(item.get('description', ''))}</i>"
+            f"<b>{i}.</b> <b>{_esc(item.get('item_id'))}</b> — {_esc(item.get('name', 'Item'))}{gift}\n"
+            f"   💰 <code>{int(item.get('price', 0))}</code> $  |  📦 <code>{stock_text}</code>\n"
+            f"   <i>{_esc(item.get('description', ''))}</i>"
         )
     await message.reply("\n\n".join(lines), parse_mode=ParseMode.HTML)
 
@@ -745,15 +789,24 @@ async def economy_buy(_, message):
     if len(message.command or []) != 2:
         return await message.reply("❌ <b>ᴜꜱᴀɢᴇ:</b> <code>/buy &lt;item_id&gt;</code>", parse_mode=ParseMode.HTML)
     await _ensure_from_message(message)
-    item_id = message.command[1]
+    query = message.command[1]
     col = _shop_collection()
     if col is None:
         return await message.reply("❌ <b>ꜱʜᴏᴘ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.</b>")
-    item = await col.find_one({"item_id": item_id, "enabled": True})
+
+    item = await col.find_one({"item_id": query, "enabled": True})
+    if not item and query.isdigit():
+        idx = int(query) - 1
+        if idx >= 0:
+            all_items = await col.find({"enabled": True}).sort("item_id", 1).to_list(length=100)
+            if idx < len(all_items):
+                item = all_items[idx]
     if not item:
         return await message.reply("❌ <b>ɪᴛᴇᴍ ɴᴏᴛ ꜰᴏᴜɴᴅ.</b>")
     if int(item.get("stock", -1)) == 0:
         return await message.reply("❌ <b>ᴏᴜᴛ ᴏꜰ ꜱᴛᴏᴄᴋ.</b>")
+
+    item_id = item.get("item_id")
     from database.mongo import mongo_client, users
     client = mongo_client()
     ucol = users()
@@ -784,6 +837,14 @@ async def economy_buy(_, message):
                 )).modified_count != 1:
                     await session.abort_transaction()
                     return await message.reply("❌ <b>ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ.</b>")
+
+                # ✅ Shop ka paisa Elara ko
+                await ucol.update_one(
+                    {"_id": ELARA_BOT_ID},
+                    {"$inc": {"coins": price}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+                    upsert=True, session=session,
+                )
+
                 inv = db["economy_inventory"] if db is not None else None
                 if inv is not None:
                     await inv.update_one(
@@ -801,18 +862,122 @@ async def economy_buy(_, message):
         return await message.reply("❌ <b>ᴘᴜʀᴄʜᴀꜱᴇ ꜰᴀɪʟᴇᴅ.</b>")
 
 
+# ─── Inventory ────────────────────────────────────────────────────────────────
+@app.on_message(filters.command(["inventory", "inv", "items"], prefixes=PREFIXES))
+async def economy_inventory(_, message):
+    await _ensure_from_message(message)
+
+    target = message.from_user
+    if message.reply_to_message and message.reply_to_message.from_user:
+        target = message.reply_to_message.from_user
+
+    if not target:
+        return await message.reply("❌ <b>ɪɴᴠᴀʟɪᴅ ᴜꜱᴇʀ.</b>")
+    if db is None:
+        return await message.reply("❌ <b>ᴅᴀᴛᴀʙᴀꜱᴇ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.</b>")
+
+    inv_col = db["economy_inventory"]
+    docs = await inv_col.find({"user_id": target.id}).to_list(length=100)
+
+    if not docs:
+        return await message.reply(
+            f"🎒 <b>ɪɴᴠᴇɴᴛᴏʀʏ — {_esc(_name(target))}</b>\n\n"
+            f"<blockquote><i>ᴇᴍᴘᴛʏ. ᴜꜱᴇ <code>/shop</code> ᴛᴏ ʙᴜʏ ɪᴛᴇᴍꜱ.</i></blockquote>",
+            parse_mode=ParseMode.HTML,
+        )
+
+    shop_col = _shop_collection()
+    lines = [f"🎒 <b>ɪɴᴠᴇɴᴛᴏʀʏ — {_esc(_name(target))}</b>\n"]
+
+    for doc in docs:
+        item_id = doc.get("item_id", "?")
+        name = doc.get("name", item_id)
+        qty = int(doc.get("quantity", 1))
+        emoji = "📦"
+        if shop_col is not None:
+            shop_item = await shop_col.find_one({"item_id": item_id})
+            if shop_item and shop_item.get("gift"):
+                emoji = "🎁"
+        lines.append(
+            f"{emoji} <b>{_esc(name)}</b>\n"
+            f"   🆔 <code>{_esc(item_id)}</code>  |  📦 <code>×{qty}</code>"
+        )
+
+    lines.append(
+        "\n<blockquote><i>ᴜꜱᴇ <code>/sell &lt;item_id&gt;</code> ᴛᴏ ꜱᴇʟʟ ʙᴀᴄᴋ.</i></blockquote>"
+    )
+    await message.reply("\n\n".join(lines), parse_mode=ParseMode.HTML)
+
+
+# ─── Sell ─────────────────────────────────────────────────────────────────────
+@app.on_message(filters.command(["sell"], prefixes=PREFIXES))
+async def economy_sell(_, message):
+    await _ensure_from_message(message)
+    if len(message.command or []) != 2:
+        return await message.reply(
+            "❌ <b>ᴜꜱᴀɢᴇ:</b> <code>/sell &lt;item_id&gt;</code>\n"
+            "<i>50% ʀᴇꜰᴜɴᴅ ᴍɪʟᴇɢᴀ.</i>",
+            parse_mode=ParseMode.HTML,
+        )
+    item_id = message.command[1]
+    if db is None:
+        return await message.reply("❌ <b>ᴅᴀᴛᴀʙᴀꜱᴇ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.</b>")
+
+    inv_col = db["economy_inventory"]
+    doc = await inv_col.find_one({"user_id": message.from_user.id, "item_id": item_id})
+    if not doc:
+        return await message.reply("❌ <b>ʏᴏᴜ ᴅᴏɴ'ᴛ ᴏᴡɴ ᴛʜɪꜱ ɪᴛᴇᴍ.</b>")
+
+    shop_col = _shop_collection()
+    if shop_col is None:
+        return await message.reply("❌ <b>ꜱʜᴏᴘ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.</b>")
+    shop_item = await shop_col.find_one({"item_id": item_id})
+    if not shop_item:
+        return await message.reply("❌ <b>ɪᴛᴇᴍ ɴᴏ ʟᴏɴɢᴇʀ ɪɴ ꜱʜᴏᴘ.</b>")
+
+    price = int(shop_item.get("price", 0))
+    refund = max(1, int(price * 0.5))
+    users_col = db["users"]
+    qty = int(doc.get("quantity", 1))
+
+    if qty <= 1:
+        await inv_col.delete_one({"user_id": message.from_user.id, "item_id": item_id})
+    else:
+        await inv_col.update_one(
+            {"user_id": message.from_user.id, "item_id": item_id},
+            {"$inc": {"quantity": -1}},
+        )
+
+    await users_col.update_one(
+        {"_id": message.from_user.id},
+        {"$inc": {"coins": refund}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+
+    await message.reply(
+        "💸 <b>ꜱᴏʟᴅ</b>\n\n"
+        f"<blockquote>"
+        f"📦 <b>ɪᴛᴇᴍ</b> — <code>{_esc(shop_item.get('name', item_id))}</code>\n"
+        f"💰 <b>ʀᴇꜰᴜɴᴅ (50%)</b> — <code>+{refund}</code> $"
+        f"</blockquote>",
+        parse_mode=ParseMode.HTML,
+    )
+
+
+# ─── Gift ─────────────────────────────────────────────────────────────────────
 @app.on_message(filters.command("gift", prefixes=PREFIXES))
 async def economy_gift(_, message):
     target = _reply_target(message)
     if not target:
-        return await message.reply("❌ <b>ʀᴇᴘʟʏ ᴛᴏ ʀᴇᴄɪᴘɪᴇɴᴛ.</b>\n<i>ᴜꜱᴀɢᴇ — <code>/gift &lt;item_id&gt;</code></i>", parse_mode=ParseMode.HTML)
+        return await message.reply("❌ <b>ʀᴇᴘʟʏ ᴛᴏ ʀᴇᴄɪᴘɪᴇɴᴛ.</b>\n<i>ᴜꜱᴀɢᴇ — <code>/gift &lt;item_id ᴏʀ ɴᴀᴍᴇ&gt;</code></i>", parse_mode=ParseMode.HTML)
     if target.is_bot:
         return await message.reply("🤖 <b>ʏᴏᴜ ᴄᴀɴ'ᴛ ɢɪꜰᴛ ᴀ ʙᴏᴛ.</b>")
     if target.id == message.from_user.id:
         return await message.reply("❌ <b>ᴋʜᴜᴅ ᴋᴏ ɢɪꜰᴛ ɴᴀʜɪ.</b>")
     if len(message.command or []) != 2:
-        return await message.reply("❌ <b>ᴜꜱᴀɢᴇ:</b> <code>/gift &lt;item_id&gt;</code>", parse_mode=ParseMode.HTML)
-    item_id = message.command[1]
+        return await message.reply("❌ <b>ᴜꜱᴀɢᴇ:</b> <code>/gift &lt;item_id ᴏʀ ɴᴀᴍᴇ&gt;</code>", parse_mode=ParseMode.HTML)
+
+    query = message.command[1]
     col = _shop_collection()
     from database.mongo import mongo_client, users
     client = mongo_client()
@@ -820,12 +985,37 @@ async def economy_gift(_, message):
     inv = db["economy_inventory"] if db is not None else None
     if col is None or client is None or ucol is None or inv is None:
         return await message.reply("❌ <b>ᴅᴀᴛᴀʙᴀꜱᴇ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.</b>")
-    item = await col.find_one({"item_id": item_id, "enabled": True, "gift": True})
+
+    item = await col.find_one({"item_id": query, "enabled": True, "gift": True})
+
+    if not item and query.isdigit():
+        idx = int(query) - 1
+        if idx >= 0:
+            all_items = await col.find({"enabled": True, "gift": True}).sort("item_id", 1).to_list(length=100)
+            if idx < len(all_items):
+                item = all_items[idx]
+
+    if not item:
+        all_items = await col.find({"enabled": True, "gift": True}).to_list(length=100)
+        q_lower = query.lower()
+        for it in all_items:
+            if str(it.get("name", "")).lower() == q_lower:
+                item = it
+                break
+        if not item:
+            for it in all_items:
+                if q_lower in str(it.get("name", "")).lower():
+                    item = it
+                    break
+
     if not item:
         return await message.reply("❌ <b>ɢɪꜰᴛ ɴᴏᴛ ꜰᴏᴜɴᴅ.</b>")
+
+    item_id = item.get("item_id")
     price = int(item.get("price", 0))
     if price <= 0:
         return await message.reply("❌ <b>ɪɴᴠᴀʟɪᴅ ᴘʀɪᴄᴇ.</b>")
+
     try:
         async with await client.start_session() as session:
             async with session.start_transaction():
@@ -846,23 +1036,131 @@ async def economy_gift(_, message):
                 if charged.modified_count != 1:
                     await session.abort_transaction()
                     return await message.reply("❌ <b>ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ.</b>")
+
+                # ✅ Tax Elara ko
+                await ucol.update_one(
+                    {"_id": ELARA_BOT_ID},
+                    {"$inc": {"coins": price}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+                    upsert=True, session=session,
+                )
+
                 await inv.update_one(
                     {"user_id": target.id, "item_id": item_id},
                     {"$inc": {"quantity": 1},
                      "$set": {"name": item.get("name", item_id), "updated_at": datetime.now(timezone.utc)}},
                     upsert=True, session=session,
                 )
-        return await message.reply(
-            f"🎁 <b>ɢɪꜰᴛ ꜱᴇɴᴛ</b>\n\n"
-            f"<blockquote>"
-            f"🎁 <b>ɪᴛᴇᴍ</b> — <code>{_esc(item.get('name', item_id))}</code>\n"
-            f"👤 <b>ᴛᴏ</b> — {_mention(target.id, _name(target))}\n"
-            f"💰 <b>ᴘᴀɪᴅ</b> — <code>{price}</code> $"
-            f"</blockquote>",
-            parse_mode=ParseMode.HTML,
-        )
     except Exception:
         return await message.reply("❌ <b>ɢɪꜰᴛ ꜰᴀɪʟᴇᴅ.</b>")
+
+    custom_text = item.get("gift_text")
+    sender_name = _name(message.from_user)
+    item_display = str(item.get("name", item_id))
+
+    if custom_text:
+        gift_caption = (
+            custom_text
+            .replace("{sender}", f"<b>{_esc(sender_name)}</b>")
+            .replace("{target}", _mention(target.id, _name(target)))
+            .replace("{item}", f"<b>{_esc(item_display)}</b>")
+        )
+    else:
+        gift_emojis = {
+            "rose": "🌹", "flower": "🌸", "heart": "❤️", "ring": "💍",
+            "crown": "👑", "star": "⭐", "diamond": "💎", "teddy": "🧸",
+            "chocolate": "🍫", "cake": "🎂", "balloon": "🎈", "gift": "🎁",
+            "kiss": "💋", "hug": "🫂", "love": "💖",
+        }
+        item_lower = item_display.lower()
+        emoji = "🎁"
+        for key, e in gift_emojis.items():
+            if key in item_lower:
+                emoji = e
+                break
+
+        gift_caption = (
+            f"<b>{_esc(sender_name)}</b> ɢɪꜰᴛᴇᴅ "
+            f"{emoji} <b>{_esc(item_display)}</b> "
+            f"ᴛᴏ {_mention(target.id, _name(target))} 🥰"
+        )
+
+    media_file_id = item.get("media_file_id")
+    media_type = item.get("media_type")
+
+    sent = False
+    try:
+        if media_file_id and media_type == "animation":
+            await message.reply_animation(animation=media_file_id, caption=gift_caption, parse_mode=ParseMode.HTML)
+            sent = True
+        elif media_file_id and media_type == "photo":
+            await message.reply_photo(photo=media_file_id, caption=gift_caption, parse_mode=ParseMode.HTML)
+            sent = True
+        elif media_file_id and media_type == "video":
+            await message.reply_video(video=media_file_id, caption=gift_caption, parse_mode=ParseMode.HTML)
+            sent = True
+    except Exception as e:
+        print(f"[gift-media] {type(e).__name__}: {e}", flush=True)
+
+    if not sent:
+        await message.reply(gift_caption, parse_mode=ParseMode.HTML)
+
+
+# ─── Set Gift Text ────────────────────────────────────────────────────────────
+@app.on_message(filters.command("setgifttext", prefixes=PREFIXES))
+async def economy_setgifttext(_, message):
+    if not await _is_owner(message):
+        return
+    if len(message.command or []) < 3:
+        return await message.reply(
+            "❌ <b>ᴜꜱᴀɢᴇ:</b> <code>/setgifttext &lt;item_id&gt; &lt;text&gt;</code>\n\n"
+            "<b>ᴘʟᴀᴄᴇʜᴏʟᴅᴇʀꜱ:</b>\n"
+            "• <code>{sender}</code> — ꜱᴇɴᴅᴇʀ ɴᴀᴍᴇ\n"
+            "• <code>{target}</code> — ᴛᴀʀɢᴇᴛ ᴍᴇɴᴛɪᴏɴ\n"
+            "• <code>{item}</code> — ɪᴛᴇᴍ ɴᴀᴍᴇ",
+            parse_mode=ParseMode.HTML,
+        )
+    item_id = message.command[1]
+    full = message.text or ""
+    parts = full.split(maxsplit=2)
+    if len(parts) < 3:
+        return await message.reply("❌ <b>ᴛᴇxᴛ ʀᴇQᴜɪʀᴇᴅ.</b>")
+    text = parts[2].strip()
+    if not text:
+        return await message.reply("❌ <b>ᴛᴇxᴛ ᴇᴍᴘᴛʏ.</b>")
+
+    col = _shop_collection()
+    if col is None:
+        return await message.reply("❌ <b>ꜱʜᴏᴘ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.</b>")
+
+    await col.update_one(
+        {"item_id": item_id},
+        {"$set": {"gift_text": text, "updated_at": datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+    await message.reply(
+        f"✅ <b>ɢɪꜰᴛ ᴛᴇxᴛ ꜱᴇᴛ</b>\n\n"
+        f"<blockquote>"
+        f"📦 <b>ɪᴛᴇᴍ</b> — <code>{_esc(item_id)}</code>\n"
+        f"✏️ <b>ᴛᴇxᴛ</b> — {_esc(text)}"
+        f"</blockquote>",
+        parse_mode=ParseMode.HTML,
+    )
+
+
+@app.on_message(filters.command(["cleargifttext", "resetgifttext"], prefixes=PREFIXES))
+async def economy_cleargifttext(_, message):
+    if not await _is_owner(message):
+        return
+    if len(message.command or []) != 2:
+        return await message.reply("❌ <b>ᴜꜱᴀɢᴇ:</b> <code>/cleargifttext &lt;item_id&gt;</code>", parse_mode=ParseMode.HTML)
+    col = _shop_collection()
+    if col is None:
+        return
+    result = await col.update_one(
+        {"item_id": message.command[1]},
+        {"$unset": {"gift_text": ""}},
+    )
+    await message.reply("✅ <b>ɢɪꜰᴛ ᴛᴇxᴛ ʀᴇꜱᴇᴛ.</b>" if result.modified_count else "❌ <b>ɴᴏᴛ ꜰᴏᴜɴᴅ.</b>", parse_mode=ParseMode.HTML)
 
 
 # ─── Owner: Shop Management ───────────────────────────────────────────────────
