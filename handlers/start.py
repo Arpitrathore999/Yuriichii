@@ -1,6 +1,6 @@
 # --------------------------------------------------------------------------------
 #  Elara AI Bot © 2026
-#  handlers/start.py — Rich HTML + Tables + 3 Prefixes + Local Assets
+#  handlers/start.py — Rich HTML + Tables + 3 Prefixes + Inline Image
 # --------------------------------------------------------------------------------
 
 PREFIXES = ["/", "!", "."]
@@ -36,7 +36,9 @@ SUPPORT_URL     = getattr(config, "SUPPORT_URL", "")
 UPDATES_URL     = getattr(config, "UPDATES_URL", "")
 OWNER_URL       = getattr(config, "OWNER_URL", "")
 OWNER_ID        = getattr(config, "OWNER_ID", 0)
-START_IMAGE_URL = (getattr(config, "START_IMAGE_URL", "") or "").strip()
+
+# ✅ Hardcoded Start Image URL
+START_IMAGE_URL = "https://myimgs.org/storage/images/49868/26203.png"
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -68,13 +70,6 @@ def _owner_link():
 def _esc(v):
     return str(v or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-def _pick_image():
-    """Return local file path, file_id, or URL."""
-    if not START_IMAGE_URL:
-        return None
-    parts = [u.strip() for u in START_IMAGE_URL.split(",") if u.strip()]
-    return parts[0] if parts else None
-
 
 # ─── Bot API caller ───────────────────────────────────────────────────────────
 async def _bot_api(method: str, payload: dict) -> dict:
@@ -102,8 +97,10 @@ def _rich_welcome(user) -> str:
     bot = _esc(BOT_NAME)
     sup = _safe_url(SUPPORT_URL)
     upd = _safe_url(UPDATES_URL)
+    img = START_IMAGE_URL
 
-    return f"""ᴡᴇʟᴄᴏᴍᴇ <a href="tg://user?id={uid}">{name}</a>, ᴡᴇʟᴄᴏᴍᴇ ʙᴀᴄᴋ! 🎉
+    return f"""<img src="{img}" />
+ᴡᴇʟᴄᴏᴍᴇ <a href="tg://user?id={uid}">{name}</a>, ᴡᴇʟᴄᴏᴍᴇ ʙᴀᴄᴋ! 🎉
 
 ɪ ᴀᴍ <b>「 {bot} 」</b> — ᴀɴ ᴀɪ ɢʀᴏᴜᴘ ᴍᴀɴᴀɢᴇʀ ᴛʜᴀᴛ ᴋᴇᴇᴘꜱ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴄʟᴇᴀɴ.
 
@@ -617,36 +614,7 @@ def _kb_to_dict(kb):
 
 
 async def _send_rich(chat_id, html, kb, image=None):
-    if image:
-        try:
-            # ✅ 1. Local file path (assets folder)
-            if not str(image).startswith(("http://", "https://")) and len(str(image)) < 200:
-                if os.path.exists(image):
-                    await bot.send_photo(chat_id, photo=image)
-                else:
-                    # Try relative to /app
-                    alt = os.path.join(os.getcwd(), image)
-                    if os.path.exists(alt):
-                        await bot.send_photo(chat_id, photo=alt)
-                    else:
-                        print(f"[start-image] file not found: {image}")
-
-            # ✅ 2. URL — download and send
-            elif str(image).startswith(("http://", "https://")):
-                req = Request(image, headers={"User-Agent": "Mozilla/5.0"})
-                def _download():
-                    with urlopen(req, timeout=20) as r:
-                        return r.read()
-                image_bytes = await asyncio.to_thread(_download)
-                await bot.send_photo(chat_id, photo=image_bytes)
-
-            # ✅ 3. Telegram file_id
-            else:
-                await bot.send_photo(chat_id, photo=image)
-
-        except Exception as e:
-            print(f"[start-image] failed: {e}")
-
+    # ✅ Image <img> tag se HTML ke andar embed hoti hai
     payload = {
         "chat_id": chat_id,
         "rich_message": {"html": html},
@@ -660,8 +628,10 @@ async def _send_rich(chat_id, html, kb, image=None):
     print(f"[rich] failed: {result.get('description')}")
 
     try:
+        import re
+        clean_html = re.sub(r"<img[^>]*/?>", "", html)
         return await bot.send_message(
-            chat_id, html, reply_markup=kb, parse_mode=ParseMode.HTML,
+            chat_id, clean_html, reply_markup=kb, parse_mode=ParseMode.HTML,
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
     except Exception as e:
@@ -724,7 +694,6 @@ async def start_handler(_, message: Message):
             message.chat.id,
             _rich_welcome(message.from_user),
             _welcome_kb(),
-            _pick_image(),
         )
     except FloodWait as fw:
         await asyncio.sleep(fw.value + 1)
@@ -732,7 +701,6 @@ async def start_handler(_, message: Message):
             message.chat.id,
             _rich_welcome(message.from_user),
             _welcome_kb(),
-            _pick_image(),
         )
 
 
@@ -743,7 +711,7 @@ async def help_handler(_, message: Message):
     except Exception:
         pass
 
-    await _send_rich(message.chat.id, _rich_help(), _HELP_KB, _pick_image())
+    await _send_rich(message.chat.id, _rich_help(), _HELP_KB)
 
 
 @bot.on_callback_query(filters.regex(
@@ -772,7 +740,6 @@ async def cb(_, q: CallbackQuery):
             q.message.chat.id,
             _rich_welcome(q.from_user),
             _welcome_kb(),
-            _pick_image(),
         )
         return
 
