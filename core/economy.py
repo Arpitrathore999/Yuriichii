@@ -24,7 +24,7 @@ TAX_RATE = 0.10
 PROTECTION_COST = 500
 PROTECTION_DURATION = timedelta(days=1)
 
-# ✅ Fixed daily reward
+# ✅ Daily = 2000
 DAILY_REWARD_MIN = 2000
 DAILY_REWARD_MAX = 2000
 
@@ -36,7 +36,7 @@ KILL_XP_MAX = 50
 WALLET_MAX_PERCENT = 0.30
 
 # Rob mechanics
-ROB_SUCCESS_CHANCE = 1.0        # ✅ Always success
+ROB_SUCCESS_CHANCE = 1.0
 ROB_MIN_PERCENT = 0.10
 ROB_MAX_PERCENT = 0.30
 ROB_MIN_TARGET_BALANCE = 100
@@ -49,9 +49,8 @@ ELARA_BOT_ID = 8899359004
 OWNER_ID = int(getattr(config, "OWNER_ID", 0) or 0)
 
 
-# ─── Roast Messages (Hinglish + English) ──────────────────────────────────────
+# ─── Rob Roast Messages ───────────────────────────────────────────────────────
 ELARA_ROASTS = [
-    # Hinglish
     "ᴀʀʀᴇ ʙʜᴀɪ, ᴀᴘɴᴀ ʜɪ ʙᴀʟᴀɴᴄᴇ ᴅᴇᴋʜ ʟᴇ ᴘᴇʜʟᴇ 😭",
     "ᴛᴜ ᴍᴜᴊʜᴇ ʀᴏʙ ᴋᴀʀᴇɢᴀ? ꜱᴀᴘɴᴇ ᴍᴇ ʙʜɪ ɴᴀʜɪ 💀",
     "ɪᴛɴɪ ʜɪᴍᴍᴀᴛ ᴋɪꜱ ᴋᴀᴀᴍ ᴋɪ, ᴊᴀʙ ʙᴀʟᴀɴᴄᴇ ʜɪ ᴢᴇʀᴏ ʜᴀɪ 🥱",
@@ -62,8 +61,6 @@ ELARA_ROASTS = [
     "ɪꜱᴋɪ ᴀᴜᴋᴀᴀᴛ ɴᴀʜɪ ʜᴀɪ ᴍᴇʀᴇ ᴘᴀɪꜱᴇ ᴋɪ 😎",
     "ᴛᴇʀᴇ ᴊᴀɪꜱᴇ 100 ᴀᴀʏᴇ, 100 ɢᴀʏᴇ 🚶",
     "ʀᴏʙʙɪɴɢ ꜱᴋɪʟʟ ᴀᴄʜʜɪ ʜᴀɪ, ᴘᴀʀ ʟᴜᴄᴋ ᴋʜᴀʀᴀʙ ʜᴀɪ 🎭",
-
-    # English
     "ɴɪᴄᴇ ᴛʀʏ, ʙᴜᴛ ɪ ᴅᴏɴ'ᴛ ɢᴇᴛ ʀᴏʙʙᴇᴅ 😏",
     "ʙʀᴏ ʀᴇᴀʟʟʏ ᴛʜᴏᴜɢʜᴛ ʜᴇ ᴄᴏᴜʟᴅ ʀᴏʙ ᴍᴇ 💀",
     "ᴛʜᴀᴛ ᴡᴀꜱ ᴄᴜᴛᴇ. ᴛʀʏ ᴀɢᴀɪɴ ɴᴇᴠᴇʀ 💅",
@@ -74,8 +71,6 @@ ELARA_ROASTS = [
     "ꜱᴋɪʟʟ ɪꜱꜱᴜᴇ, ᴍʏ ꜰʀɪᴇɴᴅ 💀",
     "ᴇᴠᴇɴ ᴍʏ ꜱʜᴀᴅᴏᴡ ʜᴀꜱ ᴍᴏʀᴇ ᴍᴏɴᴇʏ ᴛʜᴀɴ ʏᴏᴜ 😭",
     "ᴛᴏᴜᴄʜ ꜱᴏᴍᴇ ɢʀᴀꜱꜱ, ɴᴏᴛ ᴍʏ ᴡᴀʟʟᴇᴛ 🌱🚫",
-
-    # Savage Mix
     "ꜱᴋɪʟʟ: 0 | ᴄᴏɴꜰɪᴅᴇɴᴄᴇ: 100 | ʀᴇꜱᴜʟᴛ: ꜰᴀɪʟᴇᴅ 💀",
     "ʏᴏᴜ ᴠꜱ ᴍᴇ = ʏᴏᴜ ʟᴏꜱᴇ, ᴀʟᴡᴀʏꜱ 💪",
     "ʙʜᴀɪ ᴛᴜ ʀᴏʙʙɪɴɢ ᴄʜʜᴏᴅ, ᴄᴏᴅɪɴɢ ꜱᴇᴇᴋʜ ʟᴇ 🤡",
@@ -86,6 +81,26 @@ ELARA_ROASTS = [
     "ʀᴏʙʙɪɴɢ ᴀ ʙᴏᴛ ɪꜱ ʟɪᴋᴇ ꜰɪɢʜᴛɪɴɢ ᴀ ᴍɪʀʀᴏʀ. ʏᴏᴜ ʟᴏꜱᴇ ᴇɪᴛʜᴇʀ ᴡᴀʏ 🪞",
     "ʙʜᴀɪ ɪᴛɴᴀ ᴛɪᴍᴇ ᴛʜᴀ ᴛᴏʜ ᴘᴀᴅʜᴀɪ ᴋᴀʀ ʟᴇᴛᴀ 📚",
     "ɴᴇxᴛ ᴛɪᴍᴇ ʙʀɪɴɢ ᴀ ʟᴀᴅᴅᴇʀ, ʏᴏᴜ'ʀᴇ ᴛᴏᴏ ꜱʜᴏʀᴛ ᴛᴏ ʀᴇᴀᴄʜ ᴍʏ ᴡᴀʟʟᴇᴛ 🪜😏",
+]
+
+
+# ─── Kill Roast Messages ──────────────────────────────────────────────────────
+ELARA_KILL_ROASTS = [
+    "ᴛᴜ ᴍᴜᴊʜᴇ ᴋɪʟʟ ᴋᴀʀᴇɢᴀ? ᴍᴀɪ ᴛᴏ ᴛᴇʀᴇ ꜱᴀᴘɴᴏ ᴍᴇ ʙʜɪ ᴢɪɴᴅᴀ ʜᴏᴏɴ 💀",
+    "ᴋɪʟʟ ᴋᴀʀɴᴇ ꜱᴇ ᴘᴇʜʟᴇ ᴛᴜ ᴋʜᴜᴅ ᴋᴏ ᴋɪʟʟ ᴋᴀʀ ʟᴇ 🤡",
+    "ɪ ᴀᴍ ɪᴍᴍᴏʀᴛᴀʟ, ʙʀᴏ. ɴɪᴄᴇ ᴛʀʏ ᴛʜᴏᴜɢʜ 😏",
+    "ᴛᴇʀᴀ ᴋɪʟʟ ꜱᴋɪʟʟ ʟᴇᴠᴇʟ: ɴᴇɢᴀᴛɪᴠᴇ 📉",
+    "ᴍᴜᴊʜᴇ ᴋɪʟʟ ᴋᴀʀɴᴇ ᴋɪ 괜ᴋᴀᴛ ɴᴀʜɪ ʜᴀɪ ᴛᴇʀɪ 🥱",
+    "ᴡᴏᴡ, ʏᴏᴜ ᴛʀɪᴇᴅ ᴛᴏ ᴋɪʟʟ ᴀ ʙᴏᴛ. ʙʀᴀɪɴ ᴇɴɢᴀɢᴇᴅ? 🧠❌",
+    "ᴛᴇʀᴇ ʜᴀᴀᴛʜ ɴᴀʜɪ ʟᴀɢᴇɢᴀ ᴍᴇʀᴇ ʜᴀᴛʜ 🚫",
+    "ʟ + ʀᴀᴛɪᴏ + ɴᴏ ᴋɪʟʟ ꜰᴏʀ ʏᴏᴜ 💀",
+    "ꜱᴋɪʟʟ ɪꜱꜱᴜᴇ, ᴄᴀɴ'ᴛ ᴋɪʟʟ ᴛʜᴇ ᴜɴᴋɪʟʟᴀʙʟᴇ 💪",
+    "ᴛᴜ ᴛᴏ ꜱᴀᴘɴᴇ ᴍᴇ ʙʜɪ ᴋɪʟʟ ɴᴀʜɪ ᴋᴀʀ ꜱᴀᴋᴛᴀ ᴍᴜᴊʜᴇ 😴",
+    "ᴍᴇʀᴀ ʜᴇᴀʟᴛʜ ᴘᴏɪɴᴛ: ∞ | ᴛᴇʀᴀ ᴅᴀᴍᴀɢᴇ: 0 📊",
+    "ᴀᴛᴛᴇᴍᴘᴛ ꜰᴀɪʟᴇᴅ. ᴛʀʏ ɢᴇᴛᴛɪɴɢ ᴀ ʟɪꜰᴇ 🎮",
+    "ʙʜᴀɪ ᴋɪʟʟ ᴋʀɴᴇ ꜱᴇ ᴘᴇʜʟᴇ ʀᴇᴠɪᴠᴇ ᴋᴀʀ ʟᴇᴛᴀ ᴋʜᴜᴅ ᴋᴏ 💀",
+    "ɪ ᴀᴍ ᴛʜᴇ ʙᴏᴛ, ʏᴏᴜ ᴀʀᴇ ᴛʜᴇ ᴊᴏᴋᴇ 🤡",
+    "ᴄᴏɴɢʀᴀᴛꜱ! ʏᴏᴜ ᴊᴜꜱᴛ ᴛʀɪᴇᴅ ᴋɪʟʟɪɴɢ ᴛʜᴇ ᴜɴᴋɪʟʟᴀʙʟᴇ 😂",
 ]
 
 
@@ -112,7 +127,6 @@ def net_after_tax(amount: int) -> int:
 
 
 def wallet_limit(coins: int) -> int:
-    """Maximum wallet based on liquid coins + current wallet."""
     return int(max(0, coins) / (1 - WALLET_MAX_PERCENT))
 
 
@@ -216,7 +230,7 @@ async def transfer(sender_id: int, recipient_id: int, amount: int):
                     session=session,
                 )
 
-                # ✅ Tax Elara ke paas jaaye
+                # ✅ Tax Elara ko
                 if tax > 0:
                     await col.update_one(
                         {"_id": ELARA_BOT_ID},
@@ -273,6 +287,14 @@ async def kill_user(killer_id: int, target_id: int):
         return {"ok": False, "reason": "self"}
     if killer_id <= 0 or target_id <= 0:
         return {"ok": False, "reason": "invalid"}
+
+    # ✅ Elara ko koi kill nahi kar sakta
+    if int(target_id) == ELARA_BOT_ID:
+        return {
+            "ok": False,
+            "reason": "elara_kill_roast",
+            "roast": random.choice(ELARA_KILL_ROASTS),
+        }
 
     killer = await get_user(killer_id)
     target = await get_user(target_id)
@@ -331,15 +353,14 @@ async def kill_user(killer_id: int, target_id: int):
         return {"ok": False, "reason": "transaction_unavailable", "error": str(exc)}
 
 
-async def rob_user(robber_id: int, target_id: int):
+async def rob_user(robber_id: int, target_id: int, requested_amount: int = None):
     if robber_id == target_id:
         return {"ok": False, "reason": "self"}
 
     # ✅ Elara ko rob karne ki koshish
     if int(target_id) == ELARA_BOT_ID:
-        # Owner exception
         if int(robber_id) == OWNER_ID:
-            pass  # aage badhne do
+            pass  # Owner allowed
         else:
             return {
                 "ok": False,
@@ -355,9 +376,6 @@ async def rob_user(robber_id: int, target_id: int):
     target = await get_user(target_id)
     if not robber or not target:
         return {"ok": False, "reason": "user"}
-
-    # ✅ Dead user rob kar sakta hai
-    # ✅ Dead user ko bhi rob kar sakte hain
 
     until = target.get("protection_until")
     if until and until > now_utc():
@@ -385,8 +403,15 @@ async def rob_user(robber_id: int, target_id: int):
     if reserved.modified_count != 1:
         return {"ok": False, "reason": "cooldown"}
 
-    # ✅ Always success — probability hatadi
-    amount = max(1, int(target_coins * random.uniform(ROB_MIN_PERCENT, ROB_MAX_PERCENT)))
+    # ✅ Full amount agar request kiya, warna 10-30%
+    if requested_amount and requested_amount > 0:
+        amount = min(requested_amount, target_coins)
+    else:
+        amount = max(1, int(target_coins * random.uniform(ROB_MIN_PERCENT, ROB_MAX_PERCENT)))
+
+    # ✅ 10% tax
+    tax = tax_for(amount)
+    net = amount - tax
 
     client = mongo_client()
     if client is None:
@@ -395,7 +420,6 @@ async def rob_user(robber_id: int, target_id: int):
     try:
         async with await client.start_session() as session:
             async with session.start_transaction():
-                # No status check — dead target se bhi rob ho sakta hai
                 stolen = await col.update_one(
                     {
                         "_id": int(target_id),
@@ -413,17 +437,28 @@ async def rob_user(robber_id: int, target_id: int):
                     await session.abort_transaction()
                     return {"ok": False, "reason": "not_available"}
 
-                # Robber ko coins — koi status check nahi
+                # Robber ko net
                 await col.update_one(
                     {"_id": int(robber_id)},
-                    {"$inc": {"coins": amount}, "$set": {"updated_at": now_utc()}},
+                    {"$inc": {"coins": net}, "$set": {"updated_at": now_utc()}},
                     session=session,
                 )
-                await log_transaction(robber_id, "rob_received", amount,
-                                      meta={"target": target_id}, session=session)
+
+                # ✅ Tax Elara ko
+                if tax > 0:
+                    await col.update_one(
+                        {"_id": ELARA_BOT_ID},
+                        {"$inc": {"coins": tax}, "$set": {"updated_at": now_utc()}},
+                        upsert=True,
+                        session=session,
+                    )
+
+                await log_transaction(robber_id, "rob_received", net,
+                                      meta={"target": target_id, "gross": amount, "tax": tax},
+                                      session=session)
                 await log_transaction(target_id, "robbed", -amount,
                                       meta={"by": robber_id}, session=session)
-        return {"ok": True, "success": True, "amount": amount}
+        return {"ok": True, "success": True, "amount": net, "gross": amount, "tax": tax}
     except Exception as exc:
         return {"ok": False, "reason": "transaction_unavailable", "error": str(exc)}
 
