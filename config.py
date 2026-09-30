@@ -20,3 +20,5 @@ SUPPORT_URL = os.getenv("SUPPORT_URL", "")
 UPDATES_URL = os.getenv("UPDATES_URL", "")
 OWNER_URL = os.getenv("OWNER_URL", "")
 PING_IMAGE_URL = os.getenv("PING_IMAGE_URL", "https://i.ibb.co/mFRwHqq5/file-00000000c3a881f594d564c2e944c2f1.png")
+
+ECONOMY_TZ = os.getenv("ECONOMY_TZ", "Asia/Kolkata")
