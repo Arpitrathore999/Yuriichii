@@ -78,7 +78,7 @@ async def can_manage_social(message):
 
 async def deny(message):
     await message.reply(
-        "🚫 <b>ᴀᴄᴄᴇss ᴅᴇɴɪᴇᴅ</b>\n\n"
+        "🚫 <b>ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ</b>\n\n"
         "<i>ʏᴏᴜ ᴍᴜsᴛ ʙᴇ ᴛʜᴇ ɢʀᴏᴜᴘ ᴏᴡɴᴇʀ/ᴀᴅᴍɪɴ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</i>"
     )
 
@@ -94,12 +94,6 @@ def _user_name(doc):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  GROUP ADMIN MANAGEMENT
-#  Group admin management lives in management/control.py.
-#  Keeping it in one module prevents duplicate handlers for .add/.remove/.demote.
-# ══════════════════════════════════════════════════════════════════════════════
-
-# ══════════════════════════════════════════════════════════════════════════════
 #  SOCIAL ADMIN COMMANDS
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -108,12 +102,12 @@ async def admin_help(_, message):
     if not await can_manage_social(message):
         return await deny(message)
     await message.reply(
-        "🛠️ <b>sᴏᴄɪᴀʟ ᴀᴅᴍɪɴ ᴄᴏᴍᴍᴀɴᴅs</b>\n\n"
-        "🎞️ <b>ɢɪғs</b>\n"
-        "• ʀᴇᴘʟʏ ᴛᴏ ᴀ ɢɪғ → <code>/addgif hug</code>\n"
-        "• <code>/socialgifs hug</code> — ᴄᴏᴜɴᴛ ɢɪғs/ᴄᴀᴘᴛɪᴏɴs\n"
-        "• <code>/clearsocialgifs hug</code> — ᴄʟᴇᴀʀ ᴀʟʟ ɢɪғs\n\n"
-        "📝 <b>ᴄᴀᴘᴛɪᴏɴs</b>\n"
+        "🛠️ <b>ꜱᴏᴄɪᴀʟ ᴀᴅᴍɪɴ ᴄᴏᴍᴍᴀɴᴅꜱ</b>\n\n"
+        "🎞️ <b>ɢɪꜰꜱ</b>\n"
+        "• ʀᴇᴘʟʏ ᴛᴏ ᴀ ɢɪꜰ → <code>/addgif hug</code>\n"
+        "• <code>/socialgifs hug</code> — ᴄᴏᴜɴᴛ ɢɪꜰs/ᴄᴀᴘᴛɪᴏɴs\n"
+        "• <code>/clearsocialgifs hug</code> — ᴄʟᴇᴀʀ ᴀʟʟ ɢɪꜰs\n\n"
+        "📝 <b>ᴄᴀᴘᴛɪᴏɴꜱ</b>\n"
         "• <code>/addcaption hug Your caption {a} {b}</code>\n"
         "• <code>/socialcaptions hug</code> — sʜᴏᴡ ᴄᴀᴘᴛɪᴏɴ ᴄᴏᴜɴᴛ\n"
         "• <code>/clearsocialcaptions hug</code> — ᴄʟᴇᴀʀ ᴄᴜsᴛᴏᴍ ᴄᴀᴘᴛɪᴏɴs\n\n"
@@ -126,7 +120,7 @@ async def stats(_, message):
     if not await can_manage_social(message):
         return await deny(message)
     await message.reply(
-        "📊 <b>ᴇʟᴀʀᴀ sᴛᴀᴛs</b>\n\n<i>ʙᴏᴛ ɪs ᴏɴʟɪɴᴇ ᴀɴᴅ ᴍᴏᴅᴜʟᴀʀ.</i>"
+        "📊 <b>ᴇʟᴀʀᴀ sᴛᴀᴛꜱ</b>\n\n<i>ʙᴏᴛ ɪs ᴏɴʟɪɴᴇ ᴀɴᴅ ᴍᴏᴅᴜʟᴀʀ.</i>"
     )
 
 
@@ -137,25 +131,25 @@ async def add_social_gif(_, message):
     if not message.reply_to_message:
         return await message.reply("❌ ʀᴇᴘʟʏ ᴛᴏ ᴀ ɢɪғ/ᴀɴɪᴍᴀᴛɪᴏɴ ᴡɪᴛʜ <code>/addgif hug</code>.")
     if len(message.command or []) < 2:
-        return await message.reply("❌ ᴜsᴀɢᴇ: ʀᴇᴘʟʏ ᴛᴏ ᴀ ɢɪғ ᴡɪᴛʜ <code>/addgif &lt;command&gt;</code>")
+        return await message.reply("❌ ᴜꜱᴀɢᴇ: ʀᴇᴘʟʏ ᴛᴏ ᴀ ɢɪғ ᴡɪᴛʜ <code>/addgif &lt;command&gt;</code>")
 
     command = message.command[1].lower().lstrip("/")
     if command not in COMMANDS:
-        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ. ᴜsᴇ <code>/adminhelp</code>.")
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ ꜱᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ. ᴜꜱᴇ <code>/adminhelp</code>.")
 
     replied = message.reply_to_message
     media = replied.animation or replied.video or replied.document
     if not media:
-        return await message.reply("❌ ᴛʜᴇ ʀᴇᴘʟɪᴇᴅ ᴍᴇssᴀɢᴇ ᴍᴜsᴛ ᴄᴏɴᴛᴀɪɴ ᴀ ɢɪғ/ᴀɴɪᴍᴀᴛɪᴏɴ/ᴠɪᴅᴇᴏ/ᴅᴏᴄᴜᴍᴇɴᴛ.")
+        return await message.reply("❌ ᴛʜᴇ ʀᴇᴘʟɪᴇᴅ ᴍᴇꜱꜱᴀɢᴇ ᴍᴜꜱᴛ ᴄᴏɴᴛᴀɪɴ ᴀ ɢɪғ/ᴀɴɪᴍᴀᴛɪᴏɴ/ᴠɪᴅᴇᴏ/ᴅᴏᴄᴜᴍᴇɴᴛ.")
 
     if await add_gif(command, media.file_id):
         data = await get_social_data(command)
         await message.reply(
             f"✅ ɢɪғ ᴀᴅᴅᴇᴅ ᴛᴏ <code>/{command}</code>\n"
-            f"🎞️ ᴛᴏᴛᴀʟ ɢɪғs: <b>{len(data['gifs'])}</b>"
+            f"🎞️ ᴛᴏᴛᴀʟ ɢɪғꜱ: <b>{len(data['gifs'])}</b>"
         )
     else:
-        await message.reply("❌ ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ. ᴄʜᴇᴄᴋ <code>MONGO_URI</code>.")
+        await message.reply("❌ ᴍᴏɴɢᴏᴅʙ ɪꜱ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ. ᴄʜᴇᴄᴋ <code>MONGO_URI</code>.")
 
 
 @app.on_message(filters.command("addcaption", prefixes=PREFIXES))
@@ -163,21 +157,21 @@ async def add_social_caption(_, message):
     if not await can_manage_social(message):
         return await deny(message)
     if len(message.command or []) < 3:
-        return await message.reply("❌ ᴜsᴀɢᴇ: <code>/addcaption hug {a} hugged {b}! ❤️</code>")
+        return await message.reply("❌ ᴜꜱᴀɢᴇ: <code>/addcaption hug {a} hugged {b}! ❤️</code>")
 
     command = message.command[1].lower().lstrip("/")
     caption = message.text.split(None, 2)[2].strip()
     if command not in COMMANDS:
-        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ. ᴜsᴇ <code>/adminhelp</code>.")
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ ꜱᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ. ᴜꜱᴇ <code>/adminhelp</code>.")
 
     if await add_caption(command, caption):
         data = await get_social_data(command)
         await message.reply(
             f"✅ ᴄᴀᴘᴛɪᴏɴ ᴀᴅᴅᴇᴅ ᴛᴏ <code>/{command}</code>\n"
-            f"📝 ᴛᴏᴛᴀʟ ᴄᴀᴘᴛɪᴏɴs: <b>{len(data['captions'])}</b>"
+            f"📝 ᴛᴏᴛᴀʟ ᴄᴀᴘᴛɪᴏɴꜱ: <b>{len(data['captions'])}</b>"
         )
     else:
-        await message.reply("❌ ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ. ᴄʜᴇᴄᴋ <code>MONGO_URI</code>.")
+        await message.reply("❌ ᴍᴏɴɢᴏᴅʙ ɪꜱ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ. ᴄʜᴇᴄᴋ <code>MONGO_URI</code>.")
 
 
 @app.on_message(filters.command("socialgifs", prefixes=PREFIXES))
@@ -185,14 +179,14 @@ async def social_gifs(_, message):
     if not await can_manage_social(message):
         return await deny(message)
     if len(message.command or []) < 2:
-        return await message.reply("❌ ᴜsᴀɢᴇ: <code>/socialgifs hug</code>")
+        return await message.reply("❌ ᴜꜱᴀɢᴇ: <code>/socialgifs hug</code>")
     command = message.command[1].lower().lstrip("/")
     if command not in COMMANDS:
-        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ.")
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ ꜱᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ.")
     data = await get_social_data(command)
     await message.reply(
-        f"🎞️ <code>/{command}</code> ɢɪғs: <b>{len(data['gifs'])}</b>\n"
-        f"📝 ᴄᴀᴘᴛɪᴏɴs: <b>{len(data['captions'])}</b>"
+        f"🎞️ <code>/{command}</code> ɢɪғꜱ: <b>{len(data['gifs'])}</b>\n"
+        f"📝 ᴄᴀᴘᴛɪᴏɴꜱ: <b>{len(data['captions'])}</b>"
     )
 
 
@@ -201,13 +195,13 @@ async def social_captions(_, message):
     if not await can_manage_social(message):
         return await deny(message)
     if len(message.command or []) < 2:
-        return await message.reply("❌ ᴜsᴀɢᴇ: <code>/socialcaptions hug</code>")
+        return await message.reply("❌ ᴜꜱᴀɢᴇ: <code>/socialcaptions hug</code>")
     command = message.command[1].lower().lstrip("/")
     if command not in COMMANDS:
-        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ.")
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ ꜱᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ.")
     data = await get_social_data(command)
     await message.reply(
-        f"📝 <code>/{command}</code> ʜᴀs <b>{len(data['captions'])}</b> ᴄᴀᴘᴛɪᴏɴ(s)."
+        f"📝 <code>/{command}</code> ʜᴀꜱ <b>{len(data['captions'])}</b> ᴄᴀᴘᴛɪᴏɴ(s)."
     )
 
 
@@ -216,12 +210,12 @@ async def clear_social_gifs(_, message):
     if not await can_manage_social(message):
         return await deny(message)
     if len(message.command or []) < 2:
-        return await message.reply("❌ ᴜsᴀɢᴇ: <code>/clearsocialgifs hug</code>")
+        return await message.reply("❌ ᴜꜱᴀɢᴇ: <code>/clearsocialgifs hug</code>")
     command = message.command[1].lower().lstrip("/")
     if command not in COMMANDS:
-        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ.")
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ ꜱᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ.")
     ok = await clear_gifs(command)
-    await message.reply("🗑️ ᴄᴜsᴛᴏᴍ ɢɪғs ᴄʟᴇᴀʀᴇᴅ." if ok else "❌ ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.")
+    await message.reply("🗑️ ᴄᴜꜱᴛᴏᴍ ɢɪғꜱ ᴄʟᴇᴀʀᴇᴅ." if ok else "❌ ᴍᴏɴɢᴏᴅʙ ɪꜱ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.")
 
 
 @app.on_message(filters.command("clearsocialcaptions", prefixes=PREFIXES))
@@ -229,12 +223,12 @@ async def clear_social_captions(_, message):
     if not await can_manage_social(message):
         return await deny(message)
     if len(message.command or []) < 2:
-        return await message.reply("❌ ᴜsᴀɢᴇ: <code>/clearsocialcaptions hug</code>")
+        return await message.reply("❌ ᴜꜱᴀɢᴇ: <code>/clearsocialcaptions hug</code>")
     command = message.command[1].lower().lstrip("/")
     if command not in COMMANDS:
-        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ sᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ.")
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ ꜱᴏᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ.")
     ok = await clear_captions(command)
-    await message.reply("🗑️ ᴄᴜsᴛᴏᴍ ᴄᴀᴘᴛɪᴏɴs ᴄʟᴇᴀʀᴇᴅ." if ok else "❌ ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.")
+    await message.reply("🗑️ ᴄᴜꜱᴛᴏᴍ ᴄᴀᴘᴛɪᴏɴꜱ ᴄʟᴇᴀʀᴇᴅ." if ok else "❌ ᴍᴏɴɢᴏᴅʙ ɪꜱ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -251,25 +245,54 @@ def _panel_owner(message_or_query):
 
 def _panel_kb():
     return InlineKeyboardMarkup([
-        [_btn("📊 ᴅᴀsʜʙᴏᴀʀᴅ", "adm:dash", enums.ButtonStyle.PRIMARY),
-         _btn("👥 ᴜsᴇʀs", "adm:users:0", enums.ButtonStyle.SUCCESS)],
-        [_btn("🚫 ʙᴀɴɴᴇᴅ", "adm:banned:0", enums.ButtonStyle.DANGER),
-         _btn("📢 ʙʀᴏᴀᴅᴄᴀsᴛ", "adm:bcmenu", enums.ButtonStyle.PRIMARY)],
-        [_btn("📡 ʙᴄ sᴛᴀᴛs", "adm:bcstats", enums.ButtonStyle.SUCCESS),
-         _btn("🗄 ᴅᴀᴛᴀʙᴀsᴇ", "adm:db", enums.ButtonStyle.PRIMARY)],
-        [_btn("🔄 ʀᴇғʀᴇsʜ", "adm:dash", enums.ButtonStyle.PRIMARY),
-         _btn("❌ ᴄʟᴏsᴇ", "adm:close", enums.ButtonStyle.DANGER)],
+        [
+            _btn("📊 ᴅᴀꜱʜʙᴏᴀʀᴅ", "adm:dash", enums.ButtonStyle.PRIMARY),
+            _btn("👥 ᴜꜱᴇʀꜱ", "adm:users:0", enums.ButtonStyle.SUCCESS),
+        ],
+        [
+            _btn("🚫 ʙᴀɴɴᴇᴅ", "adm:banned:0", enums.ButtonStyle.DANGER),
+            _btn("📢 ʙʀᴏᴀᴅᴄᴀꜱᴛ", "adm:bcmenu", enums.ButtonStyle.PRIMARY),
+        ],
+        [
+            _btn("📡 ʙᴄ ꜱᴛᴀᴛꜱ", "adm:bcstats", enums.ButtonStyle.SUCCESS),
+            _btn("🗄 ᴅᴀᴛᴀʙᴀꜱᴇ", "adm:db", enums.ButtonStyle.PRIMARY),
+        ],
+        [
+            _btn("💰 ᴇᴄᴏɴᴏᴍʏ", "adm:economy", enums.ButtonStyle.SUCCESS),
+            _btn("🎁 ɢɪꜰᴛ ꜱʏꜱᴛᴇᴍ", "adm:gift", enums.ButtonStyle.PRIMARY),
+        ],
+        [
+            _btn("🛒 ꜱʜᴏᴘ", "adm:shop", enums.ButtonStyle.PRIMARY),
+            _btn("⚙️ ꜱᴏᴄɪᴀʟ", "adm:social", enums.ButtonStyle.SUCCESS),
+        ],
+        [
+            _btn("🔄 ʀᴇꜰʀᴇꜱʜ", "adm:dash", enums.ButtonStyle.PRIMARY),
+            _btn("❌ ᴄʟᴏꜱᴇ", "adm:close", enums.ButtonStyle.DANGER),
+        ],
     ])
 
 
 def _broadcast_kb():
     return InlineKeyboardMarkup([
-        [_btn("📣 ᴀʟʟ ᴄʜᴀᴛs", "adm:bcmode:all", enums.ButtonStyle.PRIMARY)],
-        [_btn("👤 ᴘʀɪᴠᴀᴛᴇ ᴜsᴇʀs", "adm:bcmode:private", enums.ButtonStyle.SUCCESS),
-         _btn("👥 ɢʀᴏᴜᴘs", "adm:bcmode:groups", enums.ButtonStyle.SUCCESS)],
-        [_btn("🟢 ᴀᴄᴛɪᴠᴇ 7ᴅ", "adm:bcmode:active", enums.ButtonStyle.PRIMARY),
-         _btn("🎯 sᴇʟᴇᴄᴛᴇᴅ ɪᴅs", "adm:bcmode:selected", enums.ButtonStyle.PRIMARY)],
+        [_btn("📣 ᴀʟʟ ᴄʜᴀᴛꜱ", "adm:bcmode:all", enums.ButtonStyle.PRIMARY)],
+        [
+            _btn("👤 ᴘʀɪᴠᴀᴛᴇ ᴜꜱᴇʀꜱ", "adm:bcmode:private", enums.ButtonStyle.SUCCESS),
+            _btn("👥 ɢʀᴏᴜᴘꜱ", "adm:bcmode:groups", enums.ButtonStyle.SUCCESS),
+        ],
+        [
+            _btn("🟢 ᴀᴄᴛɪᴠᴇ 7ᴅ", "adm:bcmode:active", enums.ButtonStyle.PRIMARY),
+            _btn("🎯 ꜱᴇʟᴇᴄᴛᴇᴅ ɪᴅꜱ", "adm:bcmode:selected", enums.ButtonStyle.PRIMARY),
+        ],
         [_btn("⬅️ ʜᴏᴍᴇ", "adm:dash", enums.ButtonStyle.PRIMARY)],
+    ])
+
+
+def _back_to_panel_kb():
+    return InlineKeyboardMarkup([
+        [
+            _btn("⬅️ ʙᴀᴄᴋ", "adm:dash", enums.ButtonStyle.PRIMARY),
+            _btn("❌ ᴄʟᴏꜱᴇ", "adm:close", enums.ButtonStyle.DANGER),
+        ],
     ])
 
 
@@ -278,15 +301,81 @@ def _dashboard_text(stats, bc):
         rich_heading("👑 ᴇʟᴀʀᴀ ᴏᴡɴᴇʀ ᴘᴀɴᴇʟ", level=2)
         + "<i>ᴘᴏᴡᴇʀ & ᴍᴀɴᴀɢᴇᴍᴇɴᴛ ᴄᴇɴᴛᴇʀ</i>\n\n"
         + rich_kv_table([
-            ("👥 ᴜsᴇʀs",       f"<code>{stats['total']}</code>"),
+            ("👥 ᴜꜱᴇʀꜱ",       f"<code>{stats['total']}</code>"),
             ("🟢 ᴀᴄᴛɪᴠᴇ",       f"<code>{stats['active']}</code>"),
             ("🚫 ʙᴀɴɴᴇᴅ",       f"<code>{stats['banned']}</code>"),
-            ("💬 ᴛᴏᴛᴀʟ ᴄʜᴀᴛs",  f"<code>{bc['total']}</code>"),
-            ("👥 ɢʀᴏᴜᴘs",        f"<code>{bc['groups']}</code>"),
+            ("💬 ᴛᴏᴛᴀʟ ᴄʜᴀᴛꜱ",  f"<code>{bc['total']}</code>"),
+            ("👥 ɢʀᴏᴜᴘꜱ",        f"<code>{bc['groups']}</code>"),
             ("📩 ᴘʀɪᴠᴀᴛᴇ",       f"<code>{bc['private']}</code>"),
-        ], headers=["sᴛᴀᴛᴜs", "ᴠᴀʟᴜᴇ"])
+        ], headers=["ꜱᴛᴀᴛᴜꜱ", "ᴠᴀʟᴜᴇ"])
         + "\n"
-        + rich_note("💡 ᴜsᴇ ᴛʜᴇ ʙᴜᴛᴛᴏɴs ʙᴇʟᴏᴡ ᴛᴏ ᴍᴀɴᴀɢᴇ ᴜsᴇʀs, ʙᴀɴs & ʙʀᴏᴀᴅᴄᴀsᴛs.")
+        + rich_note("💡 ᴜꜱᴇ ᴛʜᴇ ʙᴜᴛᴛᴏɴꜱ ʙᴇʟᴏᴡ ᴛᴏ ᴍᴀɴᴀɢᴇ ᴜꜱᴇʀꜱ, ʙᴀɴꜱ & ᴍᴏʀᴇ.")
+    )
+
+
+# ─── Sub-page texts ───────────────────────────────────────────────────────────
+
+def _economy_text():
+    return (
+        rich_heading("💰 ᴇᴄᴏɴᴏᴍʏ ᴏᴡɴᴇʀ ᴄᴏᴍᴍᴀɴᴅꜱ", level=3)
+        + rich_kv_table([
+            ("/addcoins &lt;amount&gt;",            "ᴀᴅᴅ ᴇᴅᴏʟʟᴇʀꜱ ᴛᴏ ᴜꜱᴇʀ <i>(ʀᴇᴘʟʏ)</i>"),
+            ("/add_edollers &lt;amount&gt;",       "ꜱᴀᴍᴇ (ᴀʟɪᴀꜱ)"),
+            ("/removecoins &lt;amount&gt;",         "ʀᴇᴍᴏᴠᴇ ᴇᴅᴏʟʟᴇʀꜱ <i>(ʀᴇᴘʟʏ)</i>"),
+            ("/remove_edollers &lt;amount&gt;",    "ꜱᴀᴍᴇ (ᴀʟɪᴀꜱ)"),
+        ], headers=["ᴄᴏᴍᴍᴀɴᴅ", "ᴋᴀᴀᴍ"])
+        + "\n"
+        + rich_note("💡 ᴀᴅᴅ/ʀᴇᴍᴏᴠᴇ ᴇᴅᴏʟʟᴇʀꜱ ꜰʀᴏᴍ ᴀɴʏ ᴜꜱᴇʀ.")
+    )
+
+
+def _gift_text():
+    return (
+        rich_heading("🎁 ɢɪꜰᴛ ꜱʏꜱᴛᴇᴍ", level=3)
+        + rich_kv_table([
+            ("/setgifttext &lt;id&gt; &lt;text&gt;",  "ꜱᴇᴛ ᴄᴜꜱᴛᴏᴍ ɢɪꜰᴛ ᴍᴇꜱꜱᴀɢᴇ"),
+            ("/cleargifttext &lt;id&gt;",              "ʀᴇꜱᴇᴛ ɢɪꜰᴛ ᴛᴇxᴛ"),
+            ("/resetgifttext &lt;id&gt;",              "ꜱᴀᴍᴇ (ᴀʟɪᴀꜱ)"),
+        ], headers=["ᴄᴏᴍᴍᴀɴᴅ", "ᴋᴀᴀᴍ"])
+        + "\n"
+        + rich_note(
+            "ᴘʟᴀᴄᴇʜᴏʟᴅᴇʀꜱ: <code>{sender}</code> <code>{item}</code> <code>{target}</code>"
+        )
+    )
+
+
+def _shop_text():
+    return (
+        rich_heading("🛒 ꜱʜᴏᴘ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ", level=3)
+        + rich_kv_table([
+            ("/shopadd &lt;id&gt; &lt;price&gt; &lt;stock&gt; &lt;name&gt;", "ᴀᴅᴅ ɪᴛᴇᴍ"),
+            ("/shopedit &lt;id&gt; &lt;field&gt; &lt;value&gt;",           "ᴇᴅɪᴛ ɪᴛᴇᴍ"),
+            ("/shopmedia &lt;id&gt;",                                     "ᴀᴛᴛᴀᴄʜ ᴍᴇᴅɪᴀ <i>(ʀᴇᴘʟʏ)</i>"),
+            ("/shopremove &lt;id&gt;",                                    "ᴅᴇʟᴇᴛᴇ ɪᴛᴇᴍ"),
+            ("/shopstock &lt;id&gt; &lt;stock&gt;",                       "ꜱᴇᴛ ꜱᴛᴏᴄᴋ"),
+            ("/shoptoggle &lt;id&gt; &lt;on/off&gt;",                     "ᴇɴᴀʙʟᴇ/ᴅɪꜱᴀʙʟᴇ"),
+            ("/shopgift &lt;id&gt; &lt;on/off&gt;",                       "ɢɪꜰᴛ ᴍᴏᴅᴇ"),
+        ], headers=["ᴄᴏᴍᴍᴀɴᴅ", "ᴋᴀᴀᴍ"])
+        + "\n"
+        + rich_note("ᴜꜱᴇ <code>-1</code> ꜰᴏʀ ᴜɴʟɪᴍɪᴛᴇᴅ ꜱᴛᴏᴄᴋ.")
+    )
+
+
+def _social_text():
+    return (
+        rich_heading("⚙️ ꜱᴏᴄɪᴀʟ ᴀᴅᴍɪɴ", level=3)
+        + rich_kv_table([
+            ("/adminhelp",           "ꜱᴏᴄɪᴀʟ ʜᴇʟᴘ ᴍᴇɴᴜ"),
+            ("/stats",               "ʙᴏᴛ ꜱᴛᴀᴛᴜꜱ"),
+            ("/addgif &lt;cmd&gt;",  "ᴀᴅᴅ ɢɪꜰ <i>(ʀᴇᴘʟʏ)</i>"),
+            ("/addcaption",          "ᴀᴅᴅ ᴄᴀᴘᴛɪᴏɴ"),
+            ("/socialgifs",          "ᴄᴏᴜɴᴛ ɢɪꜰꜱ"),
+            ("/socialcaptions",      "ᴄᴏᴜɴᴛ ᴄᴀᴘᴛɪᴏɴꜱ"),
+            ("/clearsocialgifs",     "ᴄʟᴇᴀʀ ɢɪꜰꜱ"),
+            ("/clearsocialcaptions", "ᴄʟᴇᴀʀ ᴄᴀᴘᴛɪᴏɴꜱ"),
+        ], headers=["ᴄᴏᴍᴍᴀɴᴅ", "ᴋᴀᴀᴍ"])
+        + "\n"
+        + rich_note("💡 ᴏᴡɴᴇʀ ᴏʀ ɢʀᴏᴜᴘ ᴀᴅᴍɪɴ ᴅᴏɴᴏ ᴜꜱᴇ ᴋᴀʀ ꜱᴀᴋᴛᴇ ʜᴀɪɴ.")
     )
 
 
@@ -303,7 +392,7 @@ async def _edit_panel(query, text, markup=None):
 
 async def _show_users(query, page=0, banned_only=False):
     docs, total = await get_users_page(page, 8, banned_only=banned_only)
-    title = "🚫 ʙᴀɴɴᴇᴅ ᴜsᴇʀs" if banned_only else "👥 ʙᴏᴛ ᴜsᴇʀs"
+    title = "🚫 ʙᴀɴɴᴇᴅ ᴜꜱᴇʀꜱ" if banned_only else "👥 ʙᴏᴛ ᴜꜱᴇʀꜱ"
     rows = []
     buttons = []
     for d in docs:
@@ -321,11 +410,11 @@ async def _show_users(query, page=0, banned_only=False):
             enums.ButtonStyle.SUCCESS if d.get("banned") else enums.ButtonStyle.DANGER,
         )])
     if not docs:
-        rows.append(("—", "—", "ɴᴏ ᴜsᴇʀs ғᴏᴜɴᴅ"))
+        rows.append(("—", "—", "ɴᴏ ᴜꜱᴇʀꜱ ꜰᴏᴜɴᴅ"))
     text = (
         rich_heading(title, level=3)
         + f"<i>ᴛᴏᴛᴀʟ: {total} • ᴘᴀɢᴇ: {page + 1}</i>\n\n"
-        + rich_table(["ᴜsᴇʀ", "ɪᴅ", "sᴛᴀᴛᴜs"], rows)
+        + rich_table(["ᴜꜱᴇʀ", "ɪᴅ", "ꜱᴛᴀᴛᴜꜱ"], rows)
     )
     nav = []
     prefix = "banned" if banned_only else "users"
@@ -348,7 +437,7 @@ async def admin_panel(_, message):
     if not _panel_owner(message):
         return await message.reply(
             "⛔ <b>ᴏᴡɴᴇʀ ᴏɴʟʏ</b>\n\n"
-            "<i>ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ɪs ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴛᴏ ᴛʜᴇ ʙᴏᴛ ᴏᴡɴᴇʀ.</i>"
+            "<i>ᴛʜɪꜱ ᴄᴏᴍᴍᴀɴᴅ ɪꜱ ʀᴇꜱᴛʀɪᴄᴛᴇᴅ ᴛᴏ ᴛʜᴇ ʙᴏᴛ ᴏᴡɴᴇʀ.</i>"
         )
     stats = await get_user_stats()
     bc = await get_broadcast_count()
@@ -365,26 +454,26 @@ async def admin_user_lookup(_, message):
     if not _panel_owner(message):
         return await message.reply("⛔ <b>ᴏᴡɴᴇʀ ᴏɴʟʏ</b>")
     if len(message.command or []) < 2:
-        return await message.reply("ᴜsᴀɢᴇ: <code>/adminuser USER_ID</code>")
+        return await message.reply("ᴜꜱᴀɢᴇ: <code>/adminuser USER_ID</code>")
     try:
         uid = int(message.command[1])
     except ValueError:
-        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ ᴜsᴇʀ ɪᴅ.")
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ ᴜꜱᴇʀ ɪᴅ.")
     doc = await get_user(uid)
     if not doc:
-        return await message.reply("❌ ᴜsᴇʀ ɪs ɴᴏᴛ ɪɴ ᴛʜᴇ ʙᴏᴛ ᴅᴀᴛᴀʙᴀsᴇ.")
+        return await message.reply("❌ ᴜꜱᴇʀ ɪꜱ ɴᴏᴛ ɪɴ ᴛʜᴇ ʙᴏᴛ ᴅᴀᴛᴀʙᴀꜱᴇ.")
     banned = bool(doc.get("banned"))
     joined = doc.get("joined_at")
     last_seen = doc.get("last_seen")
     text = (
-        rich_heading("👤 ᴜsᴇʀ ᴅᴇᴛᴀɪʟs", level=3)
+        rich_heading("👤 ᴜꜱᴇʀ ᴅᴇᴛᴀɪʟꜱ", level=3)
         + rich_kv_table([
             ("ɴᴀᴍᴇ",      rich_esc(_user_name(doc))),
             ("ɪᴅ",        f"<code>{uid}</code>"),
-            ("sᴛᴀᴛᴜs",    "🚫 ʙᴀɴɴᴇᴅ" if banned else "🟢 ᴀᴄᴛɪᴠᴇ"),
+            ("ꜱᴛᴀᴛᴜꜱ",    "🚫 ʙᴀɴɴᴇᴅ" if banned else "🟢 ᴀᴄᴛɪᴠᴇ"),
             ("ᴊᴏɪɴᴇᴅ",     f"<code>{joined.strftime('%Y-%m-%d') if joined else '—'}</code>"),
-            ("ʟᴀsᴛ sᴇᴇɴ", f"<code>{last_seen.strftime('%Y-%m-%d %H:%M') if last_seen else '—'}</code>"),
-        ], headers=["ғɪᴇʟᴅ", "ᴠᴀʟᴜᴇ"])
+            ("ʟᴀꜱᴛ ꜱᴇᴇɴ", f"<code>{last_seen.strftime('%Y-%m-%d %H:%M') if last_seen else '—'}</code>"),
+        ], headers=["ꜰɪᴇʟᴅ", "ᴠᴀʟᴜᴇ"])
     )
     buttons = [[InlineKeyboardButton(
         "♻️ ᴜɴʙᴀɴ" if banned else "🚫 ᴘᴇʀᴍᴀɴᴇɴᴛ ʙᴀɴ",
@@ -402,23 +491,23 @@ async def _direct_ban(message, banned: bool):
         return await message.reply("⛔ <b>ᴏᴡɴᴇʀ ᴏɴʟʏ</b>")
     if len(message.command or []) < 2:
         return await message.reply(
-            f"ᴜsᴀɢᴇ: <code>/{'banbot' if banned else 'botunban'} USER_ID</code>"
+            f"ᴜꜱᴀɢᴇ: <code>/{'banbot' if banned else 'botunban'} USER_ID</code>"
         )
     try:
         uid = int(message.command[1])
     except ValueError:
-        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ ᴛᴇʟᴇɢʀᴀᴍ ᴜsᴇʀ ɪᴅ.")
+        return await message.reply("❌ ɪɴᴠᴀʟɪᴅ ᴛᴇʟᴇɢʀᴀᴍ ᴜꜱᴇʀ ɪᴅ.")
     if uid == int(config.OWNER_ID):
         return await message.reply("❌ ʏᴏᴜ ᴄᴀɴɴᴏᴛ ʙᴀɴ/ᴜɴʙᴀɴ ᴛʜᴇ ʙᴏᴛ ᴏᴡɴᴇʀ.")
     ok = await set_user_banned(uid, banned, message.from_user.id)
     if not ok:
-        return await message.reply("❌ ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ. ᴄʜᴇᴄᴋ <code>MONGO_URI</code>.")
+        return await message.reply("❌ ᴍᴏɴɢᴏᴅʙ ɪꜱ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ. ᴄʜᴇᴄᴋ <code>MONGO_URI</code>.")
     if banned:
         return await message.reply(
-            f"🚫 <b>ᴜsᴇʀ ᴘᴇʀᴍᴀɴᴇɴᴛʟʏ ʙᴀɴɴᴇᴅ.</b>\n\n🆔 <code>{uid}</code>\n\n"
-            "<i>ᴛʜᴇ ʙᴀɴ ɪs sᴛᴏʀᴇᴅ ɪɴ ᴍᴏɴɢᴏᴅʙ ᴀɴᴅ sᴜʀᴠɪᴠᴇs ʙᴏᴛ ʀᴇsᴛᴀʀᴛs.</i>"
+            f"🚫 <b>ᴜꜱᴇʀ ᴘᴇʀᴍᴀɴᴇɴᴛʟʏ ʙᴀɴɴᴇᴅ.</b>\n\n🆔 <code>{uid}</code>\n\n"
+            "<i>ᴛʜᴇ ʙᴀɴ ɪꜱ ꜱᴛᴏʀᴇᴅ ɪɴ ᴍᴏɴɢᴏᴅʙ ᴀɴᴅ ꜱᴜʀᴠɪᴠᴇꜱ ʙᴏᴛ ʀᴇꜱᴛᴀʀᴛꜱ.</i>"
         )
-    return await message.reply(f"♻️ <b>ᴜsᴇʀ ᴜɴʙᴀɴɴᴇᴅ.</b>\n\n🆔 <code>{uid}</code>")
+    return await message.reply(f"♻️ <b>ᴜꜱᴇʀ ᴜɴʙᴀɴɴᴇᴅ.</b>\n\n🆔 <code>{uid}</code>")
 
 
 @app.on_message(filters.command("banbot", prefixes=PREFIXES))
@@ -463,15 +552,31 @@ async def admin_panel_callback(_, query: CallbackQuery):
     if action == "banned":
         return await _show_users(query, int(parts[2]) if len(parts) > 2 else 0, True)
 
+    # ✅ Economy sub-page
+    if action == "economy":
+        return await _edit_panel(query, _economy_text(), _back_to_panel_kb())
+
+    # ✅ Gift sub-page
+    if action == "gift":
+        return await _edit_panel(query, _gift_text(), _back_to_panel_kb())
+
+    # ✅ Shop sub-page
+    if action == "shop":
+        return await _edit_panel(query, _shop_text(), _back_to_panel_kb())
+
+    # ✅ Social sub-page
+    if action == "social":
+        return await _edit_panel(query, _social_text(), _back_to_panel_kb())
+
     if action in ("ban", "unban"):
         uid = int(parts[2])
         if uid == int(config.OWNER_ID):
             return await query.answer("ʏᴏᴜ ᴄᴀɴɴᴏᴛ ʙᴀɴ ᴛʜᴇ ᴏᴡɴᴇʀ.", show_alert=True)
         ok = await set_user_banned(uid, action == "ban", query.from_user.id)
         if not ok:
-            return await query.answer("ᴍᴏɴɢᴏᴅʙ ɪs ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.", show_alert=True)
+            return await query.answer("ᴍᴏɴɢᴏᴅʙ ɪꜱ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.", show_alert=True)
         await query.answer(
-            "ᴜsᴇʀ ᴘᴇʀᴍᴀɴᴇɴᴛʟʏ ʙᴀɴɴᴇᴅ." if action == "ban" else "ᴜsᴇʀ ᴜɴʙᴀɴɴᴇᴅ.",
+            "ᴜꜱᴇʀ ᴘᴇʀᴍᴀɴᴇɴᴛʟʏ ʙᴀɴɴᴇᴅ." if action == "ban" else "ᴜꜱᴇʀ ᴜɴʙᴀɴɴᴇᴅ.",
             show_alert=True,
         )
         return await _edit_panel(
@@ -482,10 +587,10 @@ async def admin_panel_callback(_, query: CallbackQuery):
     if action == "bcmenu":
         return await _edit_panel(
             query,
-            rich_heading("📢 ʙʀᴏᴀᴅᴄᴀsᴛ ᴄᴇɴᴛᴇʀ", level=3)
+            rich_heading("📢 ʙʀᴏᴀᴅᴄᴀꜱᴛ ᴄᴇɴᴛᴇʀ", level=3)
             + rich_note(
-                "ᴄʜᴏᴏsᴇ ᴡʜᴇʀᴇ ᴛʜᴇ ɴᴇxᴛ ʙʀᴏᴀᴅᴄᴀsᴛ sʜᴏᴜʟᴅ ɢᴏ.\n\n"
-                "🎯 sᴇʟᴇᴄᴛᴇᴅ ɪᴅs ᴀᴄᴄᴇᴘᴛs ᴜsᴇʀ/ᴄʜᴀᴛ ɪᴅs sᴇᴘᴀʀᴀᴛᴇᴅ ʙʏ sᴘᴀᴄᴇs ᴏʀ ᴄᴏᴍᴍᴀs."
+                "ᴄʜᴏᴏꜱᴇ ᴡʜᴇʀᴇ ᴛʜᴇ ɴᴇxᴛ ʙʀᴏᴀᴅᴄᴀꜱᴛ ꜱʜᴏᴜʟᴅ ɢᴏ.\n\n"
+                "🎯 ꜱᴇʟᴇᴄᴛᴇᴅ ɪᴅꜱ ᴀᴄᴄᴇᴘᴛꜱ ᴜꜱᴇʀ/ᴄʜᴀᴛ ɪᴅꜱ ꜱᴇᴘᴀʀᴀᴛᴇᴅ ʙʏ ꜱᴘᴀᴄᴇꜱ ᴏʀ ᴄᴏᴍᴍᴀꜱ."
             ),
             _broadcast_kb(),
         )
@@ -497,9 +602,9 @@ async def admin_panel_callback(_, query: CallbackQuery):
             _ADMIN_BROADCAST_WAIT[uid] = {"mode": "selected_ids"}
             return await _edit_panel(
                 query,
-                rich_heading("🎯 sᴇʟᴇᴄᴛᴇᴅ ɪᴅs", level=3)
+                rich_heading("🎯 ꜱᴇʟᴇᴄᴛᴇᴅ ɪᴅꜱ", level=3)
                 + rich_note(
-                    "sᴇɴᴅ ᴛᴇʟᴇɢʀᴀᴍ ᴜsᴇʀ/ᴄʜᴀᴛ ɪᴅs sᴇᴘᴀʀᴀᴛᴇᴅ ʙʏ sᴘᴀᴄᴇs ᴏʀ ᴄᴏᴍᴍᴀs.\n\n"
+                    "ꜱᴇɴᴅ ᴛᴇʟᴇɢʀᴀᴍ ᴜꜱᴇʀ/ᴄʜᴀᴛ ɪᴅꜱ ꜱᴇᴘᴀʀᴀᴛᴇᴅ ʙʏ ꜱᴘᴀᴄᴇꜱ ᴏʀ ᴄᴏᴍᴍᴀꜱ.\n\n"
                     "ᴇxᴀᴍᴘʟᴇ: <code>123456789, 987654321</code>"
                 ),
                 InlineKeyboardMarkup([[
@@ -508,17 +613,17 @@ async def admin_panel_callback(_, query: CallbackQuery):
             )
         _ADMIN_BROADCAST_WAIT[uid] = {"mode": mode}
         label = {
-            "all": "ᴀʟʟ ᴄʜᴀᴛs",
-            "private": "ᴘʀɪᴠᴀᴛᴇ ᴜsᴇʀs",
-            "groups": "ɢʀᴏᴜᴘs",
-            "active": "ᴀᴄᴛɪᴠᴇ ᴜsᴇʀs (ʟᴀsᴛ 7 ᴅᴀʏs)",
+            "all": "ᴀʟʟ ᴄʜᴀᴛꜱ",
+            "private": "ᴘʀɪᴠᴀᴛᴇ ᴜꜱᴇʀꜱ",
+            "groups": "ɢʀᴏᴜᴘꜱ",
+            "active": "ᴀᴄᴛɪᴠᴇ ᴜꜱᴇʀꜱ (ʟᴀꜱᴛ 7 ᴅᴀʏꜱ)",
         }.get(mode, mode)
         return await _edit_panel(
             query,
             rich_heading(f"📢 {label.upper()}", level=3)
             + rich_note(
-                "sᴇɴᴅ ᴛʜᴇ ᴍᴇssᴀɢᴇ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ʙʀᴏᴀᴅᴄᴀsᴛ.\n\n"
-                "ᴛᴇxᴛ, ᴘʜᴏᴛᴏ, ᴠɪᴅᴇᴏ, ᴅᴏᴄᴜᴍᴇɴᴛ, ᴀɴɪᴍᴀᴛɪᴏɴ & ғᴏʀᴡᴀʀᴅᴇᴅ ᴍᴇᴅɪᴀ sᴜᴘᴘᴏʀᴛᴇᴅ.\n\n"
+                "ꜱᴇɴᴅ ᴛʜᴇ ᴍᴇꜱꜱᴀɢᴇ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ʙʀᴏᴀᴅᴄᴀꜱᴛ.\n\n"
+                "ᴛᴇxᴛ, ᴘʜᴏᴛᴏ, ᴠɪᴅᴇᴏ, ᴅᴏᴄᴜᴍᴇɴᴛ, ᴀɴɪᴍᴀᴛɪᴏɴ & ꜰᴏʀᴡᴀʀᴅᴇᴅ ᴍᴇᴅɪᴀ ꜱᴜᴘᴘᴏʀᴛᴇᴅ.\n\n"
                 "<code>/cancelbroadcast</code> ᴛᴏ ᴄᴀɴᴄᴇʟ."
             ),
             InlineKeyboardMarkup([[
@@ -530,8 +635,8 @@ async def admin_panel_callback(_, query: CallbackQuery):
         _ADMIN_BROADCAST_WAIT.pop(int(query.from_user.id), None)
         return await _edit_panel(
             query,
-            rich_heading("📢 ʙʀᴏᴀᴅᴄᴀsᴛ ᴄᴇɴᴛᴇʀ", level=3)
-            + rich_note("ʙʀᴏᴀᴅᴄᴀsᴛ ᴄᴀɴᴄᴇʟʟᴇᴅ."),
+            rich_heading("📢 ʙʀᴏᴀᴅᴄᴀꜱᴛ ᴄᴇɴᴛᴇʀ", level=3)
+            + rich_note("ʙʀᴏᴀᴅᴄᴀꜱᴛ ᴄᴀɴᴄᴇʟʟᴇᴅ."),
             _broadcast_kb(),
         )
 
@@ -539,10 +644,10 @@ async def admin_panel_callback(_, query: CallbackQuery):
         bc = await get_broadcast_count()
         return await _edit_panel(
             query,
-            rich_heading("📡 ʙʀᴏᴀᴅᴄᴀsᴛ sᴛᴀᴛs", level=3)
+            rich_heading("📡 ʙʀᴏᴀᴅᴄᴀꜱᴛ ꜱᴛᴀᴛꜱ", level=3)
             + rich_kv_table([
                 ("💬 ᴛᴏᴛᴀʟ",  f"<code>{bc['total']}</code>"),
-                ("👥 ɢʀᴏᴜᴘs", f"<code>{bc['groups']}</code>"),
+                ("👥 ɢʀᴏᴜᴘꜱ", f"<code>{bc['groups']}</code>"),
                 ("📩 ᴘʀɪᴠᴀᴛᴇ", f"<code>{bc['private']}</code>"),
             ], headers=["ᴍᴇᴛʀɪᴄ", "ᴠᴀʟᴜᴇ"])
         )
@@ -556,8 +661,8 @@ async def admin_panel_callback(_, query: CallbackQuery):
                 state = "🔴 ᴄᴏɴɴᴇᴄᴛɪᴏɴ ᴇʀʀᴏʀ"
         return await _edit_panel(
             query,
-            rich_heading("🗄 ᴅᴀᴛᴀʙᴀsᴇ sᴛᴀᴛᴜs", level=3)
-            + rich_kv_table([("ᴍᴏɴɢᴏᴅʙ", state)], headers=["sᴇʀᴠɪᴄᴇ", "sᴛᴀᴛᴜs"])
+            rich_heading("🗄 ᴅᴀᴛᴀʙᴀꜱᴇ ꜱᴛᴀᴛᴜꜱ", level=3)
+            + rich_kv_table([("ᴍᴏɴɢᴏᴅʙ", state)], headers=["ꜱᴇʀᴠɪᴄᴇ", "ꜱᴛᴀᴛᴜꜱ"])
         )
 
 
@@ -570,7 +675,7 @@ async def cancel_admin_broadcast(_, message):
     if not _panel_owner(message):
         return await message.reply("⛔ <b>ᴏᴡɴᴇʀ ᴏɴʟʏ</b>")
     _ADMIN_BROADCAST_WAIT.pop(int(message.from_user.id), None)
-    await message.reply("❌ <b>ʙʀᴏᴀᴅᴄᴀsᴛ ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>")
+    await message.reply("❌ <b>ʙʀᴏᴀᴅᴄᴀꜱᴛ ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>")
 
 
 async def _copy_or_send(client, target_id, message):
@@ -598,11 +703,11 @@ async def admin_broadcast_message(client, message):
                 except ValueError:
                     pass
             if not ids:
-                return await message.reply("❌ ɴᴏ ᴠᴀʟɪᴅ ᴛᴇʟᴇɢʀᴀᴍ ɪᴅs ғᴏᴜɴᴅ.")
+                return await message.reply("❌ ɴᴏ ᴠᴀʟɪᴅ ᴛᴇʟᴇɢʀᴀᴍ ɪᴅꜱ ꜰᴏᴜɴᴅ.")
             state["ids"] = ids
             state["mode"] = "selected_message"
             return await message.reply(
-                "✅ ɪᴅs sᴀᴠᴇᴅ. ɴᴏᴡ sᴇɴᴅ ᴛʜᴇ ᴍᴇssᴀɢᴇ ᴛᴏ ʙʀᴏᴀᴅᴄᴀsᴛ.\n\n"
+                "✅ ɪᴅꜱ ꜱᴀᴠᴇᴅ. ɴᴏᴡ ꜱᴇɴᴅ ᴛʜᴇ ᴍᴇꜱꜱᴀɢᴇ ᴛᴏ ʙʀᴏᴀᴅᴄᴀꜱᴛ.\n\n"
                 "<code>/cancelbroadcast</code> ᴛᴏ ᴄᴀɴᴄᴇʟ."
             )
         return
@@ -623,10 +728,10 @@ async def admin_broadcast_message(client, message):
         return
     _ADMIN_BROADCAST_WAIT.pop(uid, None)
     if not targets:
-        return await message.reply("❌ ɴᴏ ᴛᴀʀɢᴇᴛs ғᴏᴜɴᴅ ғᴏʀ ᴛʜɪs ʙʀᴏᴀᴅᴄᴀsᴛ ᴍᴏᴅᴇ.")
+        return await message.reply("❌ ɴᴏ ᴛᴀʀɢᴇᴛꜱ ꜰᴏᴜɴᴅ ꜰᴏʀ ᴛʜɪꜱ ʙʀᴏᴀᴅᴄᴀꜱᴛ ᴍᴏᴅᴇ.")
     status = await message.reply(
-        f"📢 <b>ʙʀᴏᴀᴅᴄᴀsᴛ sᴛᴀʀᴛᴇᴅ</b>\n\n"
-        f"🎯 ᴛᴀʀɢᴇᴛs: <code>{len(targets)}</code>\n⏳ sᴇɴᴅɪɴɢ..."
+        f"📢 <b>ʙʀᴏᴀᴅᴄᴀꜱᴛ ꜱᴛᴀʀᴛᴇᴅ</b>\n\n"
+        f"🎯 ᴛᴀʀɢᴇᴛꜱ: <code>{len(targets)}</code>\n⏳ ꜱᴇɴᴅɪɴɢ..."
     )
     sent = failed = 0
     for cid in targets:
@@ -637,10 +742,10 @@ async def admin_broadcast_message(client, message):
             failed += 1
         await asyncio.sleep(0.05)
     await status.edit_text(
-        "<b>📢 ʙʀᴏᴀᴅᴄᴀsᴛ ᴄᴏᴍᴘʟᴇᴛᴇ</b>\n\n"
-        f"🎯 ᴛᴀʀɢᴇᴛs: <code>{len(targets)}</code>\n"
-        f"✅ sᴇɴᴛ: <code>{sent}</code>\n"
-        f"❌ ғᴀɪʟᴇᴅ: <code>{failed}</code>"
+        "<b>📢 ʙʀᴏᴀᴅᴄᴀꜱᴛ ᴄᴏᴍᴘʟᴇᴛᴇ</b>\n\n"
+        f"🎯 ᴛᴀʀɢᴇᴛꜱ: <code>{len(targets)}</code>\n"
+        f"✅ ꜱᴇɴᴛ: <code>{sent}</code>\n"
+        f"❌ ꜰᴀɪʟᴇᴅ: <code>{failed}</code>"
     )
 
 
@@ -653,7 +758,6 @@ async def banned_user_guard(_, message):
     if not message.from_user or _panel_owner(message):
         return
     if await is_user_banned(message.from_user.id):
-        # Silently ignore — no reply, no reaction, nothing.
         raise StopPropagation
 
 
@@ -662,8 +766,6 @@ async def banned_callback_guard(_, query):
     if not query.from_user or _panel_owner(query):
         return
     if await is_user_banned(query.from_user.id):
-        # Telegram requires an answer to stop the button spinner.
-        # Empty answer = user sees nothing.
         try:
             await query.answer()
         except Exception:
