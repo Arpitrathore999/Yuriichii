@@ -20,6 +20,7 @@ ECONOMY_DEFAULTS = {
     "status": "alive",
     "protection_until": None,
     "daily_last_claim": None,
+    "custom_emoji": "👤",
     "created_at": None,
     "updated_at": None,
 }
@@ -79,6 +80,7 @@ async def ensure_user(user: Any):
                     "status": {"$ifNull": ["$status", "alive"]},
                     "protection_until": {"$ifNull": ["$protection_until", None]},
                     "daily_last_claim": {"$ifNull": ["$daily_last_claim", None]},
+                    "custom_emoji": {"$ifNull": ["$custom_emoji", "👤"]},
                     "created_at": {"$ifNull": ["$created_at", now]},
                     "updated_at": now,
                 }
@@ -198,8 +200,9 @@ async def top_rich(limit: int = 10):
             "username": 1,
             "first_name": 1,
             "user_id": {"$ifNull": ["$user_id", "$_id"]},
-                    "coins": {"$ifNull": ["$coins", 0]},
+            "coins": {"$ifNull": ["$coins", 0]},
             "wallet": {"$ifNull": ["$wallet", 0]},
+            "custom_emoji": {"$ifNull": ["$custom_emoji", "👤"]},
         }},
         {"$set": {"wealth": {"$add": ["$coins", "$wallet"]}}},
         {"$sort": {"wealth": -1, "_id": 1}},
@@ -213,7 +216,14 @@ async def top_killers(limit: int = 10):
     if col is None:
         return []
     return await col.find(
-        {}, {"_id": 1, "username": 1, "first_name": 1, "kills": 1}
+        {},
+        {
+            "_id": 1,
+            "username": 1,
+            "first_name": 1,
+            "kills": 1,
+            "custom_emoji": {"$ifNull": ["$custom_emoji", "👤"]},
+        },
     ).sort([("kills", -1), ("_id", 1)]).limit(max(1, int(limit))).to_list(length=max(1, int(limit)))
 
 
