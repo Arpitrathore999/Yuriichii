@@ -24,7 +24,6 @@ TAX_RATE = 0.10
 PROTECTION_COST = 500
 PROTECTION_DURATION = timedelta(days=1)
 
-# ✅ Daily = 2000
 DAILY_REWARD_MIN = 2000
 DAILY_REWARD_MAX = 2000
 
@@ -35,7 +34,6 @@ KILL_XP_MAX = 50
 
 WALLET_MAX_PERCENT = 0.30
 
-# Rob mechanics
 ROB_SUCCESS_CHANCE = 1.0
 ROB_MIN_PERCENT = 0.10
 ROB_MAX_PERCENT = 0.30
@@ -133,29 +131,23 @@ def wallet_limit(coins: int) -> int:
 async def deposit_wallet(user_id: int, amount: int):
     if amount <= 0:
         return {"ok": False, "reason": "invalid_amount"}
-
     col = users_collection()
     if col is None:
         return {"ok": False, "reason": "database"}
-
     user = await col.find_one({"_id": int(user_id)})
     if not user:
         return {"ok": False, "reason": "user"}
-
     coins = int(user.get("coins", 0))
     wallet = int(user.get("wallet", 0))
     maximum = int((coins + wallet) * WALLET_MAX_PERCENT)
-
     if wallet + amount > maximum:
         return {"ok": False, "reason": "wallet_limit", "maximum": maximum, "wallet": wallet}
-
     result = await col.update_one(
         {"_id": int(user_id), "coins": {"$gte": amount}, "wallet": {"$gte": 0}},
         {"$inc": {"coins": -amount, "wallet": amount}, "$set": {"updated_at": now_utc()}},
     )
     if result.modified_count != 1:
         return {"ok": False, "reason": "insufficient"}
-
     await log_transaction(user_id, "wallet_deposit", amount,
                            balance_before=coins, balance_after=coins - amount)
     return {"ok": True, "amount": amount, "wallet": wallet + amount, "coins": coins - amount}
@@ -164,27 +156,22 @@ async def deposit_wallet(user_id: int, amount: int):
 async def withdraw_wallet(user_id: int, amount: int):
     if amount <= 0:
         return {"ok": False, "reason": "invalid_amount"}
-
     col = users_collection()
     if col is None:
         return {"ok": False, "reason": "database"}
-
     user = await col.find_one({"_id": int(user_id)})
     if not user:
         return {"ok": False, "reason": "user"}
-
     coins = int(user.get("coins", 0))
     wallet = int(user.get("wallet", 0))
     if wallet < amount:
         return {"ok": False, "reason": "insufficient"}
-
     result = await col.update_one(
         {"_id": int(user_id), "wallet": {"$gte": amount}},
         {"$inc": {"coins": amount, "wallet": -amount}, "$set": {"updated_at": now_utc()}},
     )
     if result.modified_count != 1:
         return {"ok": False, "reason": "insufficient"}
-
     await log_transaction(user_id, "wallet_withdraw", amount,
                            balance_before=coins, balance_after=coins + amount)
     return {"ok": True, "amount": amount, "wallet": wallet - amount, "coins": coins + amount}
@@ -195,23 +182,18 @@ async def transfer(sender_id: int, recipient_id: int, amount: int):
         return {"ok": False, "reason": "invalid_amount"}
     if sender_id == recipient_id:
         return {"ok": False, "reason": "self"}
-
     sender = await get_user(sender_id)
     recipient = await get_user(recipient_id)
     if not sender or not recipient:
         return {"ok": False, "reason": "user"}
-
     if int(recipient_id) <= 0:
         return {"ok": False, "reason": "user"}
-
     client = mongo_client()
     col = users_collection()
     if client is None or col is None:
         return {"ok": False, "reason": "database"}
-
     tax = tax_for(amount)
     net = amount - tax
-
     try:
         async with await client.start_session() as session:
             async with session.start_transaction():
@@ -223,22 +205,17 @@ async def transfer(sender_id: int, recipient_id: int, amount: int):
                 if result.modified_count != 1:
                     await session.abort_transaction()
                     return {"ok": False, "reason": "insufficient"}
-
                 await col.update_one(
                     {"_id": int(recipient_id)},
                     {"$inc": {"coins": net}, "$set": {"updated_at": now_utc()}},
                     session=session,
                 )
-
-                # ✅ Tax Elara ko
                 if tax > 0:
                     await col.update_one(
                         {"_id": ELARA_BOT_ID},
                         {"$inc": {"coins": tax}, "$set": {"updated_at": now_utc()}},
-                        upsert=True,
-                        session=session,
+                        upsert=True, session=session,
                     )
-
                 await log_transaction(sender_id, "transfer_sent", -amount,
                                       balance_before=int(sender.get("coins", 0)),
                                       balance_after=int(sender.get("coins", 0)) - amount,
@@ -256,27 +233,20 @@ async def claim_daily(user_id: int):
     col = users_collection()
     if col is None:
         return {"ok": False, "reason": "database"}
-
     tz = economy_timezone()
     today = datetime.now(tz).date().isoformat()
     reward = random.randint(DAILY_REWARD_MIN, DAILY_REWARD_MAX)
-
     result = await col.update_one(
-        {
-            "_id": int(user_id),
-            "$or": [
-                {"daily_last_claim": {"$exists": False}},
-                {"daily_last_claim": {"$ne": today}},
-            ],
-        },
-        {
-            "$inc": {"coins": reward},
-            "$set": {"daily_last_claim": today, "updated_at": now_utc()},
-        },
+        {"_id": int(user_id),
+         "$or": [
+             {"daily_last_claim": {"$exists": False}},
+             {"daily_last_claim": {"$ne": today}},
+         ]},
+        {"$inc": {"coins": reward},
+         "$set": {"daily_last_claim": today, "updated_at": now_utc()}},
     )
     if result.modified_count != 1:
         return {"ok": False, "reason": "already_claimed", "date": today}
-
     await log_transaction(user_id, "daily", reward)
     user = await get_user(user_id)
     return {"ok": True, "reward": reward, "balance": int(user.get("coins", 0))}
@@ -287,15 +257,9 @@ async def kill_user(killer_id: int, target_id: int):
         return {"ok": False, "reason": "self"}
     if killer_id <= 0 or target_id <= 0:
         return {"ok": False, "reason": "invalid"}
-
-    # ✅ Elara ko koi kill nahi kar sakta
     if int(target_id) == ELARA_BOT_ID:
-        return {
-            "ok": False,
-            "reason": "elara_kill_roast",
-            "roast": random.choice(ELARA_KILL_ROASTS),
-        }
-
+        return {"ok": False, "reason": "elara_kill_roast",
+                "roast": random.choice(ELARA_KILL_ROASTS)}
     killer = await get_user(killer_id)
     target = await get_user(target_id)
     if not killer or not target:
@@ -304,38 +268,31 @@ async def kill_user(killer_id: int, target_id: int):
         return {"ok": False, "reason": "dead"}
     if killer.get("status", "alive") == "dead":
         return {"ok": False, "reason": "killer_dead"}
-
     until = target.get("protection_until")
     if until and until > now_utc():
         return {"ok": False, "reason": "protected", "until": until}
-
     reward = random.randint(KILL_REWARD_MIN, KILL_REWARD_MAX)
     xp_reward = random.randint(KILL_XP_MIN, KILL_XP_MAX)
     client = mongo_client()
     col = users_collection()
     if client is None or col is None:
         return {"ok": False, "reason": "database"}
-
     try:
         async with await client.start_session() as session:
             async with session.start_transaction():
                 result = await col.update_one(
-                    {
-                        "_id": int(target_id),
-                        "status": "alive",
-                        "$or": [
-                            {"protection_until": None},
-                            {"protection_until": {"$lte": now_utc()}},
-                            {"protection_until": {"$exists": False}},
-                        ],
-                    },
+                    {"_id": int(target_id), "status": "alive",
+                     "$or": [
+                         {"protection_until": None},
+                         {"protection_until": {"$lte": now_utc()}},
+                         {"protection_until": {"$exists": False}},
+                     ]},
                     {"$set": {"status": "dead", "updated_at": now_utc()}},
                     session=session,
                 )
                 if result.modified_count != 1:
                     await session.abort_transaction()
                     return {"ok": False, "reason": "not_available"}
-
                 killer_update = await col.update_one(
                     {"_id": int(killer_id), "status": "alive"},
                     {"$inc": {"kills": 1, "coins": reward},
@@ -356,103 +313,76 @@ async def kill_user(killer_id: int, target_id: int):
 async def rob_user(robber_id: int, target_id: int, requested_amount: int = None):
     if robber_id == target_id:
         return {"ok": False, "reason": "self"}
-
-    # ✅ Elara ko rob karne ki koshish
     if int(target_id) == ELARA_BOT_ID:
         if int(robber_id) == OWNER_ID:
-            pass  # Owner allowed
+            pass
         else:
-            return {
-                "ok": False,
-                "reason": "elara_roast",
-                "roast": random.choice(ELARA_ROASTS),
-            }
-
+            return {"ok": False, "reason": "elara_roast",
+                    "roast": random.choice(ELARA_ROASTS)}
     col = users_collection()
     if col is None:
         return {"ok": False, "reason": "database"}
-
     robber = await get_user(robber_id)
     target = await get_user(target_id)
     if not robber or not target:
         return {"ok": False, "reason": "user"}
-
     until = target.get("protection_until")
     if until and until > now_utc():
         return {"ok": False, "reason": "protected", "until": until}
-
     target_coins = int(target.get("coins", 0))
     if target_coins < ROB_MIN_TARGET_BALANCE:
         return {"ok": False, "reason": "insufficient"}
-
     last = robber.get("rob_last_attempt")
     cutoff = now_utc() - timedelta(seconds=ROB_COOLDOWN_SECONDS)
     if last and last > cutoff:
-        return {"ok": False, "reason": "cooldown", "until": last + timedelta(seconds=ROB_COOLDOWN_SECONDS)}
-
+        return {"ok": False, "reason": "cooldown",
+                "until": last + timedelta(seconds=ROB_COOLDOWN_SECONDS)}
     reserved = await col.update_one(
-        {
-            "_id": int(robber_id),
-            "$or": [
-                {"rob_last_attempt": {"$exists": False}},
-                {"rob_last_attempt": {"$lte": cutoff}},
-            ],
-        },
+        {"_id": int(robber_id),
+         "$or": [
+             {"rob_last_attempt": {"$exists": False}},
+             {"rob_last_attempt": {"$lte": cutoff}},
+         ]},
         {"$set": {"rob_last_attempt": now_utc(), "updated_at": now_utc()}},
     )
     if reserved.modified_count != 1:
         return {"ok": False, "reason": "cooldown"}
-
-    # ✅ Full amount agar request kiya, warna 10-30%
     if requested_amount and requested_amount > 0:
         amount = min(requested_amount, target_coins)
     else:
         amount = max(1, int(target_coins * random.uniform(ROB_MIN_PERCENT, ROB_MAX_PERCENT)))
-
-    # ✅ 10% tax
     tax = tax_for(amount)
     net = amount - tax
-
     client = mongo_client()
     if client is None:
         return {"ok": False, "reason": "database"}
-
     try:
         async with await client.start_session() as session:
             async with session.start_transaction():
                 stolen = await col.update_one(
-                    {
-                        "_id": int(target_id),
-                        "coins": {"$gte": amount},
-                        "$or": [
-                            {"protection_until": None},
-                            {"protection_until": {"$lte": now_utc()}},
-                            {"protection_until": {"$exists": False}},
-                        ],
-                    },
+                    {"_id": int(target_id), "coins": {"$gte": amount},
+                     "$or": [
+                         {"protection_until": None},
+                         {"protection_until": {"$lte": now_utc()}},
+                         {"protection_until": {"$exists": False}},
+                     ]},
                     {"$inc": {"coins": -amount}, "$set": {"updated_at": now_utc()}},
                     session=session,
                 )
                 if stolen.modified_count != 1:
                     await session.abort_transaction()
                     return {"ok": False, "reason": "not_available"}
-
-                # Robber ko net
                 await col.update_one(
                     {"_id": int(robber_id)},
                     {"$inc": {"coins": net}, "$set": {"updated_at": now_utc()}},
                     session=session,
                 )
-
-                # ✅ Tax Elara ko
                 if tax > 0:
                     await col.update_one(
                         {"_id": ELARA_BOT_ID},
                         {"$inc": {"coins": tax}, "$set": {"updated_at": now_utc()}},
-                        upsert=True,
-                        session=session,
+                        upsert=True, session=session,
                     )
-
                 await log_transaction(robber_id, "rob_received", net,
                                       meta={"target": target_id, "gross": amount, "tax": tax},
                                       session=session)
@@ -467,29 +397,27 @@ async def protect_user(user_id: int):
     col = users_collection()
     if col is None:
         return {"ok": False, "reason": "database"}
-
     until = now_utc() + PROTECTION_DURATION
     result = await col.update_one(
-        {
-            "_id": int(user_id),
-            "coins": {"$gte": PROTECTION_COST},
-            "$or": [
-                {"protection_until": None},
-                {"protection_until": {"$lte": now_utc()}},
-                {"protection_until": {"$exists": False}},
-            ],
-        },
-        {
-            "$inc": {"coins": -PROTECTION_COST},
-            "$set": {"protection_until": until, "updated_at": now_utc()},
-        },
+        {"_id": int(user_id), "coins": {"$gte": PROTECTION_COST},
+         "$or": [
+             {"protection_until": None},
+             {"protection_until": {"$lte": now_utc()}},
+             {"protection_until": {"$exists": False}},
+         ]},
+        {"$inc": {"coins": -PROTECTION_COST},
+         "$set": {"protection_until": until, "updated_at": now_utc()}},
     )
     if result.modified_count != 1:
         user = await get_user(user_id)
         if user and user.get("protection_until") and user["protection_until"] > now_utc():
             return {"ok": False, "reason": "already_protected", "until": user["protection_until"]}
         return {"ok": False, "reason": "insufficient"}
-
+    await col.update_one(
+        {"_id": ELARA_BOT_ID},
+        {"$inc": {"coins": PROTECTION_COST}, "$set": {"updated_at": now_utc()}},
+        upsert=True,
+    )
     await log_transaction(user_id, "protection", -PROTECTION_COST,
                           meta={"until": until.isoformat()})
     return {"ok": True, "until": until}
@@ -498,29 +426,27 @@ async def protect_user(user_id: int):
 async def check_user(requester_id: int, target_id: int):
     if requester_id == target_id:
         return {"ok": False, "reason": "self"}
-
     target = await get_user(target_id)
     if not target:
         return {"ok": False, "reason": "user"}
-
     col = users_collection()
     if col is None:
         return {"ok": False, "reason": "database"}
-
     charged = await col.update_one(
         {"_id": int(requester_id), "coins": {"$gte": CHECK_COST}},
         {"$inc": {"coins": -CHECK_COST}, "$set": {"updated_at": now_utc()}},
     )
     if charged.modified_count != 1:
         return {"ok": False, "reason": "insufficient"}
-
+    await col.update_one(
+        {"_id": ELARA_BOT_ID},
+        {"$inc": {"coins": CHECK_COST}, "$set": {"updated_at": now_utc()}},
+        upsert=True,
+    )
     protection = target.get("protection_until")
     active = bool(protection and protection > now_utc())
     await log_transaction(requester_id, "check", -CHECK_COST,
                           meta={"target": target_id})
-    return {
-        "ok": True,
-        "target": target,
-        "protected": active,
-        "protection_until": protection if active else None,
-    }
+    return {"ok": True, "target": target,
+            "protected": active,
+            "protection_until": protection if active else None}
