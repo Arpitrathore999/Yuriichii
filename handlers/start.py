@@ -333,11 +333,7 @@ def _rich_admin() -> str:
 <tr><td><code>.demote</code></td><td>ᴀᴅᴍɪɴ ʜᴀᴛᴀᴏ</td></tr>
 <tr><td><code>.add &lt;rights&gt;</code></td><td>ꜱᴇʟᴇᴄᴛɪᴠᴇ ʀɪɢʜᴛꜱ ᴅᴏ</td></tr>
 <tr><td><code>.remove &lt;rights&gt;</code></td><td>ꜱᴇʟᴇᴄᴛɪᴠᴇ ʀɪɢʜᴛꜱ ʜᴀᴛᴀᴏ</td></tr>
-<tr><td><code>.adminlist</code></td><td>ᴀᴅᴍɪɴ ʟɪꜱᴛ ᴅᴇᴋʜᴏ</td></tr>
-<tr><td><code>.adminpanel</code></td><td>ᴏᴡɴᴇʀ ᴘᴀɴᴇʟ</td></tr>
-<tr><td><code>.adminuser &lt;id&gt;</code></td><td>ᴜꜱᴇʀ ᴅᴇᴛᴀɪʟꜱ</td></tr>
-<tr><td><code>.banbot &lt;id&gt;</code></td><td>ʙᴏᴛ ꜱᴇ ʙᴀɴ</td></tr>
-<tr><td><code>.botunban &lt;id&gt;</code></td><td>ʙᴏᴛ ꜱᴇ ᴜɴʙᴀɴ</td></tr>""",
+<tr><td><code>.adminlist</code></td><td>ᴀᴅᴍɪɴ ʟɪꜱᴛ ᴅᴇᴋʜᴏ</td></tr>""",
         "💡 ᴘʀᴏᴍᴏᴛᴇ ᴍᴏᴅᴇꜱ: <code>0</code> ᴛᴇᴍᴘ, <code>1</code> ᴊᴜɴɪᴏʀ, <code>2</code> ᴀꜱꜱɪꜱᴛᴀɴᴛ, <code>3</code> ꜰᴜʟʟ"
     )
 
