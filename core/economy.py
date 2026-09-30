@@ -459,10 +459,26 @@ async def check_user(requester_id: int, target_id: int):
         upsert=True,
     )
 
-    # ✅ Safe protection check
+    # ✅ Protection details with expire time
+    until = target.get("protection_until")
     active = _is_protected(target)
+
+    if until and isinstance(until, datetime) and until.tzinfo is None:
+        until = until.replace(tzinfo=timezone.utc)
+
+    remaining_seconds = 0
+    if active and until:
+        try:
+            remaining_seconds = max(0, int((until - now_utc()).total_seconds()))
+        except Exception:
+            remaining_seconds = 0
+
     await log_transaction(requester_id, "check", -CHECK_COST,
                           meta={"target": target_id})
-    return {"ok": True, "target": target,
-            "protected": active,
-            "protection_until": target.get("protection_until")}
+    return {
+        "ok": True,
+        "target": target,
+        "protected": active,
+        "protection_until": until if active else None,
+        "protection_remaining": remaining_seconds,
+    }
