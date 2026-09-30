@@ -44,6 +44,15 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     "promote", "demote", "adminlist", "add", "remove",
     # Tagall
     "all", "call", "tagall", "cancel", "stop",
+
+    # Economy
+    "bal", "balance", "daily", "kill", "rob", "give",
+    "wallet", "protect", "check", "toprich", "topkillers",
+    "shop", "buy", "gift",
+
+    # Economy admin/shop management
+    "shopadd", "shopedit", "shopmedia", "shopremove",
+    "shopstock", "shoptoggle", "shopgift",
 ]
 
 
