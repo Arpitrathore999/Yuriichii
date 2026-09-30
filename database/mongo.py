@@ -28,3 +28,19 @@ def warnings():
 
 def social_settings():
     return db["social_settings"] if db is not None else None
+
+
+def economy_shop():
+    return db["economy_shop"] if db is not None else None
+
+
+def economy_transactions():
+    return db["economy_transactions"] if db is not None else None
+
+
+def economy_inventory():
+    return db["economy_inventory"] if db is not None else None
+
+
+def mongo_client():
+    return _client

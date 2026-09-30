@@ -3,9 +3,10 @@ from .mongo import users
 
 
 async def ensure_user(user):
-    """Create/update a user while preserving existing economy values."""
-    from core.database import ensure_user as _economy_ensure_user
-    return bool(await _economy_ensure_user(user))
+    """Create/update a user while preserving existing fields and initializing economy fields."""
+    from core.database import ensure_user as _ensure_economy_user
+    result = await _ensure_economy_user(user)
+    return result is not None
 
 
 async def is_user_banned(user_id: int) -> bool:
