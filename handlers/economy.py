@@ -1,4 +1,5 @@
 """Telegram handlers for the isolated economy system. (Premium UI + Elara Special)"""
+from pyrogram import StopPropagation
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -177,12 +178,14 @@ async def _economy_guard(_, message):
     if not await _is_economy_enabled(message.chat.id):
         try:
             await message.reply(
-                "🔒 <b>ᴇᴄᴏɴᴏᴍʏ ɪꜱ ᴄʟᴏꜱᴇᴅ.</b>\n"
-                "<i>ᴜꜱᴇ <code>/open</code> ᴛᴏ ᴇɴᴀʙʟᴇ ɪᴛ.</i>",
+                "🔒 <b>ᴇᴄᴏɴᴏᴍʏ ᴄʟᴏꜱᴇᴅ</b>\n\n"
+                "<i>ᴀʟʟ ᴇᴄᴏɴᴏᴍʏ ᴄᴏᴍᴍᴀɴᴅꜱ ᴀʀᴇ ɴᴏᴡ ᴅɪꜱᴀʙʟᴇᴅ ɪɴ ᴛʜɪꜱ ɢʀᴏᴜᴘ.</i>\n\n"
+                "🔄 <b>ꜰᴏʀ ʀᴇᴏᴘᴇɴɪɴɢ :</b> <code>/open</code>",
                 parse_mode=ParseMode.HTML,
             )
         except Exception:
             pass
+        raise StopPropagation
 
 
 # ─── Profile ──────────────────────────────────────────────────────────────────
@@ -295,6 +298,13 @@ async def economy_kill(_, message):
             f"😎 <b>{result.get('roast', 'Nice try.')}</b>",
             parse_mode=ParseMode.HTML,
         )
+        # ✅ Protected case
+if reason == "protected":
+    return await message.reply(
+        "🛡️ <b>ᴠɪᴄᴛɪᴍ ɪꜱ ᴘʀᴏᴛᴇᴄᴛᴇᴅ ʀɪɢʜᴛ ɴᴏᴡ.</b>\n\n"
+        "🔒 <b>ᴄʜᴇᴄᴋ ᴘʀᴏᴛᴇᴄᴛɪᴏɴ ᴛɪᴍᴇ :</b> <code>/check</code> <i>(reply)</i>",
+        parse_mode=ParseMode.HTML,
+    )
 
     if not result["ok"]:
         return await message.reply({
@@ -328,8 +338,10 @@ async def economy_revive(_, message):
     await _ensure_from_message(message)
 
     target = message.from_user
+    is_self = True
     if message.reply_to_message and message.reply_to_message.from_user:
         target = message.reply_to_message.from_user
+        is_self = (int(target.id) == int(message.from_user.id))
 
     if not target or target.is_bot:
         return await message.reply("❌ <b>ɪɴᴠᴀʟɪᴅ ᴜꜱᴇʀ.</b>")
@@ -341,10 +353,15 @@ async def economy_revive(_, message):
         return await message.reply("❌ <b>ᴇᴄᴏɴᴏᴍʏ ᴅᴀᴛᴀʙᴀꜱᴇ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.</b>")
 
     if str(victim_doc.get("status", "alive")).lower() != "dead":
-        return await message.reply(f"❌ {_mention(target.id, _name(target))} ɪꜱ ɴᴏᴛ ᴅᴇᴀᴅ.")
+        return await message.reply(f"❌ {_mention(target.id, _name(target))} ɪꜱ ɴᴏᴛ ᴅᴇᴀᴅ.", parse_mode=ParseMode.HTML)
 
-    if str(reviver.get("status", "alive")).lower() != "alive":
-        return await message.reply("☠️ <b>ᴅᴇᴀᴅ ᴜꜱᴇʀꜱ ᴄᴀɴɴᴏᴛ ʀᴇᴠɪᴠᴇ.</b>")
+    if not is_self:
+        if str(reviver.get("status", "alive")).lower() != "alive":
+            return await message.reply(
+                "☠️ <b>ᴅᴇᴀᴅ ᴜꜱᴇʀꜱ ᴄᴀɴɴᴏᴛ ʀᴇᴠɪᴠᴇ ᴏᴛʜᴇʀꜱ.</b>\n"
+                "<i>ᴘᴇʜʟᴇ ᴋʜᴜᴅ ᴋᴏ ʀᴇᴠɪᴠᴇ ᴋᴀʀᴏ <code>/revive</code> ꜱᴇ.</i>",
+                parse_mode=ParseMode.HTML,
+            )
 
     if int(reviver.get("coins", 0)) < REVIVE_FEE:
         return await message.reply(
@@ -369,7 +386,6 @@ async def economy_revive(_, message):
         {"$set": {"status": "alive"}},
     )
 
-    # ✅ Revive fee Elara ko
     await users_col.update_one(
         {"_id": ELARA_BOT_ID},
         {"$inc": {"coins": REVIVE_FEE}, "$set": {"updated_at": datetime.now(timezone.utc)}},
@@ -377,7 +393,6 @@ async def economy_revive(_, message):
     )
 
     new_balance = int(reviver.get("coins", 0)) - REVIVE_FEE
-
     await message.reply(
         "✨ <b>ʀᴇᴠɪᴠᴇ ꜱᴜᴄᴄᴇꜱꜱ</b>\n\n"
         f"<blockquote>"
@@ -415,6 +430,13 @@ async def economy_rob(_, message):
             f"😎 <b>{result.get('roast', 'Nice try.')}</b>",
             parse_mode=ParseMode.HTML,
         )
+        # ✅ Protected case
+if reason == "protected":
+    return await message.reply(
+        "🛡️ <b>ᴠɪᴄᴛɪᴍ ɪꜱ ᴘʀᴏᴛᴇᴄᴛᴇᴅ ʀɪɢʜᴛ ɴᴏᴡ.</b>\n\n"
+        "🔒 <b>ᴄʜᴇᴄᴋ ᴘʀᴏᴛᴇᴄᴛɪᴏɴ ᴛɪᴍᴇ :</b> <code>/check</code> <i>(reply)</i>",
+        parse_mode=ParseMode.HTML,
+    )
 
     if not result.get("ok"):
         return await message.reply({
@@ -597,11 +619,19 @@ async def economy_check(_, message):
         f"</blockquote>"
     )
     try:
-        await app.send_message(message.from_user.id, details, parse_mode=ParseMode.HTML)
-        if message.chat.type != ChatType.PRIVATE:
-            return await message.reply("🔎 <b>ᴄʜᴇᴄᴋ ᴅᴇᴛᴀɪʟꜱ ꜱᴇɴᴛ ɪɴ ᴅᴍ.</b>")
-    except Exception:
-        return await message.reply("❌ <b>ᴅᴍ ɴᴀʜɪ ʙʜᴇᴊ ꜱᴀᴋᴀ.</b>")
+    await app.send_message(message.from_user.id, details, parse_mode=ParseMode.HTML)
+    if message.chat.type != ChatType.PRIVATE:
+        return await message.reply(
+            "🔎 <b>ᴄʜᴇᴄᴋ ᴅᴇᴛᴀɪʟꜱ ꜱᴇɴᴛ ɪɴ ᴅᴍ.</b>\n\n"
+            f"<blockquote>💰 <b>ᴄʜᴀʀɢᴇᴅ</b> — <code>500</code> $</blockquote>",
+            parse_mode=ParseMode.HTML,
+        )
+except Exception:
+    return await message.reply(
+        "❌ <b>ᴅᴍ ɴᴀʜɪ ʙʜᴇᴊ ꜱᴀᴋᴀ.</b>\n"
+        "<i>ᴘʟᴇᴀꜱᴇ ꜱᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ ɪɴ ᴅᴍ ꜰɪʀꜱᴛ.</i>",
+        parse_mode=ParseMode.HTML,
+    )
 
 
 # ─── Set Custom Emoji ─────────────────────────────────────────────────────────
