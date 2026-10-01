@@ -255,8 +255,6 @@ async def _save_rights(chat_id, user_id, rights, mode=None):
 async def cmd_promote(_, message):
     if not _is_group(message):
         return
-    if not await _can_promote(message):
-        return await message.reply("❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴘʀᴏᴍᴏᴛᴇ ᴀᴅᴍɪɴs.")
 
     parts = list(message.command or [])[1:]
     mode = 2
@@ -289,11 +287,19 @@ async def cmd_promote(_, message):
         and not target_parts
         and not message.reply_to_message
     )
-    if is_self_promote and int(message.from_user.id) != int(config.OWNER_ID):
-        return await message.reply("❌ ᴏɴʟʏ ʙᴏᴛ ᴏᴡɴᴇʀ ᴄᴀɴ ᴜsᴇ sᴇʟғ ᴘʀᴏᴍᴏᴛᴇ.")
-
-    if not is_self_promote and not await _can_edit_target(message, target.id):
-        return await message.reply("❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴍᴏᴅɪғʏ ᴛʜɪs ᴜsᴇʀ.")
+    if is_self_promote:
+        # Self-promote is strictly bot-owner only.
+        if not message.from_user or int(message.from_user.id) != int(config.OWNER_ID):
+            return await message.reply("❌ ᴏɴʟʏ ʙᴏᴛ ᴏᴡɴᴇʀ ᴄᴀɴ ᴜsᴇ sᴇʟғ ᴘʀᴏᴍᴏᴛᴇ.")
+        # Bot itself must have permission to promote members.
+        if not await _bot_can_promote(message.chat.id):
+            return await message.reply("❌ ʙᴏᴛ ɴᴇᴇᴅs <b>Promote Members</b> permission.")
+    else:
+        # Existing promotion behavior remains unchanged.
+        if not await _can_promote(message):
+            return await message.reply("❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴘʀᴏᴍᴏᴛᴇ ᴀᴅᴍɪɴs.")
+        if not await _can_edit_target(message, target.id):
+            return await message.reply("❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴍᴏᴅɪғʏ ᴛʜɪs ᴜsᴇʀ.")
 
     requested = set(PROMOTE_MODES[mode][1])
     applied = await _apply_rights(message.chat.id, target.id, requested)
