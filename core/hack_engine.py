@@ -17,10 +17,11 @@ from database.mongo import db
 ENTRY_MIN = 100
 ENTRY_MAX = 500_000
 VALID_LENGTHS = (3, 4, 5, 6)
-TURN_SECONDS = 60
+TURN_SECONDS = 40                 # ✅ 40s per turn
 GAME_FEE_PERCENT = 0.10
 WINNER_XP = 100
 LOSER_XP = 10
+MAX_MISSES = 2                    # ✅ 1st = warning, 2nd = kick
 
 # games[chat_id] = HackGame
 ACTIVE_GAMES: dict[int, "HackGame"] = {}
@@ -85,7 +86,8 @@ class HackGame:
         self.code_length = int(code_length)
 
         self.players: list[dict] = []
-        self.state = "lobby"                     # lobby | running | finished
+        self.kicked: list[dict] = []           # ✅ kicked players (fee stays in pot)
+        self.state = "lobby"                   # lobby | running | finished
         self.secret_code: Optional[str] = None
         self.max_guesses = max_guesses_for(self.code_length)
         self.remaining_guesses = self.max_guesses
@@ -116,8 +118,22 @@ class HackGame:
             "name": name,
             "mention": mention,
             "guesses_used": 0,
+            "misses": 0,                        # ✅ NEW
         })
         return True
+
+    def kick_player(self, user_id: int) -> Optional[dict]:
+        """Remove player from active list, add to kicked. Fee stays in pot."""
+        p = self.get_player(user_id)
+        if not p:
+            return None
+        self.players.remove(p)
+        self.kicked.append(p)
+        if self.players:
+            self.turn_index %= len(self.players)
+        else:
+            self.turn_index = 0
+        return p
 
     def current_player(self) -> Optional[dict]:
         if not self.players:
@@ -126,10 +142,14 @@ class HackGame:
         return self.players[self.turn_index]
 
     def next_turn(self):
-        self.turn_index = (self.turn_index + 1) % max(1, len(self.players))
+        if not self.players:
+            return
+        self.turn_index = (self.turn_index + 1) % len(self.players)
 
     def prize_pool(self) -> int:
-        return self.entry_amount * len(self.players)
+        # ✅ Kicked players ki entry fees bhi pot mein count hongi
+        total_players = len(self.players) + len(self.kicked)
+        return self.entry_amount * total_players
 
     def is_finished(self) -> bool:
         return self.state == "finished"

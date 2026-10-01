@@ -1,6 +1,6 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  core/card_engine.py — Card Game Logic (equal-sum, turns, auto-play)
+#  core/card_engine.py — Card Game Logic (equal-sum, turns, auto-play, kick)
 # --------------------------------------------------------------------------------
 
 from __future__ import annotations
@@ -16,12 +16,15 @@ from database.mongo import db
 # ─── Constants ─────────────────────────────────────────────────────────────────
 ENTRY_FEE_MIN = 100
 ENTRY_FEE_MAX = 500_000
-MAX_PLAYERS_LIMIT = 10
+MAX_PLAYERS_LIMIT = 50
 LOBBY_SECONDS = 120          # 2 minutes
-TURN_SECONDS = 60            # 60 sec per turn
-GAME_FEE_PERCENT = 0.10      # 10% fee
-WINNER_XP = 100              # per win
-LOSER_XP = 10                # consolation XP
+TURN_SECONDS = 40            # ✅ 40 sec per turn
+GAME_FEE_PERCENT = 0.10      # 10% fee (normal winner)
+KICKED_FEE_PERCENT = 0.30    # ✅ 30% fee (kicked player wins)
+WINNER_XP = 100
+LOSER_XP = 10
+MAX_MISSES = 2               # ✅ 1st = auto-flip+warning, 2nd = auto-flip+kick
+TOTAL_ROUNDS = 4
 CARD_LABELS = ["a", "b", "c", "d"]
 
 # In-memory active games keyed by chat_id
@@ -88,19 +91,21 @@ class CardGame:
         self.creator_id = int(creator_id)
 
         self.players: list[dict] = []
-        self.state = "lobby"                     # lobby | running | finished
+        self.kicked: list[dict] = []              # ✅ kicked players
+        self.state = "lobby"                      # lobby | running | finished
         self.round = 0
         self.turn_index = 0
-        self.first_turn_index = 0                # ✅ rotates each round
+        self.first_turn_index = 0
         self.round_plays: dict[int, int] = {}
         self.total_points: dict[int, int] = {}
         self.start_time: Optional[datetime] = None
         self.turn_task: Optional[asyncio.Task] = None
         self.lobby_task: Optional[asyncio.Task] = None
         self.winner_id: Optional[int] = None
+        self.winner_kicked = False                # ✅ was winner kicked?
         self.payout_done = False
 
-        # ✅ Message tracking for cleanup
+        # Message tracking
         self.game_messages: list[int] = []
         self.pinned_msg_id: Optional[int] = None
 
@@ -112,6 +117,15 @@ class CardGame:
             if p["user_id"] == int(user_id):
                 return p
         return None
+
+    def get_kicked(self, user_id: int) -> Optional[dict]:
+        for p in self.kicked:
+            if p["user_id"] == int(user_id):
+                return p
+        return None
+
+    def is_kicked(self, user_id: int) -> bool:
+        return self.get_kicked(user_id) is not None
 
     def add_player(self, user_id: int, name: str, mention: str, hand: list[int] | None = None) -> bool:
         if self.has_player(user_id):
@@ -125,6 +139,7 @@ class CardGame:
             "hand": hand or [],
             "used": [False, False, False, False],
             "round_scores": [],
+            "misses": 0,                          # ✅ miss counter
         })
         self.total_points[int(user_id)] = 0
         return True
@@ -133,25 +148,23 @@ class CardGame:
         return len(self.players) >= self.max_players
 
     def current_player(self) -> Optional[dict]:
+        """Current active player (skips kicked — but kicked players still get auto-flip turns)."""
         if not self.players:
             return None
         self.turn_index %= len(self.players)
         return self.players[self.turn_index]
 
     def next_turn(self):
-        self.turn_index = (self.turn_index + 1) % max(1, len(self.players))
+        if not self.players:
+            return
+        self.turn_index = (self.turn_index + 1) % len(self.players)
 
     def reset_round_plays(self):
         self.round_plays = {}
 
     def all_played_this_round(self) -> bool:
+        """All active players have played AND all kicked players' auto-flips done for this round."""
         return len(self.round_plays) == len(self.players)
-
-    def remaining_cards(self, user_id: int) -> list[str]:
-        p = self.get_player(user_id)
-        if not p:
-            return []
-        return [CARD_LABELS[i] for i, used in enumerate(p["used"]) if not used]
 
     def use_card(self, user_id: int, card_label: str) -> tuple[bool, str, int | None]:
         p = self.get_player(user_id)
@@ -174,26 +187,59 @@ class CardGame:
         self.round_plays[int(user_id)] = idx
         return True, "ok", value
 
+    def auto_flip_random(self, user_id: int) -> tuple[bool, str, int | None, int | None]:
+        """Auto-flip a random available card for a player. Works for both active + kicked."""
+        p = self.get_player(user_id) or self.get_kicked(user_id)
+        if not p:
+            return False, "not_player", None, None
+        if int(user_id) in self.round_plays:
+            return False, "already_played_round", None, None
+
+        available = [i for i, used in enumerate(p["used"]) if not used]
+        if not available:
+            return False, "no_cards", None, None
+
+        idx = random.choice(available)
+        p["used"][idx] = True
+        value = p["hand"][idx]
+        self.round_plays[int(user_id)] = idx
+        return True, "ok", idx, value
+
     def auto_play(self, user_id: int) -> tuple[bool, str, int | None]:
+        """Legacy — 1st available card, for auto-play on turn timeout (active players)."""
+        ok, reason, idx, val = self.auto_flip_random(user_id)
+        return ok, reason, val
+
+    def kick_player(self, user_id: int) -> Optional[dict]:
+        """Remove player from active list, add to kicked. Keeps their hand + used flags."""
         p = self.get_player(user_id)
         if not p:
-            return False, "not_player", None
-        if int(user_id) in self.round_plays:
-            return False, "already_played_round", None
-        for i, used in enumerate(p["used"]):
-            if not used:
-                p["used"][i] = True
-                self.round_plays[int(user_id)] = i
-                return True, "ok", p["hand"][i]
-        return False, "no_cards", None
+            return None
+        self.players.remove(p)
+        self.kicked.append(p)
+        # Re-add to total_points tracking (in case missing)
+        self.total_points.setdefault(int(user_id), 0)
+        if self.players:
+            self.turn_index %= len(self.players)
+        else:
+            self.turn_index = 0
+        return p
 
     def is_finished(self) -> bool:
         return self.state == "finished"
+
+    def remaining_cards(self, user_id: int) -> list[str]:
+        p = self.get_player(user_id) or self.get_kicked(user_id)
+        if not p:
+            return []
+        return [CARD_LABELS[i] for i, used in enumerate(p["used"]) if not used]
 
     def to_summary(self) -> str:
         lines = []
         for p in self.players:
             lines.append(f"• {p['name']} — {self.total_points.get(p['user_id'], 0)}")
+        for p in self.kicked:
+            lines.append(f"• {p['name']} (kicked) — {self.total_points.get(p['user_id'], 0)}")
         return "\n".join(lines)
 
 
@@ -222,17 +268,13 @@ def _lb_col():
 
 
 async def ensure_stats(user_id: int, name: str):
-    """Create or update leaderboard stats (no field conflict)."""
     col = _lb_col()
     if col is None:
         return
     await col.update_one(
         {"_id": int(user_id)},
         {
-            "$set": {
-                "name": name,
-                "updated_at": _now(),
-            },
+            "$set": {"name": name, "updated_at": _now()},
             "$setOnInsert": {
                 "_id": int(user_id),
                 "played": 0,
