@@ -23,9 +23,12 @@ from core.card_engine import (
     ENTRY_FEE_MAX,
     ENTRY_FEE_MIN,
     GAME_FEE_PERCENT,
+    KICKED_FEE_PERCENT,
     LOBBY_SECONDS,
     LOSER_XP,
+    MAX_MISSES,
     MAX_PLAYERS_LIMIT,
+    TOTAL_ROUNDS,
     TURN_SECONDS,
     WINNER_XP,
     CardGame,
@@ -99,7 +102,6 @@ async def _credit(user_id: int, amount: int) -> bool:
 
 
 async def _credit_elara(amount: int) -> bool:
-    """✅ Tax → Elara ke paas."""
     if amount <= 0:
         return False
     try:
@@ -375,7 +377,7 @@ async def _start_game(game: CardGame):
 
 
 async def _send_private_cards(game: CardGame, user_id: int, round_no: int):
-    p = game.get_player(user_id)
+    p = game.get_player(user_id) or game.get_kicked(user_id)
     if not p:
         return
     lines = []
@@ -495,6 +497,8 @@ async def _start_round(game: CardGame):
     game.reset_round_plays()
 
     n = len(game.players)
+    if n == 0:
+        return await _finish_game(game)
 
     if game.round == 1:
         game.first_turn_index = random.randint(0, n - 1)
@@ -503,8 +507,19 @@ async def _start_round(game: CardGame):
 
     game.turn_index = game.first_turn_index
 
-    order = [game.players[(game.first_turn_index + i) % n]["name"] for i in range(n)]
-    print(f"[CARDGAME] Round {game.round} order: {order}", flush=True)
+    # Notify kicked players about their upcoming auto-flip
+    if game.kicked:
+        for kp in game.kicked:
+            if not all(kp["used"]):
+                try:
+                    await app.send_message(
+                        kp["user_id"],
+                        f"🤖 <b>ʀᴏᴜɴᴅ {game.round} — ᴀᴜᴛᴏ ꜰʟɪᴘ</b>\n\n"
+                        f"<i>ʏᴏᴜ ᴀʀᴇ ᴋɪᴄᴋᴇᴅ. ᴛʜɪꜱ ʀᴏᴜɴᴅ ᴏɴᴇ ᴏꜰ ʏᴏᴜʀ ʀᴇᴍᴀɪɴɪɴɢ ᴄᴀʀᴅꜱ ᴡɪʟʟ ᴀᴜᴛᴏ-ꜰʟɪᴘ.</i>",
+                        parse_mode=ParseMode.HTML,
+                    )
+                except Exception:
+                    pass
 
     await _start_turn(game, new_round=True)
 
@@ -512,13 +527,15 @@ async def _start_round(game: CardGame):
 async def _start_turn(game: CardGame, new_round: bool = False):
     current = game.current_player()
     if not current:
-        return
+        # No active players left → check for kicked auto-flips → finish
+        return await _handle_kicked_autoflips_and_advance(game)
 
     if new_round:
         m = await app.send_message(
             game.chat_id,
             f"✅ <b>ʀᴏᴜɴᴅ {game.round} ꜱᴛᴀʀᴛᴇᴅ.</b>\n\n"
             f"👉 {current['mention']} ɪᴛ'ꜱ ʏᴏᴜʀ ᴛᴜʀɴ.\n\n"
+            f"⏳ ʏᴏᴜ ʜᴀᴠᴇ <code>{TURN_SECONDS}</code> ꜱᴇᴄᴏɴᴅꜱ.\n"
             "🃏 ᴜꜱᴇ <code>/flip a/b/c/d</code>",
             parse_mode=ParseMode.HTML,
         )
@@ -526,6 +543,7 @@ async def _start_turn(game: CardGame, new_round: bool = False):
         m = await app.send_message(
             game.chat_id,
             f"👉 {current['mention']} ɪᴛ'ꜱ ʏᴏᴜʀ ᴛᴜʀɴ.\n"
+            f"⏳ <code>{TURN_SECONDS}</code>ꜱ ᴛᴏ ꜰʟɪᴘ.\n"
             "🃏 ᴜꜱᴇ <code>/flip a/b/c/d</code>",
             parse_mode=ParseMode.HTML,
         )
@@ -547,27 +565,98 @@ async def _turn_timeout(game: CardGame, user_id: int, round_no: int):
         if int(user_id) in game.round_plays:
             return
 
-        ok, reason, value = game.auto_play(user_id)
-        if not ok:
+        player = game.get_player(user_id)
+        if not player:
             return
 
+        player["misses"] = player.get("misses", 0) + 1
+        miss_count = player["misses"]
+
+        # Auto-flip 1 random card for this miss (both 1st and 2nd)
+        ok, reason, idx, value = game.auto_flip_random(user_id)
+        if not ok:
+            # No cards available — skip turn
+            game.next_turn()
+            return await _start_turn(game)
+
+        flipped_label = CARD_LABELS[idx]
+
+        if miss_count == 1:
+            # ⚠️ 1st miss: auto-flip + warning
+            m = await app.send_message(
+                game.chat_id,
+                f"⚠️ <b>ᴛɪᴍᴇᴏᴜᴛ — ᴀᴜᴛᴏ-ꜰʟɪᴘ!</b>\n\n"
+                f"{player['mention']} ᴛɪᴍᴇᴅ ᴏᴜᴛ.\n"
+                f"🎲 ᴄᴀʀᴅ <b>{flipped_label}</b> ᴀᴜᴛᴏ-ꜰʟɪᴘᴘᴇᴅ.\n"
+                f"<i>ᴇᴋ ᴀᴜʀ ᴍɪꜱꜱ = ꜱᴇᴇᴅʜᴀ ᴋɪᴄᴋ 👢</i>",
+                parse_mode=ParseMode.HTML,
+            )
+            await _track(game, m)
+
+            if game.all_played_this_round():
+                return await _finish_round(game)
+            game.next_turn()
+            await _start_turn(game)
+            return
+
+        # ── 2nd miss: auto-flip + KICK ──
+        kicked_p = game.kick_player(user_id)
+
+        # Instantly auto-flip ALL remaining cards for the kicked player
+        for _ in range(4):
+            ok2, _, idx2, val2 = game.auto_flip_random(user_id)
+            if not ok2:
+                break
+
+        # DM the kicked player
+        try:
+            await app.send_message(
+                user_id,
+                "👢 <b>ʏᴏᴜ ᴡᴇʀᴇ ᴋɪᴄᴋᴇᴅ!</b>\n\n"
+                f"<i>2 ᴛɪᴍᴇᴏᴜᴛꜱ. ʏᴏᴜʀ ʀᴇᴍᴀɪɴɪɴɢ ᴄᴀʀᴅꜱ ʜᴀᴠᴇ ʙᴇᴇɴ ᴀᴜᴛᴏ-ꜰʟɪᴘᴘᴇᴅ.</i>\n"
+                f"<i>ʏᴏᴜʀ ᴇɴᴛʀʏ ꜰᴇᴇ ꜱᴛᴀʏꜱ ɪɴ ᴛʜᴇ ᴘᴏᴛ.</i>",
+                parse_mode=ParseMode.HTML,
+            )
+        except Exception:
+            pass
+
+        remaining_active = len(game.players)
         m = await app.send_message(
             game.chat_id,
-            f"🤖 <b>ᴀᴜᴛᴏ-ᴘʟᴀʏ ᴀᴄᴛɪᴠᴀᴛᴇᴅ.</b>\n"
-            f"👉 {current['mention']} ᴛɪᴍᴇᴅ ᴏᴜᴛ — ᴀᴜᴛᴏ ᴘʟᴀʏᴇᴅ <b>{CARD_LABELS[game.round_plays[user_id]]}</b>.",
+            f"👢 <b>ᴋɪᴄᴋᴇᴅ!</b>\n\n"
+            f"{kicked_p['mention']} ʜᴀꜱ ʙᴇᴇɴ ᴋɪᴄᴋᴇᴅ — <b>2 ᴛɪᴍᴇᴏᴜᴛꜱ</b>.\n"
+            f"🎲 ᴀʟʟ ʀᴇᴍᴀɪɴɪɴɢ ᴄᴀʀᴅꜱ ᴀᴜᴛᴏ-ꜰʟɪᴘᴘᴇᴅ.\n"
+            f"💰 ᴇɴᴛʀʏ ꜰᴇᴇ ꜱᴛᴀʏꜱ ɪɴ ᴛʜᴇ ᴘᴏᴛ.\n"
+            f"👥 <b>ʀᴇᴍᴀɪɴɪɴɢ ᴀᴄᴛɪᴠᴇ:</b> <code>{remaining_active}</code>",
             parse_mode=ParseMode.HTML,
         )
         await _track(game, m)
 
+        # Game ends immediately if no active players left
+        if remaining_active == 0:
+            return await _finish_game(game)
+
+        # If round complete (all active played), advance
         if game.all_played_this_round():
-            await _finish_round(game)
-        else:
-            game.next_turn()
-            await _start_turn(game)
+            return await _finish_round(game)
+
+        game.next_turn()
+        await _start_turn(game)
+
     except asyncio.CancelledError:
         pass
     except Exception as e:
         print(f"[CARDGAME turn] {type(e).__name__}: {e}", flush=True)
+
+
+async def _handle_kicked_autoflips_and_advance(game: CardGame):
+    """Fallback: no active players. Auto-flip kicked, then finish game."""
+    for kp in game.kicked:
+        for _ in range(4):
+            ok, _, _, _ = game.auto_flip_random(kp["user_id"])
+            if not ok:
+                break
+    return await _finish_game(game)
 
 
 async def _finish_round(game: CardGame):
@@ -578,14 +667,21 @@ async def _finish_round(game: CardGame):
         game.turn_task.cancel()
 
     played = []
+    # Active players who played
     for p in game.players:
+        idx = game.round_plays.get(p["user_id"])
+        if idx is None:
+            continue
+        played.append((p, CARD_LABELS[idx], p["hand"][idx]))
+    # Kicked players who auto-flipped this round (shouldn't be here yet, but safe)
+    for p in game.kicked:
         idx = game.round_plays.get(p["user_id"])
         if idx is None:
             continue
         played.append((p, CARD_LABELS[idx], p["hand"][idx]))
 
     if not played:
-        return
+        return await _finish_game(game)
 
     highest = max(v for _, _, v in played)
     total = sum(v for _, _, v in played)
@@ -594,7 +690,11 @@ async def _finish_round(game: CardGame):
     for w in winners:
         game.total_points[w["user_id"]] = game.total_points.get(w["user_id"], 0) + total
 
-    lines = "\n".join(f"• {p['mention']} ➜ <code>{v}</code>" for p, _, v in played)
+    lines = "\n".join(
+        f"• {p['mention']} ➜ <code>{v}</code>" +
+        (" <i>(auto)</i>" if game.is_kicked(p["user_id"]) else "")
+        for p, _, v in played
+    )
     winner_mentions = ", ".join(w["mention"] for w in winners)
 
     m = await app.send_message(
@@ -608,10 +708,13 @@ async def _finish_round(game: CardGame):
     )
     await _track(game, m)
 
+    # Send updated private cards
     for p in game.players:
         await _send_private_cards(game, p["user_id"], game.round)
+    for p in game.kicked:
+        await _send_private_cards(game, p["user_id"], game.round)
 
-    if game.round >= 4:
+    if game.round >= TOTAL_ROUNDS:
         await _finish_game(game)
     else:
         await _start_round(game)
@@ -628,17 +731,27 @@ async def _finish_game(game: CardGame):
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
 
+    # Collect all participants (active + kicked)
+    all_participants = game.players + game.kicked
+
+    if not all_participants:
+        await _delete_all_game_messages(game)
+        remove_game(game.chat_id)
+        return
+
     max_points = max(game.total_points.values()) if game.total_points else 0
-    tied = [p for p in game.players if game.total_points.get(p["user_id"], 0) == max_points]
+    tied = [p for p in all_participants if game.total_points.get(p["user_id"], 0) == max_points]
     winner = random.choice(tied) if tied else None
 
     if not winner:
         return
 
     game.winner_id = winner["user_id"]
+    game.winner_kicked = game.is_kicked(winner["user_id"])
 
-    total_pot = game.entry_fee * len(game.players)
-    fee = int(total_pot * GAME_FEE_PERCENT)
+    total_pot = game.entry_fee * len(all_participants)
+    fee_pct = KICKED_FEE_PERCENT if game.winner_kicked else GAME_FEE_PERCENT
+    fee = int(total_pot * fee_pct)
     prize = total_pot - fee
 
     if not game.payout_done:
@@ -655,7 +768,7 @@ async def _finish_game(game: CardGame):
             await add_xp(winner["user_id"], WINNER_XP)
         except Exception:
             pass
-        for p in game.players:
+        for p in all_participants:
             if p["user_id"] != winner["user_id"]:
                 try:
                     await add_xp(p["user_id"], LOSER_XP)
@@ -663,7 +776,7 @@ async def _finish_game(game: CardGame):
                     pass
         game.payout_done = True
 
-    for p in game.players:
+    for p in all_participants:
         try:
             await record_game_result(
                 p["user_id"],
@@ -675,8 +788,9 @@ async def _finish_game(game: CardGame):
             pass
 
     final_lines = "\n".join(
-        f"• {p['mention']} — <code>{game.total_points.get(p['user_id'], 0)}</code>"
-        for p in game.players
+        f"• {p['mention']} — <code>{game.total_points.get(p['user_id'], 0)}</code>" +
+        (" <i>(kicked — auto)</i>" if game.is_kicked(p["user_id"]) else "")
+        for p in all_participants
     )
 
     # ── Winner photo ──
@@ -703,16 +817,16 @@ async def _finish_game(game: CardGame):
         if start_img:
             winner_photo_url = start_img
 
-    # ── Delete all game messages ──
     await _delete_all_game_messages(game)
 
+    kicked_note = "\n⚡ <b>ᴋɪᴄᴋᴇᴅ ᴡɪɴɴᴇʀ!</b> <i>70/30 ꜱᴘʟɪᴛ</i>" if game.winner_kicked else ""
     group_text = (
         "🏁 <b>ɢᴀᴍᴇ ᴏᴠᴇʀ!</b>\n\n"
-        f"🏆 <b>ᴡɪɴɴᴇʀ:</b> {winner['mention']}\n\n"
+        f"🏆 <b>ᴡɪɴɴᴇʀ:</b> {winner['mention']}{kicked_note}\n\n"
         f"🎯 <b>ꜰɪɴᴀʟ ᴘᴏɪɴᴛꜱ:</b>\n{final_lines}\n\n"
         f"💰 <b>ᴘʀɪᴢᴇ:</b> <code>{prize}</code>\n"
         f"⚡ <b>xᴘ:</b> <code>+{WINNER_XP}</code>\n"
-        f"💵 <b>ɢᴀᴍᴇ ꜰᴇᴇ (10%):</b> <code>{fee}</code>\n\n"
+        f"💵 <b>ɢᴀᴍᴇ ꜰᴇᴇ ({int(fee_pct*100)}%):</b> <code>{fee}</code>\n\n"
         "👉 ᴘʟᴀʏ ᴀɢᴀɪɴ ᴜꜱɪɴɢ:\n"
         f"<code>/card {game.entry_fee} {game.max_players}</code>"
     )
@@ -748,7 +862,6 @@ async def _finish_game(game: CardGame):
         except Exception as e:
             print(f"[CARDGAME text-send] FAIL: {type(e).__name__}: {e}", flush=True)
 
-    # ✅ Pin final
     try:
         if final_msg:
             await app.pin_chat_message(game.chat_id, final_msg.id, disable_notification=True)
@@ -761,8 +874,8 @@ async def _finish_game(game: CardGame):
         except Exception:
             pass
 
-    # DM players
-    for p in game.players:
+    # DM all participants
+    for p in all_participants:
         is_winner = p["user_id"] == winner["user_id"]
         pts = game.total_points.get(p["user_id"], 0)
         try:
