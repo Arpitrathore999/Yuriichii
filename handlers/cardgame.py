@@ -617,21 +617,41 @@ async def _finish_game(game: CardGame):
     prize = total_pot - fee
 
     if not game.payout_done:
+    # ✅ Winner ko prize
+    try:
+        await _credit(winner["user_id"], prize)
+    except Exception as e:
+        print(f"[CARDGAME payout] {type(e).__name__}: {e}", flush=True)
+
+    # ✅ 10% fee → Elara
+    if fee > 0:
         try:
-            await _credit(winner["user_id"], prize)
+            from database.mongo import users as users_col
+            col = users_col()
+            if col is not None:
+                await col.update_one(
+                    {"_id": 8899359004},
+                    {
+                        "$inc": {"coins": int(fee)},
+                        "$set": {"updated_at": datetime.now(timezone.utc)},
+                    },
+                    upsert=True,
+                )
+                print(f"[CARDGAME tax] +{fee} coins → Elara", flush=True)
         except Exception as e:
-            print(f"[CARDGAME payout] {type(e).__name__}: {e}", flush=True)
-        try:
-            await add_xp(winner["user_id"], WINNER_XP)
-        except Exception:
-            pass
-        for p in game.players:
-            if p["user_id"] != winner["user_id"]:
-                try:
-                    await add_xp(p["user_id"], LOSER_XP)
-                except Exception:
-                    pass
-        game.payout_done = True
+            print(f"[CARDGAME tax] FAIL: {type(e).__name__}: {e}", flush=True)
+
+    try:
+        await add_xp(winner["user_id"], WINNER_XP)
+    except Exception:
+        pass
+    for p in game.players:
+        if p["user_id"] != winner["user_id"]:
+            try:
+                await add_xp(p["user_id"], LOSER_XP)
+            except Exception:
+                pass
+    game.payout_done = True
 
     for p in game.players:
         try:
