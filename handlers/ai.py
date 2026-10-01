@@ -56,6 +56,8 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     "shopstock", "shoptoggle", "shopgift", "addcoins", "removecoins",
     #cardGame
     "bet", "flip", "card", "leaders",
+    #hackGame
+    "hack", "register", "end", "guess", 
 ]
 
 
