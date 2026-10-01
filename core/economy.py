@@ -34,13 +34,17 @@ KILL_XP_MAX = 50
 
 WALLET_MAX_PERCENT = 0.30
 
+# ✅ Rob: no cooldown, no random % — user specifies amount
 ROB_SUCCESS_CHANCE = 1.0
-ROB_MIN_PERCENT = 0.10
-ROB_MAX_PERCENT = 0.30
-ROB_MIN_TARGET_BALANCE = 100
-ROB_COOLDOWN_SECONDS = 60
+ROB_MIN_TARGET_BALANCE = 1              # ✅ minimum 1 coin (koi bhi rob ho sakta)
+ROB_COOLDOWN_SECONDS = 0                # ✅ NO COOLDOWN
 
 CHECK_COST = 500
+
+# ✅ Auto-revive + minimum balance constants
+AUTO_REVIVE_HOURS = 6
+MIN_BALANCE = 300
+MIN_BALANCE_TOPUP_HOURS = 6
 
 # ─── Elara Constants ──────────────────────────────────────────────────────────
 ELARA_BOT_ID = 8899359004
@@ -88,7 +92,7 @@ ELARA_KILL_ROASTS = [
     "ᴋɪʟʟ ᴋᴀʀɴᴇ ꜱᴇ ᴘᴇʜʟᴇ ᴛᴜ ᴋʜᴜᴅ ᴋᴏ ᴋɪʟʟ ᴋᴀʀ ʟᴇ 🤡",
     "ɪ ᴀᴍ ɪᴍᴍᴏʀᴛᴀʟ, ʙʀᴏ. ɴɪᴄᴇ ᴛʀʏ ᴛʜᴏᴜɢʜ 😏",
     "ᴛᴇʀᴀ ᴋɪʟʟ ꜱᴋɪʟʟ ʟᴇᴠᴇʟ: ɴᴇɢᴀᴛɪᴠᴇ 📉",
-    "ᴍᴜᴊʜᴇ ᴋɪʟʟ ᴋᴀʀɴᴇ ᴋɪ 괜ᴋᴀᴛ ɴᴀʜɪ ʜᴀɪ ᴛᴇʀɪ 🥱",
+    "ᴍᴜᴊʜᴇ ᴋɪʟʟ ᴋᴀʀɴᴇ ᴋɪ ꜰᴜʀꜱᴀᴛ ɴᴀʜɪ ʜᴀɪ ᴛᴇʀɪ 🥱",
     "ᴡᴏᴡ, ʏᴏᴜ ᴛʀɪᴇᴅ ᴛᴏ ᴋɪʟʟ ᴀ ʙᴏᴛ. ʙʀᴀɪɴ ᴇɴɢᴀɢᴇᴅ? 🧠❌",
     "ᴛᴇʀᴇ ʜᴀᴀᴛʜ ɴᴀʜɪ ʟᴀɢᴇɢᴀ ᴍᴇʀᴇ ʜᴀᴛʜ 🚫",
     "ʟ + ʀᴀᴛɪᴏ + ɴᴏ ᴋɪʟʟ ꜰᴏʀ ʏᴏᴜ 💀",
@@ -283,8 +287,6 @@ async def kill_user(killer_id: int, target_id: int):
         return {"ok": False, "reason": "dead"}
     if killer.get("status", "alive") == "dead":
         return {"ok": False, "reason": "killer_dead"}
-
-    # ✅ Safe protection check
     if _is_protected(target):
         return {"ok": False, "reason": "protected"}
 
@@ -299,7 +301,9 @@ async def kill_user(killer_id: int, target_id: int):
             async with session.start_transaction():
                 result = await col.update_one(
                     {"_id": int(target_id), "status": "alive"},
-                    {"$set": {"status": "dead", "updated_at": now_utc()}},
+                    {"$set": {"status": "dead",
+                              "dead_since": now_utc(),
+                              "updated_at": now_utc()}},
                     session=session,
                 )
                 if result.modified_count != 1:
@@ -322,64 +326,62 @@ async def kill_user(killer_id: int, target_id: int):
         return {"ok": False, "reason": "transaction_unavailable", "error": str(exc)}
 
 
-async def rob_user(robber_id: int, target_id: int, requested_amount: int = None):
+async def rob_user(robber_id: int, target_id: int, requested_amount: int):
+    """Rob specified amount from target.
+    - No cooldown
+    - Amount is mandatory
+    - If target has less than requested → 'insufficient'
+    - 10% tax to Elara, 90% to robber
+    """
     if robber_id == target_id:
         return {"ok": False, "reason": "self"}
+
+    # Elara special case
     if int(target_id) == ELARA_BOT_ID:
         if int(robber_id) == OWNER_ID:
-            pass
+            pass  # Owner can rob Elara
         else:
             return {"ok": False, "reason": "elara_roast",
                     "roast": random.choice(ELARA_ROASTS)}
+
+    # Validate amount
+    if not requested_amount or requested_amount <= 0:
+        return {"ok": False, "reason": "invalid_amount"}
+
     col = users_collection()
     if col is None:
         return {"ok": False, "reason": "database"}
+
     robber = await get_user(robber_id)
     target = await get_user(target_id)
     if not robber or not target:
         return {"ok": False, "reason": "user"}
 
-    # ✅ Safe protection check
+    # Protection check
     if _is_protected(target):
         return {"ok": False, "reason": "protected"}
 
     target_coins = int(target.get("coins", 0))
+
+    # ✅ Minimum balance check (min 1)
     if target_coins < ROB_MIN_TARGET_BALANCE:
-        return {"ok": False, "reason": "insufficient"}
+        return {"ok": False, "reason": "insufficient",
+                "available": target_coins, "requested": requested_amount}
 
-    last = robber.get("rob_last_attempt")
-    cutoff = now_utc() - timedelta(seconds=ROB_COOLDOWN_SECONDS)
-    if last:
-        if isinstance(last, datetime) and last.tzinfo is None:
-            last = last.replace(tzinfo=timezone.utc)
-        try:
-            if last > cutoff:
-                return {"ok": False, "reason": "cooldown",
-                        "until": last + timedelta(seconds=ROB_COOLDOWN_SECONDS)}
-        except Exception:
-            pass
+    # ✅ If target has less than requested → insufficient
+    if target_coins < requested_amount:
+        return {"ok": False, "reason": "insufficient",
+                "available": target_coins, "requested": requested_amount}
 
-    reserved = await col.update_one(
-        {"_id": int(robber_id),
-         "$or": [
-             {"rob_last_attempt": {"$exists": False}},
-             {"rob_last_attempt": {"$lte": cutoff}},
-         ]},
-        {"$set": {"rob_last_attempt": now_utc(), "updated_at": now_utc()}},
-    )
-    if reserved.modified_count != 1:
-        return {"ok": False, "reason": "cooldown"}
-
-    if requested_amount and requested_amount > 0:
-        amount = min(requested_amount, target_coins)
-    else:
-        amount = max(1, int(target_coins * random.uniform(ROB_MIN_PERCENT, ROB_MAX_PERCENT)))
-
+    # ✅ Full amount rob
+    amount = requested_amount
     tax = tax_for(amount)
     net = amount - tax
+
     client = mongo_client()
     if client is None:
         return {"ok": False, "reason": "database"}
+
     try:
         async with await client.start_session() as session:
             async with session.start_transaction():
@@ -390,18 +392,22 @@ async def rob_user(robber_id: int, target_id: int, requested_amount: int = None)
                 )
                 if stolen.modified_count != 1:
                     await session.abort_transaction()
-                    return {"ok": False, "reason": "not_available"}
+                    return {"ok": False, "reason": "insufficient",
+                            "available": target_coins, "requested": requested_amount}
+
                 await col.update_one(
                     {"_id": int(robber_id)},
                     {"$inc": {"coins": net}, "$set": {"updated_at": now_utc()}},
                     session=session,
                 )
+
                 if tax > 0:
                     await col.update_one(
                         {"_id": ELARA_BOT_ID},
                         {"$inc": {"coins": tax}, "$set": {"updated_at": now_utc()}},
                         upsert=True, session=session,
                     )
+
                 await log_transaction(robber_id, "rob_received", net,
                                       meta={"target": target_id, "gross": amount, "tax": tax},
                                       session=session)
@@ -459,7 +465,6 @@ async def check_user(requester_id: int, target_id: int):
         upsert=True,
     )
 
-    # ✅ Protection details with expire time
     until = target.get("protection_until")
     active = _is_protected(target)
 
@@ -481,4 +486,137 @@ async def check_user(requester_id: int, target_id: int):
         "protected": active,
         "protection_until": until if active else None,
         "protection_remaining": remaining_seconds,
+    }
+
+
+# ─── Auto-Revive + Minimum Balance ────────────────────────────────────────────
+
+async def check_and_apply_auto_revive(user_id: int) -> dict:
+    """Check user ke liye auto-revive + minimum balance apply karo.
+    Returns: {"revived": bool, "topped_up": int}
+    """
+    user = await get_user(user_id)
+    if not user:
+        return {"revived": False, "topped_up": 0}
+
+    col = users_collection()
+    if col is None:
+        return {"revived": False, "topped_up": 0}
+
+    now = now_utc()
+    updates = {}
+    revived = False
+    topped_up = 0
+
+    # ── Auto-revive ──
+    if str(user.get("status", "alive")).lower() == "dead":
+        dead_since = user.get("dead_since")
+        if dead_since:
+            if isinstance(dead_since, datetime) and dead_since.tzinfo is None:
+                dead_since = dead_since.replace(tzinfo=timezone.utc)
+            try:
+                if now - dead_since >= timedelta(hours=AUTO_REVIVE_HOURS):
+                    updates["status"] = "alive"
+                    updates["dead_since"] = None
+                    revived = True
+            except Exception:
+                pass
+
+    # ── Minimum balance top-up ──
+    coins = int(user.get("coins", 0))
+    if coins < MIN_BALANCE:
+        low_since = user.get("low_balance_since")
+        if not low_since:
+            updates["low_balance_since"] = now
+        else:
+            if isinstance(low_since, datetime) and low_since.tzinfo is None:
+                low_since = low_since.replace(tzinfo=timezone.utc)
+            try:
+                if now - low_since >= timedelta(hours=MIN_BALANCE_TOPUP_HOURS):
+                    topup = MIN_BALANCE - coins
+                    updates["coins"] = MIN_BALANCE
+                    updates["low_balance_since"] = None
+                    topped_up = topup
+            except Exception:
+                pass
+    else:
+        if user.get("low_balance_since"):
+            updates["low_balance_since"] = None
+
+    if updates:
+        updates["updated_at"] = now
+        await col.update_one({"_id": int(user_id)}, {"$set": updates})
+
+        if revived:
+            try:
+                await log_transaction(user_id, "auto_revive", 0,
+                                      meta={"reason": f"{AUTO_REVIVE_HOURS}h auto-revive"})
+            except Exception:
+                pass
+        if topped_up:
+            try:
+                await log_transaction(user_id, "min_balance_topup", topped_up,
+                                      meta={"reason": f"balance < {MIN_BALANCE}"})
+            except Exception:
+                pass
+
+    return {"revived": revived, "topped_up": topped_up}
+
+
+async def run_auto_revive_sweep() -> dict:
+    """Background sweep — sab users check karo, jinko 6h ho gaye unko apply karo.
+    Returns: {"revived": N, "topped_up": M, "scanned": K}
+    """
+    col = users_collection()
+    if col is None:
+        return {"revived": 0, "topped_up": 0, "scanned": 0}
+
+    now = now_utc()
+    revive_cutoff = now - timedelta(hours=AUTO_REVIVE_HOURS)
+    balance_cutoff = now - timedelta(hours=MIN_BALANCE_TOPUP_HOURS)
+
+    revived_count = 0
+    topped_count = 0
+    scanned = 0
+
+    # ── Revive dead users whose 6h is up ──
+    try:
+        cursor = col.find({
+            "status": "dead",
+            "dead_since": {"$lte": revive_cutoff},
+        }, {"_id": 1})
+
+        async for doc in cursor:
+            uid = int(doc["_id"])
+            result = await check_and_apply_auto_revive(uid)
+            scanned += 1
+            if result.get("revived"):
+                revived_count += 1
+            if result.get("topped_up", 0) > 0:
+                topped_count += 1
+    except Exception as e:
+        print(f"[AUTO-REVIVE] dead scan failed: {type(e).__name__}: {e}", flush=True)
+
+    # ── Top-up users below min balance whose 6h is up ──
+    try:
+        cursor = col.find({
+            "coins": {"$lt": MIN_BALANCE},
+            "low_balance_since": {"$lte": balance_cutoff},
+        }, {"_id": 1})
+
+        async for doc in cursor:
+            uid = int(doc["_id"])
+            result = await check_and_apply_auto_revive(uid)
+            scanned += 1
+            if result.get("topped_up", 0) > 0:
+                topped_count += 1
+            if result.get("revived"):
+                revived_count += 1
+    except Exception as e:
+        print(f"[AUTO-REVIVE] balance scan failed: {type(e).__name__}: {e}", flush=True)
+
+    return {
+        "revived": revived_count,
+        "topped_up": topped_count,
+        "scanned": scanned,
     }
