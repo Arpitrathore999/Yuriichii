@@ -72,6 +72,13 @@ def _generate_equal_hands(player_count: int) -> list[list[int]]:
     return hands
 
 
+def _safe_int(v, default=0):
+    try:
+        return int(v)
+    except Exception:
+        return default
+
+
 # ─── Card Game Class ──────────────────────────────────────────────────────────
 class CardGame:
     def __init__(self, chat_id: int, entry_fee: int, max_players: int, creator_id: int):
@@ -81,9 +88,10 @@ class CardGame:
         self.creator_id = int(creator_id)
 
         self.players: list[dict] = []
-        self.state = "lobby"
+        self.state = "lobby"                     # lobby | running | finished
         self.round = 0
         self.turn_index = 0
+        self.first_turn_index = 0                # ✅ rotates each round
         self.round_plays: dict[int, int] = {}
         self.total_points: dict[int, int] = {}
         self.start_time: Optional[datetime] = None
@@ -92,9 +100,9 @@ class CardGame:
         self.winner_id: Optional[int] = None
         self.payout_done = False
 
-        # ✅ Message tracking
-        self.game_messages: list[int] = []        # delete at end
-        self.pinned_msg_id: Optional[int] = None   # pin during game
+        # ✅ Message tracking for cleanup
+        self.game_messages: list[int] = []
+        self.pinned_msg_id: Optional[int] = None
 
     def has_player(self, user_id: int) -> bool:
         return any(p["user_id"] == int(user_id) for p in self.players)
@@ -214,13 +222,17 @@ def _lb_col():
 
 
 async def ensure_stats(user_id: int, name: str):
+    """Create or update leaderboard stats (no field conflict)."""
     col = _lb_col()
     if col is None:
         return
     await col.update_one(
         {"_id": int(user_id)},
         {
-            "$set": {"name": name, "updated_at": _now()},
+            "$set": {
+                "name": name,
+                "updated_at": _now(),
+            },
             "$setOnInsert": {
                 "_id": int(user_id),
                 "played": 0,
@@ -239,6 +251,7 @@ async def record_game_result(user_id: int, name: str, points: int, won: bool):
     col = _lb_col()
     if col is None:
         return
+
     await ensure_stats(user_id, name)
 
     inc = {"played": 1, "total_points": int(points)}
