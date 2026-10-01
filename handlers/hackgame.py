@@ -31,6 +31,7 @@ from core.hack_engine import (
     ensure_stats,
     generate_secret,
     get_game,
+    is_valid_guess,
     record_result,
     remove_game,
     score_guess,
@@ -339,7 +340,8 @@ async def _start_game(game: HackGame):
             f"💰 <b>ᴘʀɪᴢᴇ ᴘᴏᴏʟ:</b> <code>{pool}</code> ᴄᴏɪɴs\n"
             f"👥 <b>ᴘʟᴀʏᴇʀs:</b> <code>{len(game.players)}</code>\n\n"
             f"👉 ᴛʏᴘᴇ <code>/guess 123</code> ᴛᴏ ɢᴜᴇss ᴏʀ ɢᴇᴛ ɪᴛ ᴡʀᴏɴɢ.\n\n"
-            f"{players_line}",
+            f"{players_line}\n\n"
+            f"<i>📝 ʀᴜʟᴇs: ᴅɪɢɪᴛs 1-9, ɴᴏ 0, ɴᴏ ʀᴇᴘᴇᴀᴛs</i>",
             parse_mode=ParseMode.HTML,
         )
         game.pinned_msg_id = start_msg.id
@@ -364,7 +366,8 @@ async def _start_turn(game: HackGame, new_round: bool = False):
         game.chat_id,
         f"👉 {current['mention']}, ɪᴛ's ʏᴏᴜʀ ᴛᴜʀɴ!\n"
         f"⏳ ʏᴏᴜ ʜᴀᴠᴇ <code>{TURN_SECONDS}</code> sᴇᴄᴏɴᴅs.\n"
-        f"🤖 ᴛʏᴘᴇ <code>/guess &lt;{game.code_length}-ᴅɪɢɪᴛs&gt;</code>",
+        f"🤖 ᴛʏᴘᴇ <code>/guess &lt;{game.code_length}-ᴅɪɢɪᴛs&gt;</code>\n"
+        f"<i>📝 ɴᴏ 0, ɴᴏ ʀᴇᴘᴇᴀᴛs</i>",
         parse_mode=ParseMode.HTML,
     )
     await _track(game, m)
@@ -410,7 +413,6 @@ async def _turn_timeout(game: HackGame, user_id: int, seconds: int = TURN_SECOND
         if not kicked:
             return
 
-        # DM the kicked player
         try:
             await app.send_message(
                 user_id,
@@ -432,14 +434,12 @@ async def _turn_timeout(game: HackGame, user_id: int, seconds: int = TURN_SECOND
         )
         await _track(game, m)
 
-        # ── Game-end checks ──
         if remaining == 0:
             return await _game_over_elara_wins(game, reason="ᴀʟʟ ᴘʟᴀʏᴇʀs ᴇʟɪᴍɪɴᴀᴛᴇᴅ")
 
         if game.remaining_guesses <= 0:
             return await _game_over_elara_wins(game, reason="ɴᴏ ɢᴜᴇssᴇs ʀᴇᴍᴀɪɴɪɴɢ")
 
-        # Reset turn index for the remaining players
         game.turn_index = 0
         await _start_turn(game)
 
@@ -489,15 +489,42 @@ async def hack_guess(_, message: Message):
 
     args = list(message.command or [])[1:]
     guess = args[0].strip() if args else ""
-    if len(guess) != game.code_length or not guess.isdigit():
+
+    # ✅ Validate guess — specific error messages
+    is_valid, reason = is_valid_guess(guess, game.code_length)
+
+    if not is_valid:
+        if reason == "not_number":
+            err_msg = "❌ <b>ᴇɴᴛᴇʀ ᴀ ɴᴜᴍʙᴇʀ!</b>"
+        elif reason == "wrong_length":
+            err_msg = (
+                f"❌ <b>ᴍᴜsᴛ ʙᴇ ᴇxᴀᴄᴛʟʏ {game.code_length} ᴅɪɢɪᴛs!</b>"
+            )
+        elif reason == "has_zero":
+            err_msg = "❌ <b>0 (ᴢᴇʀᴏ) ɴᴏᴛ ᴀʟʟᴏᴡᴇᴅ!</b>\n<i>ᴏɴʟʏ ᴅɪɢɪᴛs 1-9.</i>"
+        elif reason == "repeated":
+            err_msg = "❌ <b>ɴᴏ ʀᴇᴘᴇᴀᴛᴇᴅ ᴅɪɢɪᴛs!</b>\n<i>ᴇᴀᴄʜ ᴅɪɢɪᴛ ᴏɴʟʏ ᴏɴᴄᴇ.</i>"
+        else:
+            err_msg = "❌ <b>ɪɴᴠᴀʟɪᴅ ɢᴜᴇss — ᴛʀʏ ᴀɢᴀɪɴ!</b>"
+
+        if message.chat.type == ChatType.PRIVATE:
+            try:
+                await message.reply(err_msg, parse_mode=ParseMode.HTML)
+            except Exception:
+                pass
+            return
+
         return await message.reply(
-            f"❌ <b>ɪɴᴠᴀʟɪᴅ ɢᴜᴇss!</b>\n🔢 ᴇɴᴛᴇʀ ᴇxᴀᴄᴛʟʏ <code>{game.code_length}</code> ᴅɪɢɪᴛs.",
+            err_msg + "\n\n<i>ᴛᴜʀɴ ɴᴏᴛ ʟᴏsᴛ — ᴛʀʏ ᴀɢᴀɪɴ.</i>",
             parse_mode=ParseMode.HTML,
         )
 
     if guess in game.used_guesses:
+        if message.chat.type == ChatType.PRIVATE:
+            return
         return await message.reply("⚠️ <b>ʏᴏᴜ ᴀʟʀᴇᴀᴅʏ ɢᴜᴇssᴇᴅ ᴛʜᴀᴛ ɴᴜᴍʙᴇʀ.</b>", parse_mode=ParseMode.HTML)
 
+    # ── Valid guess — proceed normally ──
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
 
@@ -619,7 +646,6 @@ async def _winner(game: HackGame, winner_user):
         f"<code>/hack {game.entry_amount} {game.code_length}</code>"
     )
 
-    # Winner photo
     winner_photo_path = None
     winner_photo_url = None
     try:
@@ -681,7 +707,6 @@ async def _winner(game: HackGame, winner_user):
         except Exception:
             pass
 
-    # DM all participants (active + kicked)
     for p in game.players + game.kicked:
         is_winner = p["user_id"] == winner_user.id
         try:
@@ -709,7 +734,6 @@ async def _game_over_elara_wins(game: HackGame, reason: str = ""):
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
 
-    # ✅ FULL pot to Elara — no refunds to anyone
     pool = game.prize_pool()
     if pool > 0:
         await _credit_elara(pool, game.currency)
@@ -740,7 +764,6 @@ async def _game_over_elara_wins(game: HackGame, reason: str = ""):
     except Exception:
         pass
 
-    # DM every player (including kicked)
     for p in (game.players + game.kicked):
         try:
             await app.send_message(
@@ -755,7 +778,7 @@ async def _game_over_elara_wins(game: HackGame, reason: str = ""):
 
 
 async def _cancel_game(game: HackGame, reason: str):
-    """Host ne /end kiya → full refunds to active players + kicked players."""
+    """Host ne /end kiya → full refunds to active + kicked players."""
     if game.state == "finished":
         return
     game.state = "finished"
@@ -763,7 +786,6 @@ async def _cancel_game(game: HackGame, reason: str):
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
 
-    # Refund active + kicked (host cancelled manually, so return everyone's fee)
     for p in game.players + game.kicked:
         try:
             await _credit(p["user_id"], game.entry_amount, game.currency)
