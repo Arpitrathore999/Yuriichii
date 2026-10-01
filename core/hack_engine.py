@@ -17,11 +17,11 @@ from database.mongo import db
 ENTRY_MIN = 100
 ENTRY_MAX = 500_000
 VALID_LENGTHS = (3, 4, 5, 6)
-TURN_SECONDS = 40                 # ✅ 40s per turn
+TURN_SECONDS = 40
 GAME_FEE_PERCENT = 0.10
 WINNER_XP = 100
 LOSER_XP = 10
-MAX_MISSES = 2                    # ✅ 1st = warning, 2nd = kick
+MAX_MISSES = 2
 
 # games[chat_id] = HackGame
 ACTIVE_GAMES: dict[int, "HackGame"] = {}
@@ -65,8 +65,42 @@ def score_guess(secret: str, guess: str) -> tuple[int, int]:
     return hacks, glitches
 
 
+# ─── Secret Code Generation ────────────────────────────────────────────────────
 def generate_secret(length: int) -> str:
-    return "".join(random.choice("0123456789") for _ in range(int(length)))
+    """Generate unique-digit, non-zero secret code.
+    - Digits from 1-9 (no zero)
+    - No repeated digits
+    """
+    length = int(length)
+    available = [str(d) for d in range(1, 10)]   # 1-9
+    if length > len(available):
+        length = len(available)
+    return "".join(random.sample(available, length))
+
+
+# ─── Guess Validation ──────────────────────────────────────────────────────────
+def is_valid_guess(guess: str, length: int) -> tuple[bool, str]:
+    """Validate user's guess.
+
+    Rules:
+    - Must be a number (all digits)
+    - Length must match code_length
+    - No zero (0)
+    - No repeated digits
+
+    Returns:
+        (is_valid: bool, reason: str)
+        reason is one of: "ok", "not_number", "wrong_length", "has_zero", "repeated"
+    """
+    if not guess or not guess.isdigit():
+        return False, "not_number"
+    if len(guess) != int(length):
+        return False, "wrong_length"
+    if "0" in guess:
+        return False, "has_zero"
+    if len(set(guess)) != len(guess):
+        return False, "repeated"
+    return True, "ok"
 
 
 def max_guesses_for(length: int) -> int:
@@ -86,8 +120,8 @@ class HackGame:
         self.code_length = int(code_length)
 
         self.players: list[dict] = []
-        self.kicked: list[dict] = []           # ✅ kicked players (fee stays in pot)
-        self.state = "lobby"                   # lobby | running | finished
+        self.kicked: list[dict] = []
+        self.state = "lobby"                     # lobby | running | finished
         self.secret_code: Optional[str] = None
         self.max_guesses = max_guesses_for(self.code_length)
         self.remaining_guesses = self.max_guesses
@@ -118,7 +152,7 @@ class HackGame:
             "name": name,
             "mention": mention,
             "guesses_used": 0,
-            "misses": 0,                        # ✅ NEW
+            "misses": 0,
         })
         return True
 
@@ -147,7 +181,6 @@ class HackGame:
         self.turn_index = (self.turn_index + 1) % len(self.players)
 
     def prize_pool(self) -> int:
-        # ✅ Kicked players ki entry fees bhi pot mein count hongi
         total_players = len(self.players) + len(self.kicked)
         return self.entry_amount * total_players
 
