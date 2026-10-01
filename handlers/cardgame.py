@@ -617,8 +617,8 @@ async def _finish_game(game: CardGame):
     prize = total_pot - fee
 
     if not game.payout_done:
-    # ✅ Winner ko prize
-    try:
+    # ✅ Winner ko priz
+     try:
         await _credit(winner["user_id"], prize)
     except Exception as e:
         print(f"[CARDGAME payout] {type(e).__name__}: {e}", flush=True)
