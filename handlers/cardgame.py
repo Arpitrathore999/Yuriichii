@@ -38,6 +38,7 @@ from core.card_engine import (
 )
 
 PREFIXES = ["/", "!", "."]
+ELARA_BOT_ID = 8899359004
 
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -94,6 +95,30 @@ async def _credit(user_id: int, amount: int) -> bool:
         return await add_coins(int(user_id), int(amount))
     except Exception as e:
         print(f"[CARDGAME credit] {type(e).__name__}: {e}", flush=True)
+        return False
+
+
+async def _credit_elara(amount: int) -> bool:
+    """✅ Tax → Elara ke paas."""
+    if amount <= 0:
+        return False
+    try:
+        from database.mongo import users as users_col
+        col = users_col()
+        if col is None:
+            return False
+        await col.update_one(
+            {"_id": int(ELARA_BOT_ID)},
+            {
+                "$inc": {"coins": int(amount)},
+                "$set": {"updated_at": datetime.now(timezone.utc)},
+            },
+            upsert=True,
+        )
+        print(f"[CARDGAME tax] +{amount} coins → Elara", flush=True)
+        return True
+    except Exception as e:
+        print(f"[CARDGAME tax] FAIL: {type(e).__name__}: {e}", flush=True)
         return False
 
 
@@ -617,41 +642,26 @@ async def _finish_game(game: CardGame):
     prize = total_pot - fee
 
     if not game.payout_done:
-    # ✅ Winner ko priz
-     try:
-        await _credit(winner["user_id"], prize)
-    except Exception as e:
-        print(f"[CARDGAME payout] {type(e).__name__}: {e}", flush=True)
-
-    # ✅ 10% fee → Elara
-    if fee > 0:
+        # ✅ Winner → prize
         try:
-            from database.mongo import users as users_col
-            col = users_col()
-            if col is not None:
-                await col.update_one(
-                    {"_id": 8899359004},
-                    {
-                        "$inc": {"coins": int(fee)},
-                        "$set": {"updated_at": datetime.now(timezone.utc)},
-                    },
-                    upsert=True,
-                )
-                print(f"[CARDGAME tax] +{fee} coins → Elara", flush=True)
+            await _credit(winner["user_id"], prize)
         except Exception as e:
-            print(f"[CARDGAME tax] FAIL: {type(e).__name__}: {e}", flush=True)
+            print(f"[CARDGAME payout] {type(e).__name__}: {e}", flush=True)
 
-    try:
-        await add_xp(winner["user_id"], WINNER_XP)
-    except Exception:
-        pass
-    for p in game.players:
-        if p["user_id"] != winner["user_id"]:
-            try:
-                await add_xp(p["user_id"], LOSER_XP)
-            except Exception:
-                pass
-    game.payout_done = True
+        # ✅ Tax → Elara
+        await _credit_elara(fee)
+
+        try:
+            await add_xp(winner["user_id"], WINNER_XP)
+        except Exception:
+            pass
+        for p in game.players:
+            if p["user_id"] != winner["user_id"]:
+                try:
+                    await add_xp(p["user_id"], LOSER_XP)
+                except Exception:
+                    pass
+        game.payout_done = True
 
     for p in game.players:
         try:
@@ -669,55 +679,33 @@ async def _finish_game(game: CardGame):
         for p in game.players
     )
 
-    # ── Fetch winner profile photo (download to temp file) ──
+    # ── Winner photo ──
     winner_photo_path = None
     winner_photo_url = None
 
-    # Method 1: get_chat_photos → download
     try:
         async for ph in app.get_chat_photos(winner["user_id"], limit=1):
             winner_photo_path = await app.download_media(
                 ph.file_id,
                 file_name="/tmp/elara_winner.jpg",
             )
-            print(f"[CARDGAME photo] method1 OK: {winner_photo_path}", flush=True)
             break
     except Exception as e:
-        print(f"[CARDGAME photo] method1 FAIL: {type(e).__name__}: {e}", flush=True)
+        print(f"[CARDGAME photo] FAIL: {type(e).__name__}: {e}", flush=True)
 
-    # Method 2: user_obj.photo → download
-    if not winner_photo_path:
-        try:
-            user_obj = await app.get_users(winner["user_id"])
-            if getattr(user_obj, "photo", None):
-                winner_photo_path = await app.download_media(
-                    user_obj.photo.big_file_id,
-                    file_name="/tmp/elara_winner2.jpg",
-                )
-                print(f"[CARDGAME photo] method2 OK: {winner_photo_path}", flush=True)
-        except Exception as e:
-            print(f"[CARDGAME photo] method2 FAIL: {type(e).__name__}: {e}", flush=True)
-
-    # Method 3: config URL fallback
     if not winner_photo_path:
         default_img = (getattr(config, "CARD_WINNER_IMAGE", "") or "").strip()
         if default_img:
             winner_photo_url = default_img
-            print(f"[CARDGAME photo] method3 config URL", flush=True)
 
-    # Method 4: start image URL
     if not winner_photo_path and not winner_photo_url:
         start_img = (getattr(config, "START_IMAGE_URL", "") or "").strip()
         if start_img:
             winner_photo_url = start_img
-            print(f"[CARDGAME photo] method4 start image", flush=True)
 
-    print(f"[CARDGAME] photo_path={winner_photo_path}, photo_url={winner_photo_url}", flush=True)
-
-    # ── Delete all game messages BEFORE sending winner msg ──
+    # ── Delete all game messages ──
     await _delete_all_game_messages(game)
 
-    # ── Winner message ──
     group_text = (
         "🏁 <b>ɢᴀᴍᴇ ᴏᴠᴇʀ!</b>\n\n"
         f"🏆 <b>ᴡɪɴɴᴇʀ:</b> {winner['mention']}\n\n"
@@ -730,8 +718,6 @@ async def _finish_game(game: CardGame):
     )
 
     final_msg = None
-
-    # Try 1: local file
     if winner_photo_path and os.path.exists(winner_photo_path):
         try:
             final_msg = await app.send_photo(
@@ -740,12 +726,10 @@ async def _finish_game(game: CardGame):
                 caption=group_text,
                 parse_mode=ParseMode.HTML,
             )
-            print(f"[CARDGAME] sent with local photo, id={final_msg.id}", flush=True)
         except Exception as e:
             print(f"[CARDGAME local-photo] FAIL: {type(e).__name__}: {e}", flush=True)
             final_msg = None
 
-    # Try 2: URL
     if final_msg is None and winner_photo_url:
         try:
             final_msg = await app.send_photo(
@@ -754,42 +738,30 @@ async def _finish_game(game: CardGame):
                 caption=group_text,
                 parse_mode=ParseMode.HTML,
             )
-            print(f"[CARDGAME] sent with URL photo, id={final_msg.id}", flush=True)
         except Exception as e:
             print(f"[CARDGAME url-photo] FAIL: {type(e).__name__}: {e}", flush=True)
             final_msg = None
 
-    # Try 3: text only
     if final_msg is None:
         try:
-            final_msg = await app.send_message(
-                game.chat_id,
-                group_text,
-                parse_mode=ParseMode.HTML,
-            )
-            print(f"[CARDGAME] sent text only, id={final_msg.id}", flush=True)
+            final_msg = await app.send_message(game.chat_id, group_text, parse_mode=ParseMode.HTML)
         except Exception as e:
             print(f"[CARDGAME text-send] FAIL: {type(e).__name__}: {e}", flush=True)
 
-    # ✅ Pin final message
+    # ✅ Pin final
     try:
         if final_msg:
-            await app.pin_chat_message(
-                game.chat_id,
-                final_msg.id,
-                disable_notification=True,
-            )
+            await app.pin_chat_message(game.chat_id, final_msg.id, disable_notification=True)
     except Exception as e:
         print(f"[CARDGAME pin-final] FAIL: {type(e).__name__}: {e}", flush=True)
 
-    # Cleanup temp file
     if winner_photo_path and os.path.exists(winner_photo_path):
         try:
             os.remove(winner_photo_path)
         except Exception:
             pass
 
-    # ── DM each player ──
+    # DM players
     for p in game.players:
         is_winner = p["user_id"] == winner["user_id"]
         pts = game.total_points.get(p["user_id"], 0)
@@ -812,24 +784,91 @@ async def _finish_game(game: CardGame):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  /leaders
+#  /leaders — combined (Card + Hack)
 # ══════════════════════════════════════════════════════════════════════════════
-@app.on_message(filters.command(["leaders", "cardleaders"], prefixes=PREFIXES))
-async def card_leaders(_, message: Message):
-    rows = await top_leaders(10)
-    if not rows:
-        return await message.reply("❌ ɴᴏ ᴄᴀʀᴅ ɢᴀᴍᴇ ꜱᴛᴀᴛꜱ ʏᴇᴛ.", parse_mode=ParseMode.HTML)
+@app.on_message(filters.command(["leaders", "leaderboard"], prefixes=PREFIXES))
+async def leaders_cmd(_, message: Message):
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🃏 ᴄᴀʀᴅ ɢᴀᴍᴇ", callback_data="lb:card"),
+            InlineKeyboardButton("🛸 ʜᴀᴄᴋ ɢᴀᴍᴇ", callback_data="lb:hack"),
+        ],
+    ])
 
-    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
-    lines = ["🏆 <b>ᴇʟᴀʀᴀ ᴄᴀʀᴅ ɢᴀᴍᴇ ʟᴇᴀᴅᴇʀꜱ</b>\n"]
-    for i, row in enumerate(rows, 1):
-        rank = medals.get(i, f"{i}.")
-        name = row.get("name") or str(row["_id"])
-        won = int(row.get("won", 0))
-        pts = int(row.get("total_points", 0))
-        streak = int(row.get("streak", 0))
-        lines.append(
-            f"{rank} <b>{_esc(name)}</b> — <code>{won}</code> ᴡɪɴꜱ • "
-            f"<code>{pts}</code> ᴘᴛꜱ • 🔥 <code>{streak}</code>"
-        )
-    await message.reply("\n".join(lines), parse_mode=ParseMode.HTML)
+    await message.reply(
+        "🏆 <b>ᴇʟᴀʀᴀ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅꜱ</b>\n\n"
+        "ᴄʜᴏᴏsᴇ ᴀ ɢᴀᴍᴇ ᴛᴏ ᴠɪᴇᴡ ɪᴛs ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ 👇",
+        parse_mode=ParseMode.HTML,
+        reply_markup=kb,
+    )
+
+
+@app.on_callback_query(filters.regex(r"^lb:"))
+async def leaders_callback(_, query):
+    data = query.data.split(":")[1]
+
+    back_kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🃏 ᴄᴀʀᴅ", callback_data="lb:card"),
+            InlineKeyboardButton("🛸 ʜᴀᴄᴋ", callback_data="lb:hack"),
+        ],
+        [
+            InlineKeyboardButton("❌ ᴄʟᴏꜱᴇ", callback_data="lb:close"),
+        ],
+    ])
+
+    if data == "close":
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+        return
+
+    if data == "card":
+        rows = await top_leaders(10)
+        if not rows:
+            text = "🃏 <b>ᴄᴀʀᴅ ɢᴀᴍᴇ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ</b>\n\n❌ ɴᴏ ꜱᴛᴀᴛꜱ ʏᴇᴛ."
+        else:
+            medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+            lines = ["🃏 <b>ᴄᴀʀᴅ ɢᴀᴍᴇ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ</b>\n"]
+            for i, row in enumerate(rows, 1):
+                rank = medals.get(i, f"{i}.")
+                name = row.get("name") or str(row["_id"])
+                won = int(row.get("won", 0))
+                pts = int(row.get("total_points", 0))
+                streak = int(row.get("streak", 0))
+                lines.append(
+                    f"{rank} <b>{_esc(name)}</b> — <code>{won}</code> ᴡɪɴꜱ • "
+                    f"<code>{pts}</code> ᴘᴛꜱ • 🔥 <code>{streak}</code>"
+                )
+            text = "\n".join(lines)
+        try:
+            await query.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=back_kb)
+        except Exception:
+            pass
+        await query.answer()
+        return
+
+    if data == "hack":
+        from core.hack_engine import top_hackers
+        rows = await top_hackers(10)
+        if not rows:
+            text = "🛸 <b>ʜᴀᴄᴋ ɢᴀᴍᴇ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ</b>\n\n❌ ɴᴏ ꜱᴛᴀᴛꜱ ʏᴇᴛ."
+        else:
+            medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+            lines = ["🛸 <b>ʜᴀᴄᴋ ɢᴀᴍᴇ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ</b>\n"]
+            for i, row in enumerate(rows, 1):
+                rank = medals.get(i, f"{i}.")
+                name = row.get("name") or str(row["_id"])
+                won = int(row.get("won", 0))
+                streak = int(row.get("streak", 0))
+                lines.append(
+                    f"{rank} <b>{_esc(name)}</b> — <code>{won}</code> ᴡɪɴꜱ • 🔥 <code>{streak}</code>"
+                )
+            text = "\n".join(lines)
+        try:
+            await query.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=back_kb)
+        except Exception:
+            pass
+        await query.answer()
+        return
