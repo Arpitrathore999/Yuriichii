@@ -38,6 +38,8 @@ from core.hack_engine import (
 
 PREFIXES = ["/", "!", "."]
 MIN_PLAYERS = 2
+MAX_PLAYERS = 10
+LOBBY_SECONDS = 120
 ELARA_BOT_ID = 8899359004
 
 
@@ -106,7 +108,6 @@ async def _credit(user_id: int, amount: int, currency: str) -> bool:
 
 
 async def _credit_elara(amount: int, currency: str) -> bool:
-    """✅ Tax → Elara ke paas."""
     if amount <= 0:
         return False
     try:
@@ -215,11 +216,30 @@ async def hack_create(_, message: Message):
     m = await message.reply(
         "💻 <b>ʜᴀᴄᴋᴇʀ ʟᴏʙʙʏ ꜱᴛᴀʀᴛᴇᴅ!</b>\n\n"
         f"💰 <b>ᴇɴᴛʀʏ ꜰᴇᴇ:</b> <code>{amount}</code> ᴄᴏɪɴꜱ\n"
-        f"🔐 <b>ᴛᴀʀɢᴇᴛ ʟᴇɴɢᴛʜ:</b> <code>{length}</code> ᴅɪɢɪᴛꜱ\n\n"
-        f"👉 ʀᴇɢɪꜱᴛᴇʀ ᴜꜱɪɴɢ: <code>/register {amount}</code>",
+        f"🔐 <b>ᴛᴀʀɢᴇᴛ ʟᴇɴɢᴛʜ:</b> <code>{length}</code> ᴅɪɢɪᴛꜱ\n"
+        f"👥 <b>ᴍᴀx ᴘʟᴀʏᴇʀꜱ:</b> <code>{MAX_PLAYERS}</code>\n\n"
+        f"👉 ʀᴇɢɪꜱᴛᴇʀ ᴜꜱɪɴɢ: <code>/register {amount}</code>\n"
+        f"⏳ <b>ɢᴀᴍᴇ ꜱᴛᴀʀᴛꜱ ɪɴ 2 ᴍɪɴᴜᴛᴇꜱ.</b>",
         parse_mode=ParseMode.HTML,
     )
     await _track(game, m)
+
+    game.lobby_task = asyncio.create_task(_lobby_timeout(game))
+
+
+async def _lobby_timeout(game: HackGame):
+    try:
+        await asyncio.sleep(LOBBY_SECONDS)
+        if game.state != "lobby":
+            return
+        if len(game.players) < MIN_PLAYERS:
+            await _cancel_game(game, "ɴᴏᴛ ᴇɴᴏᴜɢʜ ᴘʟᴀʏᴇʀꜱ ᴊᴏɪɴᴇᴅ")
+            return
+        await _start_game(game)
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        print(f"[HACK lobby] {type(e).__name__}: {e}", flush=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -234,6 +254,13 @@ async def hack_register(_, message: Message):
         return await message.reply("❌ <b>ɴᴏ ᴀᴄᴛɪᴠᴇ ʜᴀᴄᴋ ɢᴀᴍᴇ ꜰᴏᴜɴᴅ.</b>", parse_mode=ParseMode.HTML)
     if game.state != "lobby":
         return await message.reply("❌ <b>ɢᴀᴍᴇ ʜᴀꜱ ᴀʟʀᴇᴀᴅʏ ꜱᴛᴀʀᴛᴇᴅ.</b>", parse_mode=ParseMode.HTML)
+
+    # ✅ Max players check
+    if len(game.players) >= MAX_PLAYERS:
+        return await message.reply(
+            f"❌ <b>ɢᴀᴍᴇ ɪꜱ ꜰᴜʟʟ!</b>\n<i>ᴍᴀx {MAX_PLAYERS} ᴘʟᴀʏᴇʀꜱ ᴏɴʟʏ.</i>",
+            parse_mode=ParseMode.HTML,
+        )
 
     args = list(message.command or [])[1:]
     if not args:
@@ -272,14 +299,20 @@ async def hack_register(_, message: Message):
 
     m = await message.reply(
         f"👤 <b>{_mention(message.from_user)} ᴊᴏɪɴᴇᴅ ᴛʜᴇ ʜᴀᴄᴋ ᴛᴇᴀᴍ!</b>\n"
-        f"<i>(ᴛᴏᴛᴀʟ: {len(game.players)})</i>",
+        f"<i>(ᴛᴏᴛᴀʟ: {len(game.players)}/{MAX_PLAYERS})</i>",
         parse_mode=ParseMode.HTML,
     )
     await _track(game, m)
 
-    if len(game.players) >= MIN_PLAYERS:
+    # ✅ Start if full (10 players)
+    if len(game.players) >= MAX_PLAYERS:
         if game.lobby_task and not game.lobby_task.done():
             game.lobby_task.cancel()
+        await app.send_message(
+            game.chat_id,
+            "🔥 <b>10 ᴘʟᴀʏᴇʀꜱ ᴊᴏɪɴᴇᴅ! ꜱᴛᴀʀᴛɪɴɢ ɢᴀᴍᴇ ɴᴏᴡ...</b>",
+            parse_mode=ParseMode.HTML,
+        )
         await _start_game(game)
 
 
@@ -304,8 +337,9 @@ async def _start_game(game: HackGame):
             game.chat_id,
             "🚀 <b>ʜᴀᴄᴋ ꜱᴛᴀʀᴛᴇᴅ!</b>\n\n"
             f"🔢 <b>ᴄᴏᴅᴇ ʟᴇɴɢᴛʜ:</b> <code>{game.code_length}</code> ᴅɪɢɪᴛꜱ\n"
-            f"💰 <b>ᴘʀɪᴢᴇ ᴘᴏᴏʟ:</b> <code>{pool}</code> ᴄᴏɪɴꜱ\n\n"
-            f"👉 ᴜꜱᴇ <code>/guess 123</code> ᴏɴ ʏᴏᴜʀ ᴛᴜʀɴ.\n\n"
+            f"💰 <b>ᴘʀɪᴢᴇ ᴘᴏᴏʟ:</b> <code>{pool}</code> ᴄᴏɪɴꜱ\n"
+            f"👥 <b>ᴘʟᴀʏᴇʀꜱ:</b> <code>{len(game.players)}</code>\n\n"
+            f"👉 ᴜꜱᴇ <code>/guess 123</code> ɪɴ ɢʀᴏᴜᴘ ᴏʀ ᴅᴍ ᴏɴ ʏᴏᴜʀ ᴛᴜʀɴ.\n\n"
             f"{players_line}",
             parse_mode=ParseMode.HTML,
         )
@@ -327,10 +361,13 @@ async def _start_turn(game: HackGame, new_round: bool = False):
     if game.remaining_guesses <= 0:
         return await _game_over_no_winner(game)
 
+    # ✅ 40 sec timer
+    turn_seconds = 40
+
     m = await app.send_message(
         game.chat_id,
         f"👉 {current['mention']}, ɪᴛ'ꜱ ʏᴏᴜʀ ᴛᴜʀɴ!\n"
-        f"⏳ ʏᴏᴜ ʜᴀᴠᴇ <code>1</code> ᴍɪɴᴜᴛᴇ.\n"
+        f"⏳ ʏᴏᴜ ʜᴀᴠᴇ <code>{turn_seconds}</code> ꜱᴇᴄᴏɴᴅꜱ.\n"
         f"🃏 ᴜꜱᴇ <code>/guess &lt;{game.code_length}-ᴅɪɢɪᴛꜱ&gt;</code>",
         parse_mode=ParseMode.HTML,
     )
@@ -338,12 +375,12 @@ async def _start_turn(game: HackGame, new_round: bool = False):
 
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
-    game.turn_task = asyncio.create_task(_turn_timeout(game, current["user_id"]))
+    game.turn_task = asyncio.create_task(_turn_timeout(game, current["user_id"], turn_seconds))
 
 
-async def _turn_timeout(game: HackGame, user_id: int):
+async def _turn_timeout(game: HackGame, user_id: int, seconds: int = 40):
     try:
-        await asyncio.sleep(TURN_SECONDS)
+        await asyncio.sleep(seconds)
         if game.state != "running":
             return
         current = game.current_player()
@@ -364,23 +401,42 @@ async def _turn_timeout(game: HackGame, user_id: int):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  /guess
+#  /guess — works in GROUP + DM
 # ══════════════════════════════════════════════════════════════════════════════
-@app.on_message(filters.command("guess", prefixes=PREFIXES) & filters.group)
+@app.on_message(filters.command("guess", prefixes=PREFIXES))
 async def hack_guess(_, message: Message):
-    if not _is_group(message):
+    user_id = message.from_user.id if message.from_user else None
+    if not user_id:
         return
-    game = get_game(message.chat.id)
+
+    # ✅ Find game: in group → chat's game; in DM → any active game with this user
+    game = None
+    if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP):
+        game = get_game(message.chat.id)
+    else:
+        for g in list(ACTIVE_GAMES.values()):
+            if g.has_player(user_id) and g.state == "running":
+                game = g
+                break
+
     if not game or game.state == "finished":
+        if message.chat.type == ChatType.PRIVATE:
+            return
         return await message.reply("❌ <b>ɴᴏ ᴀᴄᴛɪᴠᴇ ʜᴀᴄᴋ ɢᴀᴍᴇ.</b>", parse_mode=ParseMode.HTML)
     if game.state != "running":
+        if message.chat.type == ChatType.PRIVATE:
+            return
         return await message.reply("❌ <b>ɢᴀᴍᴇ ɴᴏᴛ ꜱᴛᴀʀᴛᴇᴅ ʏᴇᴛ.</b>", parse_mode=ParseMode.HTML)
 
-    if not game.has_player(message.from_user.id):
+    if not game.has_player(user_id):
+        if message.chat.type == ChatType.PRIVATE:
+            return
         return await message.reply("❌ ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ʀᴇɢɪꜱᴛᴇʀᴇᴅ ɪɴ ᴛʜɪꜱ ʜᴀᴄᴋ ɢᴀᴍᴇ.", parse_mode=ParseMode.HTML)
 
     current = game.current_player()
-    if not current or current["user_id"] != message.from_user.id:
+    if not current or current["user_id"] != user_id:
+        if message.chat.type == ChatType.PRIVATE:
+            return
         return await message.reply("⏳ <b>ɪᴛ'ꜱ ɴᴏᴛ ʏᴏᴜʀ ᴛᴜʀɴ!</b>", parse_mode=ParseMode.HTML)
 
     args = list(message.command or [])[1:]
@@ -401,6 +457,13 @@ async def hack_guess(_, message: Message):
     game.used_guesses.add(guess)
     game.remaining_guesses -= 1
     current["guesses_used"] += 1
+
+    # ✅ In DM → also send confirmation
+    if message.chat.type == ChatType.PRIVATE:
+        try:
+            await message.reply(f"✅ ɢᴜᴇꜱꜱ ꜱᴇɴᴛ: <code>{guess}</code>", parse_mode=ParseMode.HTML)
+        except Exception:
+            pass
 
     if guess == game.secret_code:
         return await _winner(game, message.from_user)
@@ -440,7 +503,7 @@ async def hack_end(_, message: Message):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  End states
+#  Winner / End states
 # ══════════════════════════════════════════════════════════════════════════════
 async def _winner(game: HackGame, winner_user):
     if game.state == "finished":
@@ -456,16 +519,13 @@ async def _winner(game: HackGame, winner_user):
     prize = pool - fee
 
     if not game.payout_done:
-        # ✅ Winner → prize
         try:
             await _credit(winner_user.id, prize, game.currency)
         except Exception as e:
             print(f"[HACK payout] {type(e).__name__}: {e}", flush=True)
 
-        # ✅ Tax (10% fee) → Elara
         await _credit_elara(fee, game.currency)
 
-        # ✅ XP
         try:
             await add_xp(winner_user.id, WINNER_XP)
         except Exception:
@@ -484,7 +544,6 @@ async def _winner(game: HackGame, winner_user):
         except Exception:
             pass
 
-    # Streak fetch
     streak_str = "1/1"
     try:
         from core.hack_engine import _lb_col
@@ -512,14 +571,17 @@ async def _winner(game: HackGame, winner_user):
         f"<code>/hack {game.entry_amount} {game.code_length}</code>"
     )
 
-    # ✅ Try with winner pfp
+    # ✅ Winner pfp — ChatPhoto me big_file_id use karo
     winner_photo_path = None
     winner_photo_url = None
     try:
         async for ph in app.get_chat_photos(winner_user.id, limit=1):
-            winner_photo_path = await app.download_media(
-                ph.file_id, file_name="/tmp/elara_hack_winner.jpg"
-            )
+            # ✅ ChatPhoto me file_id nahi, big_file_id hota hai
+            file_id = getattr(ph, "big_file_id", None) or getattr(ph, "file_id", None) or getattr(ph, "small_file_id", None)
+            if file_id:
+                winner_photo_path = await app.download_media(
+                    file_id, file_name="/tmp/elara_hack_winner.jpg"
+                )
             break
     except Exception as e:
         print(f"[HACK photo] FAIL: {type(e).__name__}: {e}", flush=True)
@@ -560,21 +622,18 @@ async def _winner(game: HackGame, winner_user):
         except Exception as e:
             print(f"[HACK text-send] {type(e).__name__}: {e}", flush=True)
 
-    # ✅ Pin final
     try:
         if final_msg:
             await app.pin_chat_message(game.chat_id, final_msg.id, disable_notification=True)
     except Exception as e:
         print(f"[HACK pin-final] {type(e).__name__}: {e}", flush=True)
 
-    # Cleanup temp
     if winner_photo_path and os.path.exists(winner_photo_path):
         try:
             os.remove(winner_photo_path)
         except Exception:
             pass
 
-    # DM results
     for p in game.players:
         is_winner = p["user_id"] == winner_user.id
         try:
@@ -601,7 +660,6 @@ async def _game_over_no_winner(game: HackGame):
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
 
-    # Refund all players
     for p in game.players:
         try:
             await _credit(p["user_id"], game.entry_amount, game.currency)
@@ -659,25 +717,3 @@ async def _cancel_game(game: HackGame, reason: str):
             pass
     except Exception:
         pass
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  /hackleaders — leaderboard
-# ══════════════════════════════════════════════════════════════════════════════
-@app.on_message(filters.command(["hackleaders", "hacktop"], prefixes=PREFIXES))
-async def hack_leaders(_, message: Message):
-    rows = await top_hackers(10)
-    if not rows:
-        return await message.reply("❌ ɴᴏ ʜᴀᴄᴋ ɢᴀᴍᴇ ꜱᴛᴀᴛꜱ ʏᴇᴛ.", parse_mode=ParseMode.HTML)
-
-    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
-    lines = ["🏆 <b>ᴇʟᴀʀᴀ ʜᴀᴄᴋ ɢᴀᴍᴇ ʟᴇᴀᴅᴇʀꜱ</b>\n"]
-    for i, row in enumerate(rows, 1):
-        rank = medals.get(i, f"{i}.")
-        name = row.get("name") or str(row["_id"])
-        won = int(row.get("won", 0))
-        streak = int(row.get("streak", 0))
-        lines.append(
-            f"{rank} <b>{_esc(name)}</b> — <code>{won}</code> ᴡɪɴꜱ • 🔥 <code>{streak}</code>"
-        )
-    await message.reply("\n".join(lines), parse_mode=ParseMode.HTML)
