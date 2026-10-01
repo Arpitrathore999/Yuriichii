@@ -15,10 +15,10 @@ from database.mongo import db
 
 # ─── Constants ─────────────────────────────────────────────────────────────────
 ENTRY_FEE_MIN = 100
-ENTRY_FEE_MAX = 50000000
-MAX_PLAYERS_LIMIT = 50
+ENTRY_FEE_MAX = 500_000
+MAX_PLAYERS_LIMIT = 10
 LOBBY_SECONDS = 120          # 2 minutes
-TURN_SECONDS = 40            # 40 sec per turn
+TURN_SECONDS = 60            # 60 sec per turn
 GAME_FEE_PERCENT = 0.10      # 10% fee
 WINNER_XP = 100              # per win
 LOSER_XP = 10                # consolation XP
@@ -34,7 +34,6 @@ def _now():
 
 
 def _card_sum_ok(hands: list[list[int]]) -> bool:
-    """Verify all players' 4-card hands sum to the same value."""
     if not hands:
         return False
     target = sum(hands[0])
@@ -42,17 +41,6 @@ def _card_sum_ok(hands: list[list[int]]) -> bool:
 
 
 def _generate_equal_hands(player_count: int) -> list[list[int]]:
-    """
-    Generate `player_count` hands of 4 cards each (values 1..10)
-    where ALL hands sum to the same target.
-
-    Strategy:
-      - Pick a random target in [10, 30] (4 cards of 1..10 → range [4,40])
-      - For each player, generate 4 random values 1..10 and adjust
-        the last card so the sum matches target.
-      - Retry if the adjusted card is out of range.
-    """
-    # Target between 4 and 40, but keep it interesting (mid-range)
     target = random.randint(12, 30)
 
     hands: list[list[int]] = []
@@ -66,7 +54,6 @@ def _generate_equal_hands(player_count: int) -> list[list[int]]:
                 hands.append(cards)
                 break
         else:
-            # Fallback: distribute evenly
             base = target // 4
             cards = [base] * 4
             rem = target - sum(cards)
@@ -74,9 +61,7 @@ def _generate_equal_hands(player_count: int) -> list[list[int]]:
                 cards[i % 4] += 1
             hands.append(cards)
 
-    # Sanity check
     if not _card_sum_ok(hands):
-        # Regenerate all hands as a uniform distribution
         base = target // 4
         rem = target % 4
         fallback = [base] * 4
@@ -87,13 +72,6 @@ def _generate_equal_hands(player_count: int) -> list[list[int]]:
     return hands
 
 
-def _safe_int(v, default=0):
-    try:
-        return int(v)
-    except Exception:
-        return default
-
-
 # ─── Card Game Class ──────────────────────────────────────────────────────────
 class CardGame:
     def __init__(self, chat_id: int, entry_fee: int, max_players: int, creator_id: int):
@@ -102,11 +80,11 @@ class CardGame:
         self.max_players = int(max_players)
         self.creator_id = int(creator_id)
 
-        self.players: list[dict] = []     # [{user_id, name, mention, hand, used, round_scores}]
-        self.state = "lobby"              # lobby | running | finished
+        self.players: list[dict] = []
+        self.state = "lobby"
         self.round = 0
         self.turn_index = 0
-        self.round_plays: dict[int, int] = {}   # user_id -> card_index played this round
+        self.round_plays: dict[int, int] = {}
         self.total_points: dict[int, int] = {}
         self.start_time: Optional[datetime] = None
         self.turn_task: Optional[asyncio.Task] = None
@@ -114,7 +92,10 @@ class CardGame:
         self.winner_id: Optional[int] = None
         self.payout_done = False
 
-    # ── Player helpers ─────────────────────────────────────────────────────────
+        # ✅ Message tracking
+        self.game_messages: list[int] = []        # delete at end
+        self.pinned_msg_id: Optional[int] = None   # pin during game
+
     def has_player(self, user_id: int) -> bool:
         return any(p["user_id"] == int(user_id) for p in self.players)
 
@@ -165,9 +146,6 @@ class CardGame:
         return [CARD_LABELS[i] for i, used in enumerate(p["used"]) if not used]
 
     def use_card(self, user_id: int, card_label: str) -> tuple[bool, str, int | None]:
-        """
-        Attempt to use a card. Returns (ok, message, card_value).
-        """
         p = self.get_player(user_id)
         if not p:
             return False, "not_player", None
@@ -180,7 +158,6 @@ class CardGame:
         if p["used"][idx]:
             return False, "already_used", None
 
-        # Already played this round?
         if int(user_id) in self.round_plays:
             return False, "already_played_round", None
 
@@ -190,7 +167,6 @@ class CardGame:
         return True, "ok", value
 
     def auto_play(self, user_id: int) -> tuple[bool, str, int | None]:
-        """Auto-play: pick first unused card."""
         p = self.get_player(user_id)
         if not p:
             return False, "not_player", None
@@ -213,13 +189,12 @@ class CardGame:
         return "\n".join(lines)
 
 
-# ─── Game Registry (per chat) ─────────────────────────────────────────────────
+# ─── Game Registry ────────────────────────────────────────────────────────────
 def get_game(chat_id: int) -> Optional[CardGame]:
     return ACTIVE_GAMES.get(int(chat_id))
 
 
 def create_game(chat_id: int, entry_fee: int, max_players: int, creator_id: int) -> CardGame:
-    # Cleanup old finished game
     existing = ACTIVE_GAMES.get(int(chat_id))
     if existing and existing.is_finished():
         ACTIVE_GAMES.pop(int(chat_id), None)
@@ -245,9 +220,9 @@ async def ensure_stats(user_id: int, name: str):
     await col.update_one(
         {"_id": int(user_id)},
         {
+            "$set": {"name": name, "updated_at": _now()},
             "$setOnInsert": {
                 "_id": int(user_id),
-                "name": name,
                 "played": 0,
                 "won": 0,
                 "total_points": 0,
@@ -255,7 +230,6 @@ async def ensure_stats(user_id: int, name: str):
                 "best_streak": 0,
                 "created_at": _now(),
             },
-            "$set": {"name": name, "updated_at": _now()},
         },
         upsert=True,
     )
@@ -266,10 +240,10 @@ async def record_game_result(user_id: int, name: str, points: int, won: bool):
     if col is None:
         return
     await ensure_stats(user_id, name)
+
     inc = {"played": 1, "total_points": int(points)}
     if won:
         inc["won"] = 1
-        inc["streak"] = 1
         doc = await col.find_one({"_id": int(user_id)}, {"streak": 1, "best_streak": 1})
         current = int(doc.get("streak", 0)) + 1 if doc else 1
         best = max(current, int(doc.get("best_streak", 0)) if doc else 0)
