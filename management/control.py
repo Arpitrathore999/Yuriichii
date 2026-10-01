@@ -271,10 +271,28 @@ async def cmd_promote(_, message):
     if mode not in PROMOTE_MODES:
         return await message.reply("❌ ɪɴᴠᴀʟɪᴅ ᴍᴏᴅᴇ. ᴜsᴇ 0, 1, 2 ᴏʀ 3.")
 
+    # Owner-only self promote: /promote 0-3
+    # If no target is supplied, only the bot owner may promote himself.
     target = await _resolve_target(message, target_parts)
+    if not target and not target_parts and not message.reply_to_message:
+        if not message.from_user or int(message.from_user.id) != int(config.OWNER_ID):
+            return await message.reply("❌ ᴏɴʟʏ ʙᴏᴛ ᴏᴡɴᴇʀ ᴄᴀɴ ᴜsᴇ sᴇʟғ ᴘʀᴏᴍᴏᴛᴇ.")
+        target = message.from_user
+
     if not target:
         return await message.reply("❌ ᴜsᴇ ᴀ ʀᴇᴘʟʏ, @ᴜsᴇʀɴᴀᴍᴇ ᴏʀ ᴜsᴇʀ ɪᴅ.")
-    if not await _can_edit_target(message, target.id):
+
+    # Self-promote is owner-only; normal target promotion keeps existing checks.
+    is_self_promote = bool(
+        message.from_user
+        and int(target.id) == int(message.from_user.id)
+        and not target_parts
+        and not message.reply_to_message
+    )
+    if is_self_promote and int(message.from_user.id) != int(config.OWNER_ID):
+        return await message.reply("❌ ᴏɴʟʏ ʙᴏᴛ ᴏᴡɴᴇʀ ᴄᴀɴ ᴜsᴇ sᴇʟғ ᴘʀᴏᴍᴏᴛᴇ.")
+
+    if not is_self_promote and not await _can_edit_target(message, target.id):
         return await message.reply("❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴍᴏᴅɪғʏ ᴛʜɪs ᴜsᴇʀ.")
 
     requested = set(PROMOTE_MODES[mode][1])
