@@ -472,10 +472,8 @@ async def _start_round(game: CardGame):
     n = len(game.players)
 
     if game.round == 1:
-        # Round 1 — random first player
         game.first_turn_index = random.randint(0, n - 1)
     else:
-        # Round 2+ — first shifts -1 (backwards)
         game.first_turn_index = (game.first_turn_index - 1) % n
 
     game.turn_index = game.first_turn_index
@@ -651,43 +649,43 @@ async def _finish_game(game: CardGame):
         for p in game.players
     )
 
-    # ── Fetch winner profile photo ──
-    # ── Fetch winner profile photo ──
-winner_photo = None
-try:
-    # ✅ Method 1: user object se photo
-    user_obj = await app.get_users(winner["user_id"])
-    if getattr(user_obj, "photo", None):
-        winner_photo = user_obj.photo.big_file_id
-        print(f"[CARDGAME photo] got from user_obj: {winner_photo[:20]}", flush=True)
-except Exception as e:
-    print(f"[CARDGAME photo method1] {type(e).__name__}: {e}", flush=True)
+    # ── Fetch winner profile photo (4 methods) ──
+    winner_photo = None
 
-if not winner_photo:
+    # Method 1: user_obj.photo
     try:
-        # ✅ Method 2: get_chat_photos
-        async for ph in app.get_chat_photos(winner["user_id"], limit=1):
-            winner_photo = ph.file_id
-            print(f"[CARDGAME photo] got from get_chat_photos: {winner_photo[:20]}", flush=True)
-            break
+        user_obj = await app.get_users(winner["user_id"])
+        if getattr(user_obj, "photo", None):
+            winner_photo = user_obj.photo.big_file_id
+            print(f"[CARDGAME photo] method1 OK: {str(winner_photo)[:20]}", flush=True)
     except Exception as e:
-        print(f"[CARDGAME photo method2] {type(e).__name__}: {e}", flush=True)
+        print(f"[CARDGAME photo] method1 FAIL: {type(e).__name__}: {e}", flush=True)
 
-if not winner_photo:
-    # ✅ Method 3: config fallback
-    default_img = (getattr(config, "CARD_WINNER_IMAGE", "") or "").strip()
-    if default_img:
-        winner_photo = default_img
-        print(f"[CARDGAME photo] using CARD_WINNER_IMAGE", flush=True)
+    # Method 2: get_chat_photos
+    if not winner_photo:
+        try:
+            async for ph in app.get_chat_photos(winner["user_id"], limit=1):
+                winner_photo = ph.file_id
+                print(f"[CARDGAME photo] method2 OK: {str(winner_photo)[:20]}", flush=True)
+                break
+        except Exception as e:
+            print(f"[CARDGAME photo] method2 FAIL: {type(e).__name__}: {e}", flush=True)
 
-if not winner_photo:
-    # ✅ Method 4: start image
-    start_img = (getattr(config, "START_IMAGE_URL", "") or "").strip()
-    if start_img:
-        winner_photo = start_img
-        print(f"[CARDGAME photo] using START_IMAGE_URL", flush=True)
+    # Method 3: config fallback
+    if not winner_photo:
+        default_img = (getattr(config, "CARD_WINNER_IMAGE", "") or "").strip()
+        if default_img:
+            winner_photo = default_img
+            print(f"[CARDGAME photo] method3 config fallback", flush=True)
 
-print(f"[CARDGAME] final winner_photo = {winner_photo[:30] if winner_photo else 'NONE'}", flush=True)
+    # Method 4: start image
+    if not winner_photo:
+        start_img = (getattr(config, "START_IMAGE_URL", "") or "").strip()
+        if start_img:
+            winner_photo = start_img
+            print(f"[CARDGAME photo] method4 start image", flush=True)
+
+    print(f"[CARDGAME] winner_photo = {str(winner_photo)[:30] if winner_photo else 'NONE'}", flush=True)
 
     # ── Delete all game messages BEFORE sending winner msg ──
     await _delete_all_game_messages(game)
@@ -705,30 +703,29 @@ print(f"[CARDGAME] final winner_photo = {winner_photo[:30] if winner_photo else 
     )
 
     final_msg = None
-if winner_photo:
-    try:
-        final_msg = await app.send_photo(
-            game.chat_id,
-            photo=winner_photo,
-            caption=group_text,
-            parse_mode=ParseMode.HTML,
-        )
-        print(f"[CARDGAME] sent with photo: {final_msg.id}", flush=True)
-    except Exception as e:
-        print(f"[CARDGAME photo-send] {type(e).__name__}: {e}", flush=True)
-        final_msg = None
+    if winner_photo:
+        try:
+            final_msg = await app.send_photo(
+                game.chat_id,
+                photo=winner_photo,
+                caption=group_text,
+                parse_mode=ParseMode.HTML,
+            )
+            print(f"[CARDGAME] sent with photo, id={final_msg.id}", flush=True)
+        except Exception as e:
+            print(f"[CARDGAME photo-send] FAIL: {type(e).__name__}: {e}", flush=True)
+            final_msg = None
 
-if final_msg is None:
-    # Fallback: text only
-    try:
-        final_msg = await app.send_message(
-            game.chat_id,
-            group_text,
-            parse_mode=ParseMode.HTML,
-        )
-        print(f"[CARDGAME] sent text only: {final_msg.id}", flush=True)
-    except Exception as e:
-        print(f"[CARDGAME text-send] {type(e).__name__}: {e}", flush=True)
+    if final_msg is None:
+        try:
+            final_msg = await app.send_message(
+                game.chat_id,
+                group_text,
+                parse_mode=ParseMode.HTML,
+            )
+            print(f"[CARDGAME] sent text only, id={final_msg.id}", flush=True)
+        except Exception as e:
+            print(f"[CARDGAME text-send] FAIL: {type(e).__name__}: {e}", flush=True)
 
     # ✅ Pin final message
     try:
@@ -739,7 +736,7 @@ if final_msg is None:
                 disable_notification=True,
             )
     except Exception as e:
-        print(f"[CARDGAME pin-final] {type(e).__name__}: {e}", flush=True)
+        print(f"[CARDGAME pin-final] FAIL: {type(e).__name__}: {e}", flush=True)
 
     # ── DM each player ──
     for p in game.players:
