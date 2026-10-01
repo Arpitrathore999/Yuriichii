@@ -15,7 +15,7 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 import config
 from core.bot import app
-from core.database import get_user, add_coins, add_xp
+from core.database import get_user, add_coins, remove_coins, add_xp
 from core.card_engine import (
     ACTIVE_GAMES,
     CARD_LABELS,
@@ -72,15 +72,25 @@ async def _get_balance(user_id: int) -> int:
 
 
 async def _deduct(user_id: int, amount: int) -> bool:
+    """Deduct coins using existing economy (remove_coins)."""
     if amount <= 0:
         return False
-    return await add_coins(int(user_id), -int(amount))
+    try:
+        return await remove_coins(int(user_id), int(amount))
+    except Exception as e:
+        print(f"[CARDGAME deduct] {type(e).__name__}: {e}", flush=True)
+        return False
 
 
 async def _credit(user_id: int, amount: int) -> bool:
+    """Credit coins using existing economy (add_coins)."""
     if amount <= 0:
         return False
-    return await add_coins(int(user_id), int(amount))
+    try:
+        return await add_coins(int(user_id), int(amount))
+    except Exception as e:
+        print(f"[CARDGAME credit] {type(e).__name__}: {e}", flush=True)
+        return False
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -125,7 +135,6 @@ async def card_create(_, message: Message):
 
     game = create_game(message.chat.id, entry_fee, max_players, message.from_user.id)
 
-    # Auto-add creator? No — creator must /bet to join, matches spec.
     await message.reply(
         "🃏 <b>ᴄᴀʀᴅ ɢᴀᴍᴇ ꜱᴛᴀʀᴛᴇᴅ.</b>\n\n"
         f"💰 <b>ᴇɴᴛʀʏ ꜰᴇᴇ:</b> <code>{entry_fee}</code>\n"
@@ -135,7 +144,6 @@ async def card_create(_, message: Message):
         parse_mode=ParseMode.HTML,
     )
 
-    # Schedule lobby timeout
     game.lobby_task = asyncio.create_task(_lobby_timeout(game))
 
 
@@ -145,10 +153,8 @@ async def _lobby_timeout(game: CardGame):
         if game.state != "lobby":
             return
         if len(game.players) < 2:
-            # Not enough players → cancel, refund
             await _cancel_lobby(game, reason="ɴᴏᴛ ᴇɴᴏᴜɢʜ ᴘʟᴀʏᴇʀꜱ ᴊᴏɪɴᴇᴅ")
             return
-        # Enough players → start with current count
         await _start_game(game)
     except asyncio.CancelledError:
         pass
@@ -160,7 +166,6 @@ async def _cancel_lobby(game: CardGame, reason: str):
     if game.state != "lobby":
         return
     game.state = "finished"
-    # Refund players
     for p in game.players:
         try:
             await _credit(p["user_id"], game.entry_fee)
@@ -219,7 +224,6 @@ async def card_bet(_, message: Message):
     if balance < amount:
         return await message.reply("❌ <b>ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ.</b>", parse_mode=ParseMode.HTML)
 
-    # Deduct
     ok = await _deduct(message.from_user.id, amount)
     if not ok:
         return await message.reply("❌ <b>ꜰᴀɪʟᴇᴅ ᴛᴏ ᴅᴇᴅᴜᴄᴛ ʙᴀʟᴀɴᴄᴇ.</b>", parse_mode=ParseMode.HTML)
@@ -239,7 +243,6 @@ async def card_bet(_, message: Message):
 
     if game.is_full():
         await message.reply("👥 <b>ɢᴀᴍᴇ ɪꜱ ꜰᴜʟʟ! ꜱᴛᴀʀᴛɪɴɢ ɴᴏᴡ...</b>", parse_mode=ParseMode.HTML)
-        # Cancel lobby task
         if game.lobby_task and not game.lobby_task.done():
             game.lobby_task.cancel()
         await _start_game(game)
@@ -257,7 +260,6 @@ async def _start_game(game: CardGame):
     game.state = "running"
     game.start_time = datetime.now(timezone.utc)
 
-    # Generate equal-sum hands
     from core.card_engine import _generate_equal_hands
     hands = _generate_equal_hands(len(game.players))
     for p, hand in zip(game.players, hands):
@@ -279,11 +281,9 @@ async def _start_game(game: CardGame):
         reply_markup=_panel_kb_check_cards(),
     )
 
-    # Send each player private cards
     for p in game.players:
         await _send_private_cards(game, p["user_id"], round_no=1)
 
-    # Start round 1
     await _start_round(game)
 
 
@@ -317,13 +317,11 @@ async def _send_private_cards(game: CardGame, user_id: int, round_no: int):
 # ══════════════════════════════════════════════════════════════════════════════
 @app.on_message(filters.command("flip", prefixes=PREFIXES))
 async def card_flip(_, message: Message):
-    # Works in DM or in group
     chat_id = message.chat.id
     user_id = message.from_user.id if message.from_user else None
     if not user_id:
         return
 
-    # Find active game: if in group, that group; if in DM, find the game containing the user
     game = None
     if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP):
         game = get_game(chat_id)
@@ -351,7 +349,6 @@ async def card_flip(_, message: Message):
     if card_label not in CARD_LABELS:
         return await message.reply("⚠️ ᴜꜱᴇ <code>/flip a</code>, <code>/flip b</code>, <code>/flip c</code> ᴏʀ <code>/flip d</code>.", parse_mode=ParseMode.HTML)
 
-    # Turn check
     current = game.current_player()
     if not current or current["user_id"] != user_id:
         if message.chat.type == ChatType.PRIVATE:
@@ -370,27 +367,16 @@ async def card_flip(_, message: Message):
             "no_cards": "⚠️ ɴᴏ ᴄᴀʀᴅꜱ ʟᴇꜰᴛ.",
         }
         msg = mapping.get(reason, f"⚠️ {_esc(reason)}")
-        if message.chat.type == ChatType.PRIVATE:
-            try:
-                await message.reply(msg, parse_mode=ParseMode.HTML)
-            except Exception:
-                pass
-            return
         return await message.reply(msg, parse_mode=ParseMode.HTML)
 
-    # Cancel auto-play timer
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
 
     if message.chat.type == ChatType.PRIVATE:
         try:
-            await message.reply(
-                f"✅ ᴄᴀʀᴅ <b>{card_label}</b> ᴘʟᴀʏᴇᴅ ᴘʀɪᴠᴀᴛᴇʟʏ.",
-                parse_mode=ParseMode.HTML,
-            )
+            await message.reply(f"✅ ᴄᴀʀᴅ <b>{card_label}</b> ᴘʟᴀʏᴇᴅ ᴘʀɪᴠᴀᴛᴇʟʏ.", parse_mode=ParseMode.HTML)
         except Exception:
             pass
-        # Also notify group
         try:
             await app.send_message(
                 game.chat_id,
@@ -405,7 +391,6 @@ async def card_flip(_, message: Message):
             parse_mode=ParseMode.HTML,
         )
 
-    # Check if round complete
     if game.all_played_this_round():
         await _finish_round(game)
     else:
@@ -441,7 +426,6 @@ async def _start_turn(game: CardGame, new_round: bool = False):
             parse_mode=ParseMode.HTML,
         )
 
-    # Start auto-play timer
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
     game.turn_task = asyncio.create_task(_turn_timeout(game, current["user_id"], game.round))
@@ -456,7 +440,7 @@ async def _turn_timeout(game: CardGame, user_id: int, round_no: int):
         if not current or current["user_id"] != user_id:
             return
         if int(user_id) in game.round_plays:
-            return  # already played
+            return
 
         ok, reason, value = game.auto_play(user_id)
         if not ok:
@@ -484,11 +468,10 @@ async def _finish_round(game: CardGame):
     if game.state != "running":
         return
 
-    # Cancel turn timer
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
 
-    played = []  # [(player, card_label, value)]
+    played = []
     for p in game.players:
         idx = game.round_plays.get(p["user_id"])
         if idx is None:
@@ -502,9 +485,6 @@ async def _finish_round(game: CardGame):
     total = sum(v for _, _, v in played)
     winners = [p for p, _, v in played if v == highest]
 
-    # Award total points to each winner
-    for p in game.players:
-        pass
     for w in winners:
         game.total_points[w["user_id"]] = game.total_points.get(w["user_id"], 0) + total
 
@@ -521,11 +501,9 @@ async def _finish_round(game: CardGame):
         parse_mode=ParseMode.HTML,
     )
 
-    # Update private DMs with remaining cards
     for p in game.players:
         await _send_private_cards(game, p["user_id"], game.round)
 
-    # Next round or finish
     if game.round >= 4:
         await _finish_game(game)
     else:
@@ -543,7 +521,6 @@ async def _finish_game(game: CardGame):
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
 
-    # Find final winner(s)
     max_points = max(game.total_points.values()) if game.total_points else 0
     tied = [p for p in game.players if game.total_points.get(p["user_id"], 0) == max_points]
     winner = random.choice(tied) if tied else None
@@ -553,11 +530,11 @@ async def _finish_game(game: CardGame):
 
     game.winner_id = winner["user_id"]
 
-    # Payout (once)
+    total_pot = game.entry_fee * len(game.players)
+    fee = int(total_pot * GAME_FEE_PERCENT)
+    prize = total_pot - fee
+
     if not game.payout_done:
-        total_pot = game.entry_fee * len(game.players)
-        fee = int(total_pot * GAME_FEE_PERCENT)
-        prize = total_pot - fee
         try:
             await _credit(winner["user_id"], prize)
         except Exception as e:
@@ -573,12 +550,7 @@ async def _finish_game(game: CardGame):
                 except Exception:
                     pass
         game.payout_done = True
-    else:
-        total_pot = game.entry_fee * len(game.players)
-        fee = int(total_pot * GAME_FEE_PERCENT)
-        prize = total_pot - fee
 
-    # Save stats
     for p in game.players:
         try:
             await record_game_result(
@@ -590,7 +562,6 @@ async def _finish_game(game: CardGame):
         except Exception:
             pass
 
-    # Group final
     final_lines = "\n".join(
         f"• {p['mention']} — <code>{game.total_points.get(p['user_id'], 0)}</code>"
         for p in game.players
@@ -609,7 +580,6 @@ async def _finish_game(game: CardGame):
         parse_mode=ParseMode.HTML,
     )
 
-    # DM results
     for p in game.players:
         is_winner = p["user_id"] == winner["user_id"]
         pts = game.total_points.get(p["user_id"], 0)
@@ -661,7 +631,6 @@ async def card_leaders(_, message: Message):
 @app.on_callback_query(filters.regex(r"^cardgame:check$"))
 async def cardgame_check(_, query):
     user_id = query.from_user.id
-    # Find game with this user
     game = None
     for g in list(ACTIVE_GAMES.values()):
         if g.has_player(user_id) and g.state == "running":
