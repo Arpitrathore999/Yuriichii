@@ -6,7 +6,7 @@ def load_handlers():
         "management.control", "management.bans", "management.filter",
         "management.greetings", "management.lock", "management.pin",
         "management.purge", "management.report", "management.warnings", "management.tagall",
-        "handlers.cardgame",
+        "handlers.cardgame", "handlers.hackgame",
     ]
     for module_name in modules:
         try:
