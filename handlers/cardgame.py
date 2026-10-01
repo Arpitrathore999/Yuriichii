@@ -63,7 +63,7 @@ def _panel_kb_check_cards():
     ])
 
 
-# ─── Balance helpers (uses existing economy) ───────────────────────────────────
+# ─── Balance helpers ──────────────────────────────────────────────────────────
 async def _get_balance(user_id: int) -> int:
     doc = await get_user(int(user_id))
     if not doc:
@@ -72,7 +72,6 @@ async def _get_balance(user_id: int) -> int:
 
 
 async def _deduct(user_id: int, amount: int) -> bool:
-    """Deduct coins using existing economy (remove_coins)."""
     if amount <= 0:
         return False
     try:
@@ -83,7 +82,6 @@ async def _deduct(user_id: int, amount: int) -> bool:
 
 
 async def _credit(user_id: int, amount: int) -> bool:
-    """Credit coins using existing economy (add_coins)."""
     if amount <= 0:
         return False
     try:
@@ -91,6 +89,15 @@ async def _credit(user_id: int, amount: int) -> bool:
     except Exception as e:
         print(f"[CARDGAME credit] {type(e).__name__}: {e}", flush=True)
         return False
+
+
+async def _track(game: CardGame, msg):
+    """Track a message for deletion at game end."""
+    try:
+        if msg:
+            game.game_messages.append(msg.id)
+    except Exception:
+        pass
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -135,14 +142,15 @@ async def card_create(_, message: Message):
 
     game = create_game(message.chat.id, entry_fee, max_players, message.from_user.id)
 
-    await message.reply(
+    m = await message.reply(
         "🃏 <b>ᴄᴀʀᴅ ɢᴀᴍᴇ ꜱᴛᴀʀᴛᴇᴅ.</b>\n\n"
         f"💰 <b>ᴇɴᴛʀʏ ꜰᴇᴇ:</b> <code>{entry_fee}</code>\n"
         f"👥 <b>ᴘʟᴀʏᴇʀꜱ:</b> ᴍᴀx <code>{max_players}</code> ᴘʟᴀʏᴇʀꜱ\n"
-        f"👉 ᴜꜱᴇ <code>/bet {entry_fee}</code> ɢᴇᴍꜱ/ᴄᴏɪɴꜱ\n"
+        f"👉 ᴜꜱᴇ <code>/bet {entry_fee}</code>\n"
         f"⏳ <b>ɢᴀᴍᴇ ꜱᴛᴀʀᴛꜱ ɪɴ 2 ᴍɪɴᴜᴛᴇꜱ.</b>",
         parse_mode=ParseMode.HTML,
     )
+    await _track(game, m)
 
     game.lobby_task = asyncio.create_task(_lobby_timeout(game))
 
@@ -171,16 +179,53 @@ async def _cancel_lobby(game: CardGame, reason: str):
             await _credit(p["user_id"], game.entry_fee)
         except Exception:
             pass
+    # Delete game messages
+    await _delete_all_game_messages(game)
     remove_game(game.chat_id)
     try:
-        await app.send_message(
+        m = await app.send_message(
             game.chat_id,
             f"❌ <b>ɢᴀᴍᴇ ᴄᴀɴᴄᴇʟʟᴇᴅ</b>\n<i>{_esc(reason)}</i>\n"
             f"💰 ᴀʟʟ ᴇɴᴛʀʏ ꜰᴇᴇꜱ ʀᴇꜰᴜɴᴅᴇᴅ.",
             parse_mode=ParseMode.HTML,
         )
+        await asyncio.sleep(10)
+        try:
+            await app.delete_messages(game.chat_id, m.id)
+        except Exception:
+            pass
     except Exception:
         pass
+
+
+async def _delete_all_game_messages(game: CardGame):
+    """Delete all tracked game messages except pinned."""
+    try:
+        # Unpin the pinned message
+        if game.pinned_msg_id:
+            try:
+                await app.unpin_chat_message(game.chat_id, game.pinned_msg_id)
+            except Exception:
+                pass
+            try:
+                await app.delete_messages(game.chat_id, game.pinned_msg_id)
+            except Exception:
+                pass
+
+        # Delete tracked messages in batches
+        if game.game_messages:
+            for i in range(0, len(game.game_messages), 100):
+                chunk = game.game_messages[i:i+100]
+                try:
+                    await app.delete_messages(game.chat_id, chunk)
+                except Exception:
+                    for mid in chunk:
+                        try:
+                            await app.delete_messages(game.chat_id, mid)
+                        except Exception:
+                            pass
+    except Exception as e:
+        print(f"[CARDGAME cleanup] {type(e).__name__}: {e}", flush=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -235,14 +280,16 @@ async def card_bet(_, message: Message):
     )
     await ensure_stats(message.from_user.id, _name(message.from_user))
 
-    await message.reply(
+    m = await message.reply(
         f"🦋 <b>{_mention(message.from_user)} ᴊᴏɪɴᴇᴅ.</b>\n"
         f"👥 ᴘʟᴀʏᴇʀꜱ: <code>{len(game.players)}/{game.max_players}</code>",
         parse_mode=ParseMode.HTML,
     )
+    await _track(game, m)
 
     if game.is_full():
-        await message.reply("👥 <b>ɢᴀᴍᴇ ɪꜱ ꜰᴜʟʟ! ꜱᴛᴀʀᴛɪɴɢ ɴᴏᴡ...</b>", parse_mode=ParseMode.HTML)
+        m2 = await message.reply("👥 <b>ɢᴀᴍᴇ ɪꜱ ꜰᴜʟʟ! ꜱᴛᴀʀᴛɪɴɢ ɴᴏᴡ...</b>", parse_mode=ParseMode.HTML)
+        await _track(game, m2)
         if game.lobby_task and not game.lobby_task.done():
             game.lobby_task.cancel()
         await _start_game(game)
@@ -269,17 +316,31 @@ async def _start_game(game: CardGame):
     players_line = "\n".join(f"👤 {p['mention']}" for p in game.players)
     total_pot = game.entry_fee * len(game.players)
 
-    await app.send_message(
-        game.chat_id,
-        "👻 <b>ɢᴀᴍᴇ ꜱᴛᴀʀᴛᴇᴅ!</b>\n\n"
-        f"💰 ᴘʟᴀʏᴇʀ'ꜱ ʙᴇᴛ ᴀᴍᴏᴜɴᴛ: <code>{game.entry_fee}</code>\n"
-        f"👥 ᴛᴏᴛᴀʟ ᴘʟᴀʏᴇʀꜱ: <code>{len(game.players)}</code>\n"
-        f"💵 ᴛᴏᴛᴀʟ ᴘᴏᴛ: <code>{total_pot}</code>\n\n"
-        f"👉 {players_line}\n\n"
-        "<i>ᴛᴀᴘ ʙᴇʟᴏᴡ ᴛᴏ ᴄʜᴇᴄᴋ ʏᴏᴜʀ ᴘʀɪᴠᴀᴛᴇ ᴄᴀʀᴅꜱ.</i>",
-        parse_mode=ParseMode.HTML,
-        reply_markup=_panel_kb_check_cards(),
-    )
+    # ✅ START message — pin this
+    try:
+        start_msg = await app.send_message(
+            game.chat_id,
+            "👻 <b>ɢᴀᴍᴇ ꜱᴛᴀʀᴛᴇᴅ!</b>\n\n"
+            f"💰 ᴘʟᴀʏᴇʀ'ꜱ ʙᴇᴛ ᴀᴍᴏᴜɴᴛ: <code>{game.entry_fee}</code>\n"
+            f"👥 ᴛᴏᴛᴀʟ ᴘʟᴀʏᴇʀꜱ: <code>{len(game.players)}</code>\n"
+            f"💵 ᴛᴏᴛᴀʟ ᴘᴏᴛ: <code>{total_pot}</code>\n\n"
+            f"👉 {players_line}\n\n"
+            "<i>ᴛᴀᴘ ʙᴇʟᴏᴡ ᴛᴏ ᴄʜᴇᴄᴋ ʏᴏᴜʀ ᴘʀɪᴠᴀᴛᴇ ᴄᴀʀᴅꜱ.</i>",
+            parse_mode=ParseMode.HTML,
+            reply_markup=_panel_kb_check_cards(),
+        )
+        game.pinned_msg_id = start_msg.id
+        # ✅ Pin during game
+        try:
+            await app.pin_chat_message(
+                game.chat_id,
+                start_msg.id,
+                disable_notification=True,
+            )
+        except Exception as e:
+            print(f"[CARDGAME pin] {type(e).__name__}: {e}", flush=True)
+    except Exception as e:
+        print(f"[CARDGAME start-msg] {type(e).__name__}: {e}", flush=True)
 
     for p in game.players:
         await _send_private_cards(game, p["user_id"], round_no=1)
@@ -378,18 +439,20 @@ async def card_flip(_, message: Message):
         except Exception:
             pass
         try:
-            await app.send_message(
+            gm = await app.send_message(
                 game.chat_id,
                 f"🃏 {current['mention']} ꜰʟɪᴘᴘᴇᴅ ᴀ ᴄᴀʀᴅ.",
                 parse_mode=ParseMode.HTML,
             )
+            await _track(game, gm)
         except Exception:
             pass
     else:
-        await message.reply(
+        m = await message.reply(
             f"🃏 {current['mention']} ꜰʟɪᴘᴘᴇᴅ ᴄᴀʀᴅ <b>{card_label}</b>.",
             parse_mode=ParseMode.HTML,
         )
+        await _track(game, m)
 
     if game.all_played_this_round():
         await _finish_round(game)
@@ -411,7 +474,7 @@ async def _start_turn(game: CardGame, new_round: bool = False):
         return
 
     if new_round:
-        await app.send_message(
+        m = await app.send_message(
             game.chat_id,
             f"✅ <b>ʀᴏᴜɴᴅ {game.round} ꜱᴛᴀʀᴛᴇᴅ.</b>\n\n"
             f"👉 {current['mention']} ɪᴛ'ꜱ ʏᴏᴜʀ ᴛᴜʀɴ.\n\n"
@@ -419,12 +482,13 @@ async def _start_turn(game: CardGame, new_round: bool = False):
             parse_mode=ParseMode.HTML,
         )
     else:
-        await app.send_message(
+        m = await app.send_message(
             game.chat_id,
             f"👉 {current['mention']} ɪᴛ'ꜱ ʏᴏᴜʀ ᴛᴜʀɴ.\n"
             "🃏 ᴜꜱᴇ <code>/flip a/b/c/d</code>",
             parse_mode=ParseMode.HTML,
         )
+    await _track(game, m)
 
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
@@ -446,12 +510,13 @@ async def _turn_timeout(game: CardGame, user_id: int, round_no: int):
         if not ok:
             return
 
-        await app.send_message(
+        m = await app.send_message(
             game.chat_id,
             f"🤖 <b>ᴀᴜᴛᴏ-ᴘʟᴀʏ ᴀᴄᴛɪᴠᴀᴛᴇᴅ.</b>\n"
             f"👉 {current['mention']} ᴛɪᴍᴇᴅ ᴏᴜᴛ — ᴀᴜᴛᴏ ᴘʟᴀʏᴇᴅ <b>{CARD_LABELS[game.round_plays[user_id]]}</b>.",
             parse_mode=ParseMode.HTML,
         )
+        await _track(game, m)
 
         if game.all_played_this_round():
             await _finish_round(game)
@@ -491,7 +556,7 @@ async def _finish_round(game: CardGame):
     lines = "\n".join(f"• {p['mention']} ➜ <code>{v}</code>" for p, _, v in played)
     winner_mentions = ", ".join(w["mention"] for w in winners)
 
-    await app.send_message(
+    m = await app.send_message(
         game.chat_id,
         f"🎯 <b>ʀᴏᴜɴᴅ {game.round}</b>\n\n"
         f"{lines}\n\n"
@@ -500,6 +565,7 @@ async def _finish_round(game: CardGame):
         f"💰 <b>ᴘᴏɪɴᴛꜱ ɢᴀɪɴᴇᴅ:</b> <code>{total}</code> ᴇᴀᴄʜ",
         parse_mode=ParseMode.HTML,
     )
+    await _track(game, m)
 
     for p in game.players:
         await _send_private_cards(game, p["user_id"], game.round)
@@ -567,8 +633,20 @@ async def _finish_game(game: CardGame):
         for p in game.players
     )
 
-    await app.send_message(
-        game.chat_id,
+    # ── Fetch winner profile photo ────────────────────────────
+    winner_photo = None
+    try:
+        async for ph in app.get_chat_photos(winner["user_id"], limit=1):
+            winner_photo = ph.file_id
+            break
+    except Exception as e:
+        print(f"[CARDGAME photo] {type(e).__name__}: {e}", flush=True)
+
+    # ── Delete all game messages BEFORE sending winner msg ────
+    await _delete_all_game_messages(game)
+
+    # ── Send winner message ────────────────────────────────────
+    group_text = (
         "🏁 <b>ɢᴀᴍᴇ ᴏᴠᴇʀ!</b>\n\n"
         f"🏆 <b>ᴡɪɴɴᴇʀ:</b> {winner['mention']}\n\n"
         f"🎯 <b>ꜰɪɴᴀʟ ᴘᴏɪɴᴛꜱ:</b>\n{final_lines}\n\n"
@@ -576,10 +654,39 @@ async def _finish_game(game: CardGame):
         f"⚡ <b>xᴘ:</b> <code>+{WINNER_XP}</code>\n"
         f"💵 <b>ɢᴀᴍᴇ ꜰᴇᴇ (10%):</b> <code>{fee}</code>\n\n"
         "👉 ᴘʟᴀʏ ᴀɢᴀɪɴ ᴜꜱɪɴɢ:\n"
-        f"<code>/card {game.entry_fee} {game.max_players}</code>",
-        parse_mode=ParseMode.HTML,
+        f"<code>/card {game.entry_fee} {game.max_players}</code>"
     )
 
+    final_msg = None
+    try:
+        if winner_photo:
+            final_msg = await app.send_photo(
+                game.chat_id,
+                photo=winner_photo,
+                caption=group_text,
+                parse_mode=ParseMode.HTML,
+            )
+        else:
+            final_msg = await app.send_message(
+                game.chat_id,
+                group_text,
+                parse_mode=ParseMode.HTML,
+            )
+    except Exception as e:
+        print(f"[CARDGAME final-send] {type(e).__name__}: {e}", flush=True)
+
+    # ✅ Pin final message
+    try:
+        if final_msg:
+            await app.pin_chat_message(
+                game.chat_id,
+                final_msg.id,
+                disable_notification=True,
+            )
+    except Exception as e:
+        print(f"[CARDGAME pin-final] {type(e).__name__}: {e}", flush=True)
+
+    # ── DM each player ─────────────────────────────────────────
     for p in game.players:
         is_winner = p["user_id"] == winner["user_id"]
         pts = game.total_points.get(p["user_id"], 0)
@@ -602,7 +709,7 @@ async def _finish_game(game: CardGame):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  /leaders — Card game leaderboard
+#  /leaders
 # ══════════════════════════════════════════════════════════════════════════════
 @app.on_message(filters.command(["leaders", "cardleaders"], prefixes=PREFIXES))
 async def card_leaders(_, message: Message):
