@@ -18,10 +18,11 @@ from database.mongo import db
 # ─── Constants ─────────────────────────────────────────────────────────────────
 ENTRY_MIN = 100
 ENTRY_MAX = 500_000
-TURN_SECONDS = 40
+TURN_SECONDS = 60
+LOBBY_SECONDS = 120               # ✅ 2 minutes join window
 GAME_FEE_PERCENT = 0.10
 WINNER_XP = 20
-DRAW_XP = 0                       # No XP on draw (as per spec)
+DRAW_XP = 0
 TOTAL_CELLS = 9
 
 P1_SYMBOL = "❌"
@@ -73,6 +74,7 @@ class TTTGame:
         self.winner_id: Optional[int] = None
         self.created_at = _now()
         self.turn_task: Optional[asyncio.Task] = None
+        self.lobby_task: Optional[asyncio.Task] = None      # ✅ NEW — join timeout
 
         # Message tracking
         self.invite_message_id: Optional[int] = None
@@ -163,6 +165,12 @@ class TTTGame:
         if self.turn_task and not self.turn_task.done():
             self.turn_task.cancel()
         self.turn_task = None
+
+    def cancel_lobby_timer(self):
+        """Cancel the join-window timer (called when opponent joins)."""
+        if self.lobby_task and not self.lobby_task.done():
+            self.lobby_task.cancel()
+        self.lobby_task = None
 
 
 # ─── Registry ─────────────────────────────────────────────────────────────────
