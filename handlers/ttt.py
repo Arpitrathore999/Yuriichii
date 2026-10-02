@@ -29,6 +29,7 @@ from core.ttt_engine import (
     ENTRY_MAX,
     ENTRY_MIN,
     GAME_FEE_PERCENT,
+    LOBBY_SECONDS,
     P1_SYMBOL,
     P2_SYMBOL,
     TURN_SECONDS,
@@ -290,6 +291,9 @@ async def ttt_create(_, message: Message):
             await app.pin_chat_message(game.chat_id, inv.id, disable_notification=True)
         except Exception as e:
             print(f"[TTT pin] {type(e).__name__}: {e}", flush=True)
+
+        # ✅ Start 2-minute join timeout
+        game.lobby_task = asyncio.create_task(_lobby_timeout(game))
     except Exception as e:
         print(f"[TTT invite] {type(e).__name__}: {e}", flush=True)
         await _credit(message.from_user.id, bet, currency)
@@ -310,7 +314,7 @@ async def ttt_join(_, query: CallbackQuery):
         return await query.answer("❌ ᴛʜɪs ɢᴀᴍᴇ ʜᴀs ᴇɴᴅᴇᴅ.", show_alert=True)
 
     if game.is_finished():
-        return await query.answer("❌ ᴛʜɪs ɢᴀᴍᴇ ʜᴀs ᴀʟʀᴇᴀᴅʏ sᴛᴀʀᴛᴇᴅ.", show_alert=True)
+        return await query.answer("❌ ᴛʜɪs ɢᴀᴍᴇ ʜᴀs ᴇɴᴅᴇᴅ.", show_alert=True)
 
     if game.status != "WAITING":
         return await query.answer("❌ ᴛʜɪs ɢᴀᴍᴇ ʜᴀs ᴀʟʀᴇᴀᴅʏ sᴛᴀʀᴛᴇᴅ.", show_alert=True)
@@ -342,6 +346,9 @@ async def ttt_join(_, query: CallbackQuery):
     ok = await _deduct(user.id, game.bet, game.currency)
     if not ok:
         return await query.answer("❌ ꜰᴀɪʟᴇᴅ ᴛᴏ ᴅᴇᴅᴜᴄᴛ ʙᴇᴛ.", show_alert=True)
+
+    # ✅ Cancel join-window timer (opponent joined)
+    game.cancel_lobby_timer()
 
     game.opponent_id = int(user.id)
     game.opponent_name = _name(user)
@@ -474,6 +481,66 @@ async def ttt_noop(_, query: CallbackQuery):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  Lobby timeout — agar 2 min mein koi join nahi kare toh cancel + refund
+# ══════════════════════════════════════════════════════════════════════════════
+async def _lobby_timeout(game: TTTGame):
+    try:
+        await asyncio.sleep(LOBBY_SECONDS)
+
+        # Safety checks
+        if game.is_finished():
+            return
+        if game.status != "WAITING":
+            return
+        if game.has_opponent():
+            return
+
+        # ✅ Cancel game — no opponent joined
+        game.status = "CANCELLED"
+        game.cancel_lobby_timer()
+
+        # Refund host
+        await _credit(game.host_id, game.bet, game.currency)
+
+        await mark_game_finished(game.game_id, "CANCELLED")
+        unregister_game(game.game_id)
+
+        # Update invite message
+        try:
+            if game.invite_message_id:
+                await app.edit_message_text(
+                    chat_id=game.chat_id,
+                    message_id=game.invite_message_id,
+                    text=(
+                        "⏰ <b>ᴛɪᴄ ᴛᴀᴄ ᴛᴏᴇ — ɴᴏ ᴏᴘᴘᴏɴᴇɴᴛ ᴊᴏɪɴᴇᴅ</b>\n\n"
+                        f"<i>ᴛʜᴇ ɢᴀᴍᴇ ᴡᴀs ᴄᴀɴᴄᴇʟʟᴇᴅ ᴀꜰᴛᴇʀ {LOBBY_SECONDS // 60} ᴍɪɴᴜᴛᴇs.</i>\n\n"
+                        f"💰 <b>ʙᴇᴛ ʀᴇꜰᴜɴᴅᴇᴅ:</b> <code>{game.bet}</code> {game.currency.upper()}"
+                    ),
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=None,
+                )
+        except Exception as e:
+            print(f"[TTT lobby-edit] {type(e).__name__}: {e}", flush=True)
+
+        # DM host
+        try:
+            await app.send_message(
+                game.host_id,
+                "⏰ <b>ᴛɪᴄ ᴛᴀᴄ ᴛᴏᴇ — ɢᴀᴍᴇ ᴄᴀɴᴄᴇʟʟᴇᴅ</b>\n\n"
+                f"<i>ɴᴏ ᴏᴘᴘᴏɴᴇɴᴛ ᴊᴏɪɴᴇᴅ ɪɴ ᴛɪᴍᴇ.</i>\n"
+                f"💰 <b>ʙᴇᴛ ʀᴇꜰᴜɴᴅᴇᴅ:</b> <code>{game.bet}</code> {game.currency.upper()}",
+                parse_mode=ParseMode.HTML,
+            )
+        except Exception:
+            pass
+
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        print(f"[TTT lobby] {type(e).__name__}: {e}", flush=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  Timer / Turn timeout
 # ══════════════════════════════════════════════════════════════════════════════
 async def _turn_timeout(game: TTTGame, expected_turn: int):
@@ -516,6 +583,7 @@ async def _finish_game(game: TTTGame, winner_id: Optional[int], draw: bool = Fal
         return
     game.payout_done = True
     game.cancel_timer()
+    game.cancel_lobby_timer()
 
     total_pot = game.bet * 2
     cur = game.currency.upper()
