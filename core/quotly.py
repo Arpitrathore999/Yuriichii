@@ -20,11 +20,6 @@ QUOTE_APIS = [
     "https://quotes.fl1yd.su/generate",
 ]
 
-# ── Default colors ────────────────────────────────────────────────────────────
-DEFAULT_BG = "#1b1429"
-DEFAULT_TEXT = "#ffffff"
-DEFAULT_REPLY = "#3b3b3b"
-
 
 def _entity_type(e) -> str:
     t = str(e.type).lower()
@@ -113,18 +108,20 @@ async def build_message_dict(msg, *, include_reply: bool = False) -> dict:
     text = msg.text or msg.caption or ""
     entities = convert_entities(msg.entities or msg.caption_entities)
 
+    from_obj = {
+        "id": int(sender.id) if sender else 0,
+        "name": name,
+        "username": (sender.username if sender else "") or "",
+    }
+    if avatar_uri:
+        from_obj["photo"] = {"url": avatar_uri}
+
     data = {
         "entities": entities,
         "avatar": bool(avatar_uri),
-        "from": {
-            "id": int(sender.id) if sender else 0,
-            "name": name,
-            "username": (sender.username if sender else "") or "",
-        },
+        "from": from_obj,
         "text": text,
     }
-    if avatar_uri:
-        data["from"]["photo"] = {"url": avatar_uri}
 
     if include_reply and msg.reply_to_message:
         r = msg.reply_to_message
@@ -150,10 +147,12 @@ async def build_message_dict(msg, *, include_reply: bool = False) -> dict:
 async def generate_quote_png(
     messages: list[dict],
     *,
-    bg_color: str = DEFAULT_BG,
-    text_color: str = DEFAULT_TEXT,
-    reply_color: str = DEFAULT_REPLY,
+    bg_color: str = "#1b1429",
+    text_color: str = "#ffffff",
+    reply_color: str = "#3b3b3b",
     scale: int = 2,
+    width: int = 512,
+    height: int = 768,
 ) -> Optional[bytes]:
     """Call QuotLy API, return PNG bytes or None on failure."""
     payload = {
@@ -162,21 +161,26 @@ async def generate_quote_png(
         "backgroundColor": bg_color,
         "textColor": text_color,
         "replyColor": reply_color,
+        "width": width,
+        "height": height,
         "scale": scale,
         "messages": messages,
     }
-    timeout = aiohttp.ClientTimeout(total=25)
+    timeout = aiohttp.ClientTimeout(total=30)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         for url in QUOTE_APIS:
             try:
                 async with session.post(url, json=payload) as resp:
                     if resp.status != 200:
+                        print(f"[QUOTE API] {url} returned {resp.status}", flush=True)
                         continue
                     try:
                         data = await resp.json(content_type=None)
-                    except Exception:
+                    except Exception as e:
+                        print(f"[QUOTE API] {url} json failed: {e}", flush=True)
                         continue
                     if not data.get("ok"):
+                        print(f"[QUOTE API] {url} not ok: {data.get('error') or data.get('message')}", flush=True)
                         continue
                     img = data.get("result", {}).get("image")
                     if not img:
@@ -184,7 +188,8 @@ async def generate_quote_png(
                     if img.startswith("data:"):
                         img = img.split(",", 1)[1]
                     return base64.b64decode(img)
-            except Exception:
+            except Exception as e:
+                print(f"[QUOTE API] {url} failed: {type(e).__name__}: {e}", flush=True)
                 continue
     return None
 
