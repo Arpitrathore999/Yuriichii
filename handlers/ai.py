@@ -57,7 +57,7 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     #cardGame
     "bet", "flip", "card", "leaders",
     #hackGame
-    "hack", "register", "end", "guess", "ttt", "id"
+    "hack", "register", "end", "guess", "ttt", "id", "q", "qhelp"
 ]
 
 
