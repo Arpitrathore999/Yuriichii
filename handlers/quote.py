@@ -57,7 +57,6 @@ async def _collect_range(message: Message, count: int) -> list[Message]:
     targets = [reply]
 
     if count > 0:
-        # replied + N below (newer messages)
         try:
             async for m in app.get_chat_history(
                 message.chat.id,
@@ -72,7 +71,6 @@ async def _collect_range(message: Message, count: int) -> list[Message]:
             pass
 
     elif count < 0:
-        # replied + N above (older messages)
         n = abs(count)
         try:
             older = []
@@ -123,7 +121,6 @@ async def quote_cmd(_, message: Message):
     if not message.from_user:
         return
 
-    # No reply → show help
     if not message.reply_to_message:
         return await message.reply(_help_text(), parse_mode=ParseMode.HTML)
 
@@ -134,12 +131,12 @@ async def quote_cmd(_, message: Message):
     if not targets:
         return
 
-    # Build payload
     payload = []
     for m in targets:
         try:
             payload.append(await build_message_dict(m, include_reply=show_reply))
-        except Exception:
+        except Exception as e:
+            print(f"[QUOTE build] {type(e).__name__}: {e}", flush=True)
             continue
 
     if not payload:
@@ -148,7 +145,6 @@ async def quote_cmd(_, message: Message):
             parse_mode=ParseMode.HTML,
         )
 
-    # Progress message
     try:
         status = await message.reply(
             "🎨 <b>ɢᴇɴᴇʀᴀᴛɪɴɢ ǫᴜᴏᴛᴇ...</b>",
@@ -172,7 +168,6 @@ async def quote_cmd(_, message: Message):
     if crop:
         png = crop_to_strip(png)
 
-    # Write to temp file
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
     tmp.write(png)
     tmp.close()
@@ -195,7 +190,6 @@ async def quote_cmd(_, message: Message):
                     except Exception:
                         pass
             else:
-                # Fallback: send as photo
                 await message.reply_photo(photo=path)
     except Exception as e:
         print(f"[QUOTE send] {type(e).__name__}: {e}", flush=True)
@@ -211,13 +205,10 @@ async def quote_cmd(_, message: Message):
             pass
 
 
-# ── Private chat: forward any message → sticker quote ─────────────────────────
 @app.on_message(filters.private & filters.forwarded)
 async def quote_forward_cmd(_, message: Message):
-    # Ignore if message looks like a command
     if message.text and message.text.startswith(tuple(PREFIXES)):
         return
-    # Ignore bot's own messages
     if message.from_user and message.from_user.is_bot:
         return
 
