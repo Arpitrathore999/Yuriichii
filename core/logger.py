@@ -9,11 +9,11 @@ from __future__ import annotations
 import os
 import platform
 import sys
-import time
 from datetime import datetime, timezone
-from typing import Optional
 
 import psutil
+from pyrogram.enums import ParseMode
+from pyrogram.types import LinkPreviewOptions
 
 import config
 from core.bot import app
@@ -23,17 +23,15 @@ from database.mongo import db
 # ══════════════════════════════════════════════════════════════════════════════
 #  📢 LOG DESTINATION
 # ══════════════════════════════════════════════════════════════════════════════
-# Logs will go to this group/channel. Fallback = OWNER_ID DM.
 LOG_GROUP_ID = -1004454997629
+
+# ✅ No-preview options (replaces deprecated disable_web_page_preview)
+_NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  DB Collections
 # ══════════════════════════════════════════════════════════════════════════════
-def _logs_col():
-    return db["bot_logs"] if db is not None else None
-
-
 def _groups_col():
     return db["bot_groups"] if db is not None else None
 
@@ -54,30 +52,28 @@ def _esc(v):
 
 
 async def _send_log(text: str):
-    """Send log to LOG_GROUP_ID. Fallback to OWNER_ID DM if group fails."""
+    """Send log to LOG_GROUP_ID. Fallback to OWNER_ID DM."""
     sent = False
 
-    # Try LOG_GROUP_ID first
     if LOG_GROUP_ID:
         try:
             await app.send_message(
                 LOG_GROUP_ID,
                 text,
-                parse_mode="HTML",
-                disable_web_page_preview=True,
+                parse_mode=ParseMode.HTML,          # ✅ ENUM, not string
+                link_preview_options=_NO_PREVIEW,
             )
             sent = True
         except Exception as e:
             print(f"[LOGGER log-group] {type(e).__name__}: {e}", flush=True)
 
-    # Fallback: OWNER_ID DM
     if not sent and config.OWNER_ID:
         try:
             await app.send_message(
                 int(config.OWNER_ID),
                 text,
-                parse_mode="HTML",
-                disable_web_page_preview=True,
+                parse_mode=ParseMode.HTML,          # ✅ ENUM, not string
+                link_preview_options=_NO_PREVIEW,
             )
             sent = True
         except Exception as e:
@@ -103,7 +99,6 @@ def _group_link(chat) -> str:
 #  1️⃣ BOT STARTUP LOG
 # ══════════════════════════════════════════════════════════════════════════════
 async def log_startup():
-    """Log bot startup: system info, timestamp, etc."""
     try:
         boot_time = datetime.now(timezone.utc)
 
@@ -164,7 +159,6 @@ async def log_startup():
             f"  • <b>ᴘɪᴅ:</b> <code>{data['pid']}</code>"
         )
         await _send_log(text)
-
         print(f"[LOGGER] startup logged — {bot_username}", flush=True)
     except Exception as e:
         print(f"[LOGGER startup] {type(e).__name__}: {e}", flush=True)
@@ -174,7 +168,6 @@ async def log_startup():
 #  2️⃣ GROUP JOIN LOG
 # ══════════════════════════════════════════════════════════════════════════════
 async def log_group_join(chat, added_by=None, is_new: bool = True):
-    """Log when bot is added to a new group."""
     try:
         group_link = _group_link(chat)
         member_count = getattr(chat, "members_count", 0) or 0
@@ -207,7 +200,6 @@ async def log_group_join(chat, added_by=None, is_new: bool = True):
                 upsert=True,
             )
 
-        # Adder info
         adder_line = "—"
         if added_by:
             adder_name = added_by.first_name or added_by.username or str(added_by.id)
@@ -230,7 +222,6 @@ async def log_group_join(chat, added_by=None, is_new: bool = True):
             f"👤 <b>ᴀᴅᴅᴇᴅ ʙʏ:</b>\n{adder_line}"
         )
         await _send_log(text)
-
         print(f"[LOGGER] group joined: {data['title']} ({chat.id})", flush=True)
     except Exception as e:
         print(f"[LOGGER group] {type(e).__name__}: {e}", flush=True)
@@ -240,7 +231,6 @@ async def log_group_join(chat, added_by=None, is_new: bool = True):
 #  3️⃣ GROUP LEAVE LOG
 # ══════════════════════════════════════════════════════════════════════════════
 async def log_group_leave(chat):
-    """Log when bot is removed from a group."""
     try:
         col = _groups_col()
         if col is not None:
@@ -264,7 +254,6 @@ async def log_group_leave(chat):
 #  4️⃣ INITIAL GROUPS SYNC
 # ══════════════════════════════════════════════════════════════════════════════
 async def sync_existing_groups():
-    """On startup, log count of known groups."""
     try:
         col = _groups_col()
         if col is None:
