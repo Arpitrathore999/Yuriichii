@@ -72,7 +72,7 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     # Quote
     "q", "qhelp", "quotehelp",
     # ID
-    "id", "title",
+    "id", "title", "titlehelp",
 ]
 
 
