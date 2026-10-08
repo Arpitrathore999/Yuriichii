@@ -1,323 +1,126 @@
-# --------------------------------------------------------------------------------
-#  Elara © 2026
-#  handlers/whisper.py — 🔒 Whisper System (with debug)
-# --------------------------------------------------------------------------------
+"""One-time group whisper system.
+
+Usage in a group (after enabling Inline Mode for the bot):
+    @ElaraBot hello, this is secret @username
+
+The inline result posts a locked message to the group. Only the target user can
+press "Read content". The secret is shown in a Telegram alert and the whisper
+message is deleted immediately after the first successful read.
+"""
 
 import re
-import time
-import uuid
-from collections import defaultdict
-from datetime import datetime, timezone
+import secrets
+from typing import Dict
 
-from pyrogram import StopPropagation, filters
-from pyrogram.enums import ParseMode
+from pyrogram import filters
 from pyrogram.types import (
-    CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    Message,
+    InlineQueryResultArticle,
+    InputTextMessageContent,
 )
 
-import config
 from core.bot import app
-from database.mongo import db
 
-BOT_USERNAME = "ItzElaraBot"
+# token -> whisper data. A token is deleted as soon as the intended recipient
+# successfully reads it, making the whisper strictly one-time per process.
+_WHISPERS: Dict[str, dict] = {}
 
-# Anti-spam
-_READ_ATTEMPTS: dict = defaultdict(list)
-_BLOCKED_READERS: dict = {}
-_READ_WINDOW = 60
-_READ_LIMIT = 3
-_BLOCK_SECONDS = 600
-
-WHISPER_TTL_SECONDS = 86400
+_USERNAME_RE = re.compile(r"(?<!\w)@([A-Za-z0-9_]{5,32})(?!\w)")
 
 
-def _whispers_col():
-    return db["whispers"] if db is not None else None
-
-
-def _esc(v):
-    return str(v or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-
-def _parse_whisper(text: str) -> tuple[str, str]:
-    """Return (message, recipient_username)."""
-    body = re.sub(
-        rf"^@{re.escape(BOT_USERNAME)}\s+", "", text, count=1, flags=re.I
-    ).strip()
-    if not body:
-        return "", ""
-    # Find all @mentions except bot
-    matches = list(re.finditer(r"@([A-Za-z0-9_]{5,32})", body))
-    filtered = [m for m in matches if m.group(1).lower() != BOT_USERNAME.lower()]
-    if not filtered:
-        return body, ""
-    last = filtered[-1]
-    recipient = last.group(1)
-    msg = (body[:last.start()] + body[last.end():]).strip()
-    return msg, recipient
-
-
-def _is_blocked(user_id: int) -> int:
-    now = time.time()
-    blocked_until = _BLOCKED_READERS.get(int(user_id), 0)
-    if blocked_until > now:
-        return int(blocked_until - now)
-    if blocked_until:
-        _BLOCKED_READERS.pop(int(user_id), None)
-        _READ_ATTEMPTS.pop(int(user_id), None)
-    return 0
-
-
-def _track_violation(user_id: int) -> bool:
-    now = time.time()
-    uid = int(user_id)
-    recent = [t for t in _READ_ATTEMPTS.get(uid, []) if now - t < _READ_WINDOW]
-    recent.append(now)
-    _READ_ATTEMPTS[uid] = recent
-    if len(recent) >= _READ_LIMIT:
-        _BLOCKED_READERS[uid] = now + _BLOCK_SECONDS
-        _READ_ATTEMPTS[uid] = []
-        return True
-    return False
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  HANDLER: @ItzElaraBot <message> @username
-# ══════════════════════════════════════════════════════════════════════════════
-@app.on_message(
-    filters.group & filters.text,
-    group=-50,              # Run BEFORE other handlers
-)
-async def whisper_handler(_, message: Message):
-    if not message.from_user or not message.text:
+@app.on_inline_query()
+async def whisper_inline(_, inline_query):
+    query = (inline_query.query or "").strip()
+    if not query:
         return
 
-    text = message.text.strip()
-
-    # Quick check: starts with @ItzElaraBot ?
-    if not text.lower().startswith(f"@{BOT_USERNAME.lower()}"):
+    # Recipient is the last @username in the inline query. This lets the
+    # sender write naturally: "hello bhai @lovers_rock".
+    matches = list(_USERNAME_RE.finditer(query))
+    if not matches:
         return
 
-    print(f"[WHISPER] triggered: {text[:80]}", flush=True)
-
-    whisper_text, recipient_username = _parse_whisper(text)
-
-    # No recipient username → let AI handle
-    if not recipient_username:
-        print(f"[WHISPER] no recipient, skipping → AI will handle", flush=True)
+    recipient_username = matches[-1].group(1)
+    secret_text = (query[: matches[-1].start()] + query[matches[-1].end() :]).strip()
+    if not secret_text:
         return
 
-    print(f"[WHISPER] text='{whisper_text}' recipient='{recipient_username}'", flush=True)
-
-    if not whisper_text:
-        await message.reply(
-            "❌ <b>ᴜꜱᴀɢᴇ:</b>\n"
-            f"<code>@{BOT_USERNAME} &lt;message&gt; @username</code>\n\n"
-            f"<b>ᴇxᴀᴍᴘʟᴇ:</b>\n"
-            f"<code>@{BOT_USERNAME} ʜᴇʟʟᴏ ʙʀᴏ @username</code>",
-            parse_mode=ParseMode.HTML,
-        )
-        raise StopPropagation
-
-    # Lookup recipient
     try:
         recipient = await app.get_users(recipient_username)
-        print(f"[WHISPER] recipient found: {recipient.id}", flush=True)
-    except Exception as e:
-        print(f"[WHISPER] recipient lookup failed: {type(e).__name__}: {e}", flush=True)
-        await message.reply(
-            f"❌ <b>ᴜꜱᴇʀ ɴᴏᴛ ꜰᴏᴜɴᴅ:</b> @{_esc(recipient_username)}\n"
-            "<i>ᴍᴀᴋᴇ sᴜʀᴇ ᴛʜᴇʏ ʜᴀᴠᴇ ᴀ ᴜꜱᴇʀɴᴀᴍᴇ ᴀɴᴅ ʜᴀᴠᴇ sᴛᴀʀᴛᴇᴅ ᴛʜᴇ ʙᴏᴛ.</i>",
-            parse_mode=ParseMode.HTML,
-        )
-        raise StopPropagation
-
-    # Self-check
-    if recipient.id == message.from_user.id:
-        await message.reply("❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴡʜɪsᴘᴇʀ ᴛᴏ ʏᴏᴜʀsᴇʟꜰ.")
-        raise StopPropagation
-
-    # Check recipient in group
-    try:
-        await app.get_chat_member(message.chat.id, recipient.id)
-        print(f"[WHISPER] recipient is in group", flush=True)
-    except Exception as e:
-        print(f"[WHISPER] recipient not in group: {type(e).__name__}: {e}", flush=True)
-        await message.reply(
-            f"❌ @{_esc(recipient_username)} ɪs ɴᴏᴛ ɪɴ ᴛʜɪs ɢʀᴏᴜᴘ.",
-            parse_mode=ParseMode.HTML,
-        )
-        raise StopPropagation
-
-    # Store
-    col = _whispers_col()
-    if col is None:
-        await message.reply("❌ ᴅᴀᴛᴀʙᴀsᴇ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.")
-        raise StopPropagation
-
-    whisper_id = uuid.uuid4().hex[:16]
-    await col.insert_one({
-        "_id": whisper_id,
-        "chat_id": int(message.chat.id),
-        "sender_id": int(message.from_user.id),
-        "sender_name": message.from_user.first_name or "User",
-        "recipient_id": int(recipient.id),
-        "recipient_username": recipient_username,
-        "text": whisper_text,
-        "created_at": datetime.now(timezone.utc),
-    })
-    print(f"[WHISPER] stored: {whisper_id}", flush=True)
-
-    # Delete original message
-    try:
-        await message.delete()
-    except Exception as e:
-        print(f"[WHISPER] delete failed: {type(e).__name__}: {e}", flush=True)
-
-    recipient_name = recipient.first_name or recipient_username
-
-    body = (
-        f"🔒 <b>ᴡʜɪsᴘᴇʀ ꜰᴏʀ {_esc(recipient_name)}.</b>\n"
-        f"<i>ᴏɴʟʏ ᴛʜᴇʏ ᴄᴀɴ ʀᴇᴀᴅ ᴛʜᴇ ᴄᴏɴᴛᴇɴᴛ.</i>"
-    )
-
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton(
-            "👁 ʀᴇᴀᴅ ᴄᴏɴᴛᴇɴᴛ",
-            callback_data=f"whisper_read:{whisper_id}",
-        )],
-        [InlineKeyboardButton(
-            "ℹ️ ʜᴏᴡ ᴛᴏ sᴇɴᴅ ᴀ ᴡʜɪsᴘᴇʀ?",
-            callback_data="whisper_help",
-        )],
-    ])
-
-    try:
-        sent = await app.send_message(
-            message.chat.id,
-            body,
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb,
-        )
-        print(f"[WHISPER] placeholder sent: {sent.id}", flush=True)
-    except Exception as e:
-        print(f"[WHISPER] send failed: {type(e).__name__}: {e}", flush=True)
-
-    raise StopPropagation
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  CALLBACK: 👁 Read content
-# ══════════════════════════════════════════════════════════════════════════════
-@app.on_callback_query(filters.regex(r"^whisper_read:"), group=-50)
-async def whisper_read(_, query: CallbackQuery):
-    whisper_id = query.data.split(":", 1)[1]
-    user = query.from_user
-    if not user:
+    except Exception:
         return
 
-    print(f"[WHISPER read] user={user.id} whisper={whisper_id}", flush=True)
+    if not recipient or recipient.is_bot:
+        return
 
-    # Blocked?
-    if _is_blocked(user.id):
-        try:
-            await query.answer()
-        except Exception:
-            pass
-        raise StopPropagation
+    token = secrets.token_urlsafe(18)
+    _WHISPERS[token] = {
+        "sender_id": inline_query.from_user.id,
+        "recipient_id": recipient.id,
+        "recipient_name": recipient.first_name or recipient.username or "User",
+        "text": secret_text,
+    }
 
-    col = _whispers_col()
-    if col is None:
-        await query.answer("❌ ᴅᴀᴛᴀʙᴀsᴇ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.", show_alert=True)
-        raise StopPropagation
+    # Telegram's inline-result cache is disabled so each generated token is
+    # unique and cannot accidentally be reused by another user.
+    result = InlineQueryResultArticle(
+        id=token,
+        title=f"Whisper for {recipient.first_name or recipient_username} (@{recipient_username})",
+        description="Only the selected user can read this message • One-time read",
+        input_message_content=InputTextMessageContent(
+            f"🔒 <b>Whisper for {recipient.first_name or recipient_username}.</b>\n"
+            "Only they can read the content.\n\n"
+            "<i>⚠️ This whisper expires after it is read once.</i>"
+        ),
+        reply_markup=InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("👁️ Read content", callback_data=f"wpr:{token}")],
+                [InlineKeyboardButton("↗️ How to send a whisper?", callback_data="wpr:help")],
+            ]
+        ),
+    )
 
-    doc = await col.find_one({"_id": whisper_id})
-    if not doc:
-        await query.answer(
-            "❌ ᴛʜɪs ᴡʜɪsᴘᴇʀ ɪs ɴᴏ ʟᴏɴɢᴇʀ ᴀᴠᴀɪʟᴀʙʟᴇ.",
+    await inline_query.answer([result], cache_time=0, is_personal=True)
+
+
+@app.on_callback_query(filters.regex(r"^wpr:"))
+async def whisper_callback(_, callback_query):
+    data = callback_query.data or ""
+
+    if data == "wpr:help":
+        await callback_query.answer(
+            "Use inline mode in a group:\n\n"
+            "@ElaraBot your secret message @username\n\n"
+            "Select the Whisper result and send it. Only @username can read it, and it expires after the first successful read.",
             show_alert=True,
         )
-        raise StopPropagation
+        return
 
-    # TTL
-    created = doc.get("created_at")
-    if created:
-        if created.tzinfo is None:
-            created = created.replace(tzinfo=timezone.utc)
-        age = (datetime.now(timezone.utc) - created).total_seconds()
-        if age > WHISPER_TTL_SECONDS:
-            await query.answer("❌ ᴛʜɪs ᴡʜɪsᴘᴇʀ ʜᴀs ᴇxᴘɪʀᴇᴅ.", show_alert=True)
-            raise StopPropagation
+    token = data[4:]
+    whisper = _WHISPERS.get(token)
+    if not whisper:
+        await callback_query.answer(
+            "⌛ This whisper has already expired or is no longer available.",
+            show_alert=True,
+        )
+        return
 
-    # Recipient only
-    if int(user.id) != int(doc["recipient_id"]):
-        print(f"[WHISPER read] NOT for {user.id} (belongs to {doc['recipient_id']})", flush=True)
-        blocked = _track_violation(user.id)
-        if blocked:
-            try:
-                await query.answer(
-                    "⚠️ ᴅᴏɴ'ᴛ sᴘᴀᴍ! ʏᴏᴜʀ ᴍᴇssᴀɢᴇs ᴡɪʟʟ ʙᴇ ɪɢɴᴏʀᴇᴅ ꜰᴏʀ 10 ᴍɪɴᴜᴛᴇs.",
-                    show_alert=True,
-                )
-            except Exception:
-                pass
-            raise StopPropagation
-        try:
-            await query.answer("🔒 ᴛʜɪs ᴡʜɪsᴘᴇʀ ɪs ɴᴏᴛ ꜰᴏʀ ʏᴏᴜ!", show_alert=True)
-        except Exception:
-            pass
-        raise StopPropagation
+    if callback_query.from_user.id != whisper["recipient_id"]:
+        await callback_query.answer(
+            "🔒 This whisper is private. Only the intended recipient can read it.",
+            show_alert=True,
+        )
+        return
 
-    content = doc.get("text", "")
-    sender = doc.get("sender_name", "Someone")
-    alert_text = f"🔒 Whisper from {sender}:\n\n{content}"
+    # Consume before showing the content. This prevents a second successful
+    # callback from racing the first one and reading the same whisper twice.
+    _WHISPERS.pop(token, None)
 
-    if len(alert_text) <= 200:
-        try:
-            await query.answer(alert_text, show_alert=True)
-            print(f"[WHISPER read] shown via alert", flush=True)
-        except Exception as e:
-            print(f"[WHISPER read] alert failed: {e}", flush=True)
-    else:
-        try:
-            await app.send_message(
-                user.id,
-                f"🔒 <b>ᴡʜɪsᴘᴇʀ ꜰʀᴏᴍ {_esc(sender)}:</b>\n\n{_esc(content)}",
-                parse_mode=ParseMode.HTML,
-            )
-            await query.answer("✅ sᴇɴᴛ ᴛᴏ ʏᴏᴜʀ ᴅᴍ!", show_alert=False)
-        except Exception:
-            try:
-                await query.answer(
-                    "❌ ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ ɪɴ ᴅᴍ ꜰɪʀsᴛ.",
-                    show_alert=True,
-                )
-            except Exception:
-                pass
+    await callback_query.answer(whisper["text"], show_alert=True)
 
-    raise StopPropagation
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  CALLBACK: ℹ️ How to send
-# ══════════════════════════════════════════════════════════════════════════════
-@app.on_callback_query(filters.regex(r"^whisper_help$"), group=-50)
-async def whisper_help(_, query: CallbackQuery):
-    text = (
-        f"ℹ️ How to send a whisper\n\n"
-        f"Format:\n@{BOT_USERNAME} <message> @username\n\n"
-        f"Example:\n@{BOT_USERNAME} hello bro @username\n\n"
-        f"Notes:\n"
-        f"• Bot username at start\n"
-        f"• Recipient username at end\n"
-        f"• Recipient must be in the group\n"
-        f"• Only they can read"
-    )
+    # Remove the group message immediately after the first successful read.
     try:
-        await query.answer(text[:200], show_alert=True)
+        await callback_query.message.delete()
     except Exception:
         pass
-    raise StopPropagation
