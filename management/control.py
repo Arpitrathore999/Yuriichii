@@ -543,12 +543,12 @@ async def cmd_title(_, message):
     elif is_admin:
         return await message.reply(
             f"🏷 {_mention(target)} ɴᴏᴡ ʜᴀs ᴛᴀɢ: <b>{title_text}</b>\n"
-            f"<i>(sᴀᴠᴇᴅ ɪɴ ᴅᴀᴛᴀʙᴀsᴇ — ᴛᴇʟᴇɢʀᴀᴍ ᴛɪᴛʟᴇ ғᴀɪʟᴇᴅ)</i>"
+            
         )
     else:
         return await message.reply(
             f"🏷 {_mention(target)} ɴᴏᴡ ʜᴀs ᴛᴀɢ: <b>{title_text}</b>\n"
-            f"<i>(ɴᴏʀᴍᴀʟ ᴍᴇᴍʙᴇʀ — sᴀᴠᴇᴅ ɪɴ ᴅᴀᴛᴀʙᴀsᴇ)</i>"
+          
         )
 
 
