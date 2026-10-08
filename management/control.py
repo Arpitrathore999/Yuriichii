@@ -379,44 +379,82 @@ async def cmd_demote(_, message):
     return await message.reply(f"{_mention(target)} 🕊 Dᴇᴍᴏᴛᴇᴅ ᴛᴏ 👤 Mᴇᴍʙᴇʀ.")
 
 
-# ── /title — Set custom admin title ──────────────────────────────────────────
+# ── /title — Set custom tag (works for admins AND normal members) ─────────────
+
+def _tags_col():
+    """MongoDB collection for custom tags."""
+    return db["user_tags"] if db is not None else None
+
+
+async def _save_custom_tag(chat_id, user_id, tag: str):
+    """Store custom tag in DB (works for all users)."""
+    col = _tags_col()
+    if col is None:
+        return False
+    if tag:
+        await col.update_one(
+            {"chat_id": int(chat_id), "user_id": int(user_id)},
+            {"$set": {"chat_id": int(chat_id), "user_id": int(user_id), "tag": tag}},
+            upsert=True,
+        )
+    else:
+        await col.delete_one(
+            {"chat_id": int(chat_id), "user_id": int(user_id)}
+        )
+    return True
+
+
+async def get_custom_tag(chat_id, user_id) -> str:
+    """Get custom tag for a user in a chat (used by other modules)."""
+    col = _tags_col()
+    if col is None:
+        return ""
+    doc = await col.find_one(
+        {"chat_id": int(chat_id), "user_id": int(user_id)},
+        {"tag": 1},
+    )
+    return doc.get("tag", "") if doc else ""
+
 
 @app.on_message(filters.command("title", prefixes=PREFIXES))
 async def cmd_title(_, message):
-    """Set custom admin title for a user.
+    """Set custom tag/title for ANY user (admin or normal member).
 
     Usage:
-        .title King        (reply to admin)
+        .title King           (reply to anyone)
         .title @user King
         .title King @user
-        .title             (reply — clear title)
+        .title                (reply — clear tag)
 
-    Max 16 characters (Telegram limit).
+    Behavior:
+        - If target is ADMIN → sets Telegram's custom title + saves in DB
+        - If target is NORMAL MEMBER → saves in DB only (bot uses it when mentioning)
+        - Max 16 chars (Telegram limit for admin title; enforced for consistency)
     """
     if not _is_group(message):
         return await message.reply("❌ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴏɴʟʏ ᴡᴏʀᴋs ɪɴ ɢʀᴏᴜᴘs.")
 
-    # Permission check
-    if not await _can_promote(message):
+    # Permission check — only admins with promote permission OR bot owner
+    is_owner = (
+        message.from_user
+        and int(message.from_user.id) == int(config.OWNER_ID)
+    )
+    if not is_owner and not await _can_promote(message):
         return await message.reply(
             "❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴄʜᴀɴɢᴇ ᴛɪᴛʟᴇs."
-        )
-    if not await _bot_can_promote(message.chat.id):
-        return await message.reply(
-            "❌ ʙᴏᴛ ɴᴇᴇᴅs <b>Promote Members</b> permission."
         )
 
     args = list(message.command or [])[1:]
 
-    # Resolve target
+    # ── Resolve target ──
     target = None
     title_parts = []
 
     if message.reply_to_message and message.reply_to_message.from_user:
         target = message.reply_to_message.from_user
-        title_parts = args  # all args are title
+        title_parts = args
     else:
-        # Find target in args (mention / id / username) and rest is title
+        # Find @username or numeric ID in args
         for i, a in enumerate(args):
             raw = a.strip()
             if raw.startswith("@") or raw.lstrip("+-").isdigit():
@@ -430,73 +468,104 @@ async def cmd_title(_, message):
                 if target:
                     title_parts = args[:i] + args[i+1:]
                     break
-        if not target and args:
-            # Maybe text mention entity
+
+        # Try text-mention entity
+        if not target:
             for entity in list(message.entities or []):
                 etype = str(getattr(entity, "type", ""))
                 if etype in ("MessageEntityType.TEXT_MENTION", "text_mention") and getattr(entity, "user", None):
                     target = entity.user
-                    # Remove that token from title_parts
                     title_parts = []
                     for a in args:
-                        if a.strip() != "@" + (target.username or ""):
+                        if a.strip() != ("@" + (target.username or "")):
                             title_parts.append(a)
                     break
 
     if not target:
         return await message.reply(
             "❌ <b>ᴜsᴀɢᴇ:</b>\n"
-            "• Reply to an admin + <code>.title King</code>\n"
+            "• Reply to anyone + <code>.title King</code>\n"
             "• <code>.title @user King</code>"
         )
 
-    if not await _can_edit_target(message, target.id):
-        return await message.reply("❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴍᴏᴅɪғʏ ᴛʜɪs ᴜsᴇʀ.")
+    # Can't target bot owner (self target is allowed if owner)
+    if int(target.id) == int(config.OWNER_ID) and not is_owner:
+        return await message.reply("❌ ᴄᴀɴ'ᴛ ᴄʜᴀɴɢᴇ ᴛʜᴇ ʙᴏᴛ ᴏᴡɴᴇʀ's ᴛɪᴛʟᴇ.")
 
-    # Check if target is admin
-    try:
-        target_member = await app.get_chat_member(message.chat.id, target.id)
-    except Exception:
-        return await message.reply("❌ ᴄᴀɴ'ᴛ ғᴇᴛᴄʜ ᴛᴀʀɢᴇᴛ ᴍᴇᴍʙᴇʀ.")
-
-    if target_member.status == ChatMemberStatus.OWNER:
-        return await message.reply("❌ ᴄᴀɴ'ᴛ ᴄʜᴀɴɢᴇ ɢʀᴏᴜᴘ ᴏᴡɴᴇʀ's ᴛɪᴛʟᴇ.")
-
-    if target_member.status != ChatMemberStatus.ADMINISTRATOR:
-        return await message.reply(
-            f"❌ {_mention(target)} ɪs ɴᴏᴛ ᴀɴ ᴀᴅᴍɪɴ.\n"
-            "<i>ᴘʀᴏᴍᴏᴛᴇ ᴛʜᴇᴍ ғɪʀsᴛ ᴡɪᴛʜ /promote.</i>"
-        )
-
-    # Title text
+    # ── Title text ──
     title_text = " ".join(title_parts).strip()
 
-    # Telegram limit: 16 chars
+    # Max 16 chars (Telegram limit for admin titles)
     if len(title_text) > 16:
         return await message.reply(
             f"❌ ᴛɪᴛʟᴇ ᴛᴏᴏ ʟᴏɴɢ ({len(title_text)}/16).\n"
             "<i>ᴍᴀx 16 ᴄʜᴀʀᴀᴄᴛᴇʀs.</i>"
         )
 
-    # Set title (empty string = clear)
+    # ── Check target's member status ──
     try:
-        await app.set_administrator_title(
-            message.chat.id, target.id, title_text
-        )
-    except Exception as e:
-        print(f"[TITLE] {type(e).__name__}: {e}", flush=True)
+        target_member = await app.get_chat_member(message.chat.id, target.id)
+    except Exception:
+        return await message.reply("❌ ᴄᴀɴ'ᴛ ғᴇᴛᴄʜ ᴛᴀʀɢᴇᴛ ᴍᴇᴍʙᴇʀ.")
+
+    is_admin = target_member.status in (
+        ChatMemberStatus.OWNER,
+        ChatMemberStatus.ADMINISTRATOR,
+    )
+
+    # ── Save to DB (works for everyone) ──
+    db_ok = await _save_custom_tag(message.chat.id, target.id, title_text)
+    if not db_ok:
+        return await message.reply("❌ ᴅᴀᴛᴀʙᴀsᴇ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ.")
+
+    # ── If admin: also try Telegram API (best-effort) ──
+    telegram_set = False
+    if is_admin and target_member.status != ChatMemberStatus.OWNER:
+        try:
+            await app.set_administrator_title(
+                message.chat.id, target.id, title_text
+            )
+            telegram_set = True
+        except Exception as e:
+            print(f"[TITLE telegram] {type(e).__name__}: {e}", flush=True)
+
+    # ── Response ──
+    if not title_text:
         return await message.reply(
-            f"❌ ꜰᴀɪʟᴇᴅ ᴛᴏ sᴇᴛ ᴛɪᴛʟᴇ: <code>{str(e)[:200]}</code>"
+            f"🏷 {_mention(target)}'s ᴛᴀɢ ʀᴇᴍᴏᴠᴇᴅ."
         )
 
-    if title_text:
+    if is_admin and telegram_set:
         return await message.reply(
-            f"👑 {_mention(target)} ɴᴏᴡ ʜᴀs ᴛɪᴛʟᴇ: <b>{title_text}</b>"
+            f"👑 {_mention(target)} ɴᴏᴡ ʜᴀs ᴛɪᴛʟᴇ: <b>{title_text}</b>\n"
+            f"<i>(ᴀᴅᴍɪɴ ᴛɪᴛʟᴇ sᴇᴛ)</i>"
+        )
+    elif is_admin:
+        return await message.reply(
+            f"🏷 {_mention(target)} ɴᴏᴡ ʜᴀs ᴛᴀɢ: <b>{title_text}</b>\n"
+            f"<i>(sᴀᴠᴇᴅ ɪɴ ᴅᴀᴛᴀʙᴀsᴇ — ᴛᴇʟᴇɢʀᴀᴍ ᴛɪᴛʟᴇ ғᴀɪʟᴇᴅ)</i>"
         )
     else:
         return await message.reply(
-            f"👑 {_mention(target)}'s ᴛɪᴛʟᴇ ʀᴇᴍᴏᴠᴇᴅ."
+            f"🏷 {_mention(target)} ɴᴏᴡ ʜᴀs ᴛᴀɢ: <b>{title_text}</b>\n"
+            f"<i>(ɴᴏʀᴍᴀʟ ᴍᴇᴍʙᴇʀ — sᴀᴠᴇᴅ ɪɴ ᴅᴀᴛᴀʙᴀsᴇ)</i>"
         )
+
+
+# ── Helper for other modules to show custom tag ──
+async def format_user_with_tag(chat_id, user) -> str:
+    """Return a mention string with custom tag if present.
+    Example output: <a href="tg://user?id=123">John</a> [King]
+
+    Usage in other files:
+        from management.control import format_user_with_tag
+        text = await format_user_with_tag(chat.id, user)
+    """
+    base = _mention(user)
+    tag = await get_custom_tag(chat_id, user.id)
+    if tag:
+        return f"{base} <b>[{rich_esc(tag)}]</b>"
+    return base
 
 
 # ── /adminlist ────────────────────────────────────────────────────────────────
