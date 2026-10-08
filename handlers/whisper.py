@@ -1,7 +1,6 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  handlers/whisper.py — 🔒 Whisper System
-#  Format: @ItzElaraBot <message> @username
+#  handlers/whisper.py — 🔒 Whisper System (with debug)
 # --------------------------------------------------------------------------------
 
 import re
@@ -25,14 +24,14 @@ from database.mongo import db
 
 BOT_USERNAME = "ItzElaraBot"
 
-# ── Anti-spam for non-recipients ─────────────────────────────────────────────
+# Anti-spam
 _READ_ATTEMPTS: dict = defaultdict(list)
 _BLOCKED_READERS: dict = {}
 _READ_WINDOW = 60
 _READ_LIMIT = 3
-_BLOCK_SECONDS = 600        # 10 minutes
+_BLOCK_SECONDS = 600
 
-WHISPER_TTL_SECONDS = 86400  # 24 hours
+WHISPER_TTL_SECONDS = 86400
 
 
 def _whispers_col():
@@ -44,15 +43,14 @@ def _esc(v):
 
 
 def _parse_whisper(text: str) -> tuple[str, str]:
-    """Return (message, recipient_username) from '@ItzElaraBot msg @user'."""
+    """Return (message, recipient_username)."""
     body = re.sub(
         rf"^@{re.escape(BOT_USERNAME)}\s+", "", text, count=1, flags=re.I
     ).strip()
     if not body:
         return "", ""
+    # Find all @mentions except bot
     matches = list(re.finditer(r"@([A-Za-z0-9_]{5,32})", body))
-    if not matches:
-        return body, ""
     filtered = [m for m in matches if m.group(1).lower() != BOT_USERNAME.lower()]
     if not filtered:
         return body, ""
@@ -86,29 +84,33 @@ def _track_violation(user_id: int) -> bool:
     return False
 
 
-def _whisper_filter(_, __, message: Message) -> bool:
-    if not message.text:
-        return False
-    return message.text.strip().lower().startswith(f"@{BOT_USERNAME.lower()}")
-
-
-whisper_filter = filters.create(_whisper_filter)
-
-
 # ══════════════════════════════════════════════════════════════════════════════
 #  HANDLER: @ItzElaraBot <message> @username
 # ══════════════════════════════════════════════════════════════════════════════
-@app.on_message(filters.group & whisper_filter, group=-5)
+@app.on_message(
+    filters.group & filters.text,
+    group=-50,              # Run BEFORE other handlers
+)
 async def whisper_handler(_, message: Message):
     if not message.from_user or not message.text:
         return
 
     text = message.text.strip()
+
+    # Quick check: starts with @ItzElaraBot ?
+    if not text.lower().startswith(f"@{BOT_USERNAME.lower()}"):
+        return
+
+    print(f"[WHISPER] triggered: {text[:80]}", flush=True)
+
     whisper_text, recipient_username = _parse_whisper(text)
 
-    # No recipient → it's an AI trigger, skip and let AI handle
+    # No recipient username → let AI handle
     if not recipient_username:
+        print(f"[WHISPER] no recipient, skipping → AI will handle", flush=True)
         return
+
+    print(f"[WHISPER] text='{whisper_text}' recipient='{recipient_username}'", flush=True)
 
     if not whisper_text:
         await message.reply(
@@ -123,7 +125,9 @@ async def whisper_handler(_, message: Message):
     # Lookup recipient
     try:
         recipient = await app.get_users(recipient_username)
-    except Exception:
+        print(f"[WHISPER] recipient found: {recipient.id}", flush=True)
+    except Exception as e:
+        print(f"[WHISPER] recipient lookup failed: {type(e).__name__}: {e}", flush=True)
         await message.reply(
             f"❌ <b>ᴜꜱᴇʀ ɴᴏᴛ ꜰᴏᴜɴᴅ:</b> @{_esc(recipient_username)}\n"
             "<i>ᴍᴀᴋᴇ sᴜʀᴇ ᴛʜᴇʏ ʜᴀᴠᴇ ᴀ ᴜꜱᴇʀɴᴀᴍᴇ ᴀɴᴅ ʜᴀᴠᴇ sᴛᴀʀᴛᴇᴅ ᴛʜᴇ ʙᴏᴛ.</i>",
@@ -131,20 +135,17 @@ async def whisper_handler(_, message: Message):
         )
         raise StopPropagation
 
-    me = await app.get_me()
-
+    # Self-check
     if recipient.id == message.from_user.id:
         await message.reply("❌ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴡʜɪsᴘᴇʀ ᴛᴏ ʏᴏᴜʀsᴇʟꜰ.")
         raise StopPropagation
 
-    if recipient.id == me.id:
-        await message.reply("🤖 ʏᴏᴜ ᴄᴀɴ'ᴛ ᴡʜɪsᴘᴇʀ ᴛᴏ ᴛʜᴇ ʙᴏᴛ.")
-        raise StopPropagation
-
-    # Recipient must be in this group
+    # Check recipient in group
     try:
         await app.get_chat_member(message.chat.id, recipient.id)
-    except Exception:
+        print(f"[WHISPER] recipient is in group", flush=True)
+    except Exception as e:
+        print(f"[WHISPER] recipient not in group: {type(e).__name__}: {e}", flush=True)
         await message.reply(
             f"❌ @{_esc(recipient_username)} ɪs ɴᴏᴛ ɪɴ ᴛʜɪs ɢʀᴏᴜᴘ.",
             parse_mode=ParseMode.HTML,
@@ -168,12 +169,13 @@ async def whisper_handler(_, message: Message):
         "text": whisper_text,
         "created_at": datetime.now(timezone.utc),
     })
+    print(f"[WHISPER] stored: {whisper_id}", flush=True)
 
-    # Delete original user message
+    # Delete original message
     try:
         await message.delete()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[WHISPER] delete failed: {type(e).__name__}: {e}", flush=True)
 
     recipient_name = recipient.first_name or recipient_username
 
@@ -189,19 +191,20 @@ async def whisper_handler(_, message: Message):
         )],
         [InlineKeyboardButton(
             "ℹ️ ʜᴏᴡ ᴛᴏ sᴇɴᴅ ᴀ ᴡʜɪsᴘᴇʀ?",
-            callback_data=f"whisper_help:{whisper_id}",
+            callback_data="whisper_help",
         )],
     ])
 
     try:
-        await app.send_message(
+        sent = await app.send_message(
             message.chat.id,
             body,
             parse_mode=ParseMode.HTML,
             reply_markup=kb,
         )
+        print(f"[WHISPER] placeholder sent: {sent.id}", flush=True)
     except Exception as e:
-        print(f"[WHISPER send] {type(e).__name__}: {e}", flush=True)
+        print(f"[WHISPER] send failed: {type(e).__name__}: {e}", flush=True)
 
     raise StopPropagation
 
@@ -209,14 +212,16 @@ async def whisper_handler(_, message: Message):
 # ══════════════════════════════════════════════════════════════════════════════
 #  CALLBACK: 👁 Read content
 # ══════════════════════════════════════════════════════════════════════════════
-@app.on_callback_query(filters.regex(r"^whisper_read:"), group=-5)
+@app.on_callback_query(filters.regex(r"^whisper_read:"), group=-50)
 async def whisper_read(_, query: CallbackQuery):
     whisper_id = query.data.split(":", 1)[1]
     user = query.from_user
     if not user:
         return
 
-    # Silent if blocked
+    print(f"[WHISPER read] user={user.id} whisper={whisper_id}", flush=True)
+
+    # Blocked?
     if _is_blocked(user.id):
         try:
             await query.answer()
@@ -237,17 +242,19 @@ async def whisper_read(_, query: CallbackQuery):
         )
         raise StopPropagation
 
-    # TTL check
+    # TTL
     created = doc.get("created_at")
     if created:
         if created.tzinfo is None:
             created = created.replace(tzinfo=timezone.utc)
-        if (datetime.now(timezone.utc) - created).total_seconds() > WHISPER_TTL_SECONDS:
+        age = (datetime.now(timezone.utc) - created).total_seconds()
+        if age > WHISPER_TTL_SECONDS:
             await query.answer("❌ ᴛʜɪs ᴡʜɪsᴘᴇʀ ʜᴀs ᴇxᴘɪʀᴇᴅ.", show_alert=True)
             raise StopPropagation
 
-    # Recipient-only
+    # Recipient only
     if int(user.id) != int(doc["recipient_id"]):
+        print(f"[WHISPER read] NOT for {user.id} (belongs to {doc['recipient_id']})", flush=True)
         blocked = _track_violation(user.id)
         if blocked:
             try:
@@ -268,12 +275,12 @@ async def whisper_read(_, query: CallbackQuery):
     sender = doc.get("sender_name", "Someone")
     alert_text = f"🔒 Whisper from {sender}:\n\n{content}"
 
-    # Show via alert (short) or DM (long)
     if len(alert_text) <= 200:
         try:
             await query.answer(alert_text, show_alert=True)
-        except Exception:
-            pass
+            print(f"[WHISPER read] shown via alert", flush=True)
+        except Exception as e:
+            print(f"[WHISPER read] alert failed: {e}", flush=True)
     else:
         try:
             await app.send_message(
@@ -295,21 +302,22 @@ async def whisper_read(_, query: CallbackQuery):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  CALLBACK: ℹ️ How to send whisper
+#  CALLBACK: ℹ️ How to send
 # ══════════════════════════════════════════════════════════════════════════════
-@app.on_callback_query(filters.regex(r"^whisper_help:"), group=-5)
+@app.on_callback_query(filters.regex(r"^whisper_help$"), group=-50)
 async def whisper_help(_, query: CallbackQuery):
     text = (
-        f"ℹ️ ʜᴏᴡ ᴛᴏ sᴇɴᴅ ᴀ ᴡʜɪsᴘᴇʀ\n\n"
+        f"ℹ️ How to send a whisper\n\n"
         f"Format:\n@{BOT_USERNAME} <message> @username\n\n"
-        f"Example:\n@{BOT_USERNAME} ʜᴇʟʟᴏ ʙʀᴏ @username\n\n"
+        f"Example:\n@{BOT_USERNAME} hello bro @username\n\n"
         f"Notes:\n"
-        f"• Bot username must be at start\n"
+        f"• Bot username at start\n"
         f"• Recipient username at end\n"
         f"• Recipient must be in the group\n"
-        f"• Only they can read the content"
+        f"• Only they can read"
     )
     try:
         await query.answer(text[:200], show_alert=True)
     except Exception:
         pass
+    raise StopPropagation
