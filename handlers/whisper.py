@@ -1,6 +1,7 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
 #  handlers/whisper.py — One-Time Receiver Whisper System
+#  Supports: @username AND user ID
 # --------------------------------------------------------------------------------
 
 import re
@@ -19,9 +20,14 @@ from core.bot import app
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  CONFIG
+# ══════════════════════════════════════════════════════════════════════════════
+BOT_USERNAME = "ItzElaraBot"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  WHISPER STORAGE
 # ══════════════════════════════════════════════════════════════════════════════
-
 # token -> whisper data
 #
 # Whisper remains here until:
@@ -33,10 +39,42 @@ from core.bot import app
 _WHISPERS: Dict[str, dict] = {}
 
 
-# Telegram username pattern
-_USERNAME_RE = re.compile(
-    r"(?<!\w)@([A-Za-z0-9_]{5,32})(?!\w)"
-)
+# Telegram username pattern: @username
+_USERNAME_RE = re.compile(r"(?<!\w)@([A-Za-z0-9_]{5,32})(?!\w)")
+
+# Telegram user ID pattern: 5-15 digits as standalone number
+_USER_ID_RE = re.compile(r"(?<!\d)(\d{5,15})(?!\d)")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  PARSER — find recipient in query
+# ══════════════════════════════════════════════════════════════════════════════
+def _find_recipient(query: str):
+    """Return (secret_text, recipient_token, recipient_type).
+
+    recipient_type:
+        "username" — @username found
+        "user_id"  — numeric ID found
+        ""         — no recipient
+    Priority: @username first, then numeric user ID.
+    """
+    # ── Priority 1: @username ──
+    matches = list(_USERNAME_RE.finditer(query))
+    if matches:
+        last = matches[-1]
+        recipient = last.group(1)
+        secret = (query[:last.start()] + query[last.end():]).strip()
+        return secret, recipient, "username"
+
+    # ── Priority 2: numeric user ID ──
+    id_matches = list(_USER_ID_RE.finditer(query))
+    if id_matches:
+        last = id_matches[-1]
+        recipient = last.group(1)
+        secret = (query[:last.start()] + query[last.end():]).strip()
+        return secret, recipient, "user_id"
+
+    return query.strip(), "", ""
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -47,31 +85,25 @@ _USERNAME_RE = re.compile(
 async def whisper_inline(_, inline_query):
 
     query = (inline_query.query or "").strip()
-
     results = []
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 📖 INSTRUCTIONS
-    #
-    # This is ALWAYS shown when user opens:
-    #
-    # @ElaraBot
-    #
-    # It is NOT dependent on a username being present.
+    # 📖 INSTRUCTIONS (always first)
     # ──────────────────────────────────────────────────────────────────────────
-
     instructions = InlineQueryResultArticle(
         id=f"whisper-help-{inline_query.from_user.id}",
-
         title="📖 Instructions",
-
         description="How to send and read a Whisper",
-
         input_message_content=InputTextMessageContent(
             "<b>🤫 Whisper Instructions</b>\n\n"
 
-            "<b>📤 How to send:</b>\n"
-            "<code>@ElaraBot your secret message @username</code>\n\n"
+            "<b>📤 How to send:</b>\n\n"
+
+            "<b>1️⃣ By username:</b>\n"
+            f"<code>@{BOT_USERNAME} your message @username</code>\n\n"
+
+            "<b>2️⃣ By user ID (no username):</b>\n"
+            f"<code>@{BOT_USERNAME} your message 123456789</code>\n\n"
 
             "<b>👤 Sender:</b>\n"
             "You can read your Whisper as many times as you want "
@@ -88,7 +120,6 @@ async def whisper_inline(_, inline_query):
             "Only the sender and intended receiver can read the "
             "Whisper content."
         ),
-
         reply_markup=InlineKeyboardMarkup(
             [
                 [
@@ -100,140 +131,84 @@ async def whisper_inline(_, inline_query):
             ]
         ),
     )
-
-    # Instructions is always the first inline result.
     results.append(instructions)
 
-
-    # ══════════════════════════════════════════════════════════════════════════
-    #  NO QUERY
-    # ══════════════════════════════════════════════════════════════════════════
-
-    # If user only types @ElaraBot, show Instructions.
+    # ──────────────────────────────────────────────────────────────────────────
+    # NO QUERY → show instructions only
+    # ──────────────────────────────────────────────────────────────────────────
     if not query:
-        await inline_query.answer(
-            results,
-            cache_time=0,
-            is_personal=True,
-        )
+        await inline_query.answer(results, cache_time=0, is_personal=True)
         return
 
+    # ──────────────────────────────────────────────────────────────────────────
+    # FIND RECIPIENT
+    # ──────────────────────────────────────────────────────────────────────────
+    secret_text, recipient_token, recipient_type = _find_recipient(query)
 
-    # ══════════════════════════════════════════════════════════════════════════
-    #  FIND RECIPIENT
-    # ══════════════════════════════════════════════════════════════════════════
-
-    matches = list(_USERNAME_RE.finditer(query))
-
-    # No @username yet.
-    # Still show Instructions.
-    if not matches:
-        await inline_query.answer(
-            results,
-            cache_time=0,
-            is_personal=True,
-        )
+    if not recipient_token or not secret_text:
+        await inline_query.answer(results, cache_time=0, is_personal=True)
         return
 
-
-    # Last @username = recipient
-    recipient_username = matches[-1].group(1)
-
-    # Everything except recipient username = secret message
-    secret_text = (
-        query[:matches[-1].start()]
-        + query[matches[-1].end():]
-    ).strip()
-
-    if not secret_text:
-        await inline_query.answer(
-            results,
-            cache_time=0,
-            is_personal=True,
-        )
-        return
-
-
-    # ══════════════════════════════════════════════════════════════════════════
-    #  RESOLVE USER
-    # ══════════════════════════════════════════════════════════════════════════
-
+    # ──────────────────────────────────────────────────────────────────────────
+    # RESOLVE USER
+    # ──────────────────────────────────────────────────────────────────────────
+    recipient = None
     try:
-        recipient = await app.get_users(recipient_username)
-    except Exception:
-        await inline_query.answer(
-            results,
-            cache_time=0,
-            is_personal=True,
-        )
-        return
+        if recipient_type == "username":
+            recipient = await app.get_users(recipient_token)
+        elif recipient_type == "user_id":
+            recipient = await app.get_users(int(recipient_token))
+    except Exception as e:
+        print(f"[Whisper lookup] {type(e).__name__}: {e}", flush=True)
 
     if not recipient:
-        await inline_query.answer(
-            results,
-            cache_time=0,
-            is_personal=True,
-        )
+        await inline_query.answer(results, cache_time=0, is_personal=True)
         return
 
-    # Don't allow whispering to bots.
+    # Don't allow whispering to bots
     if recipient.is_bot:
-        await inline_query.answer(
-            results,
-            cache_time=0,
-            is_personal=True,
-        )
+        await inline_query.answer(results, cache_time=0, is_personal=True)
         return
 
-
-    # ══════════════════════════════════════════════════════════════════════════
-    #  CREATE WHISPER TOKEN
-    # ══════════════════════════════════════════════════════════════════════════
-
+    # ──────────────────────────────────────────────────────────────────────────
+    # CREATE WHISPER TOKEN
+    # ──────────────────────────────────────────────────────────────────────────
     token = secrets.token_urlsafe(18)
-
-    _WHISPERS[token] = {
-        "sender_id": inline_query.from_user.id,
-        "recipient_id": recipient.id,
-        "recipient_name": (
-            recipient.first_name
-            or recipient.username
-            or "User"
-        ),
-        "text": secret_text,
-    }
-
 
     recipient_name = (
         recipient.first_name
         or recipient.username
-        or "User"
+        or str(recipient.id)
     )
 
+    _WHISPERS[token] = {
+        "sender_id": inline_query.from_user.id,
+        "recipient_id": recipient.id,
+        "recipient_name": recipient_name,
+        "text": secret_text,
+    }
 
-    # ══════════════════════════════════════════════════════════════════════════
-    #  WHISPER RESULT
-    # ══════════════════════════════════════════════════════════════════════════
+    # ──────────────────────────────────────────────────────────────────────────
+    # WHISPER RESULT
+    # ──────────────────────────────────────────────────────────────────────────
+    recipient_label = (
+        f"@{recipient.username}"
+        if recipient.username
+        else f"ID {recipient.id}"
+    )
 
     whisper_result = InlineQueryResultArticle(
         id=token,
-
-        title=(
-            f"Whisper for {recipient_name} "
-            f"(@{recipient_username})"
-        ),
-
+        title=f"Whisper for {recipient_name} ({recipient_label})",
         description=(
             "🔐 Receiver: one-time read • "
             "Sender: unlimited reads"
         ),
-
         input_message_content=InputTextMessageContent(
             f"🔒 <b>Whisper for {recipient_name}.</b>\n"
             "Only they can read the content.\n\n"
             "<i>👁️ Receiver can read this only once.</i>"
         ),
-
         reply_markup=InlineKeyboardMarkup(
             [
                 [
@@ -251,21 +226,12 @@ async def whisper_inline(_, inline_query):
             ]
         ),
     )
-
-
-    # Put Whisper below Instructions.
     results.append(whisper_result)
 
-
-    # ══════════════════════════════════════════════════════════════════════════
-    #  ANSWER INLINE QUERY
-    # ══════════════════════════════════════════════════════════════════════════
-
-    await inline_query.answer(
-        results,
-        cache_time=0,
-        is_personal=True,
-    )
+    # ──────────────────────────────────────────────────────────────────────────
+    # ANSWER
+    # ──────────────────────────────────────────────────────────────────────────
+    await inline_query.answer(results, cache_time=0, is_personal=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -277,17 +243,16 @@ async def whisper_callback(_, callback_query):
 
     data = callback_query.data or ""
 
-
-    # ══════════════════════════════════════════════════════════════════════════
-    #  HELP / INSTRUCTIONS
-    # ══════════════════════════════════════════════════════════════════════════
-
+    # ──────────────────────────────────────────────────────────────────────────
+    # HELP / INSTRUCTIONS
+    # ──────────────────────────────────────────────────────────────────────────
     if data == "wpr:help":
-
         await callback_query.answer(
             "🤫 Whisper\n\n"
-            "To send:\n"
-            "@ElaraBot your secret message @username\n\n"
+            "To send (by username):\n"
+            f"@{BOT_USERNAME} your message @username\n\n"
+            "To send (by user ID):\n"
+            f"@{BOT_USERNAME} your message 123456789\n\n"
             "👤 Sender:\n"
             "You can read your Whisper unlimited times.\n\n"
             "🔐 Receiver:\n"
@@ -296,94 +261,59 @@ async def whisper_callback(_, callback_query):
             "the Whisper message is automatically deleted.",
             show_alert=True,
         )
-
         return
 
-
-    # ══════════════════════════════════════════════════════════════════════════
-    #  GET TOKEN
-    # ══════════════════════════════════════════════════════════════════════════
-
+    # ──────────────────────────────────────────────────────────────────────────
+    # GET TOKEN
+    # ──────────────────────────────────────────────────────────────────────────
     token = data[4:]
-
     whisper = _WHISPERS.get(token)
 
-
-    # Already consumed / expired
     if not whisper:
-
         await callback_query.answer(
             "⌛ This whisper has already expired.",
             show_alert=True,
         )
-
         return
-
 
     user_id = callback_query.from_user.id
 
-
-    # ══════════════════════════════════════════════════════════════════════════
-    #  SENDER
-    #
-    # Sender can read unlimited times.
-    # Token is NOT removed.
-    # Group message is NOT deleted.
-    # ══════════════════════════════════════════════════════════════════════════
-
+    # ──────────────────────────────────────────────────────────────────────────
+    # SENDER — unlimited reads
+    # ──────────────────────────────────────────────────────────────────────────
     if user_id == whisper["sender_id"]:
-
         await callback_query.answer(
             whisper["text"],
             show_alert=True,
         )
-
         return
 
-
-    # ══════════════════════════════════════════════════════════════════════════
-    #  WRONG USER
-    # ══════════════════════════════════════════════════════════════════════════
-
+    # ──────────────────────────────────────────────────────────────────────────
+    # WRONG USER
+    # ──────────────────────────────────────────────────────────────────────────
     if user_id != whisper["recipient_id"]:
-
         await callback_query.answer(
             "🔒 This whisper is private.\n"
             "Only the sender and intended recipient can read it.",
             show_alert=True,
         )
-
         return
 
-
-    # ══════════════════════════════════════════════════════════════════════════
-    #  RECEIVER — ONE TIME ONLY
-    # ══════════════════════════════════════════════════════════════════════════
-
-    # Remove BEFORE displaying content.
-    #
-    # This makes it impossible for the same receiver to successfully
-    # consume the whisper twice, even if two callbacks arrive quickly.
+    # ──────────────────────────────────────────────────────────────────────────
+    # RECEIVER — ONE TIME ONLY
+    # ──────────────────────────────────────────────────────────────────────────
+    # Pop BEFORE displaying → prevents double-read
     _WHISPERS.pop(token, None)
 
-
-    # Show secret once.
+    # Show secret once
     await callback_query.answer(
         whisper["text"],
         show_alert=True,
     )
 
-
-    # ══════════════════════════════════════════════════════════════════════════
-    #  DELETE GROUP WHISPER
-    # ══════════════════════════════════════════════════════════════════════════
-
+    # Delete the group whisper message
     try:
         if callback_query.message:
             await callback_query.message.delete()
-
     except Exception as e:
-        print(
-            f"[Whisper delete] {type(e).__name__}: {e}",
-            flush=True,
-        )
+        print(f"[Whisper delete] {type(e).__name__}: {e}", flush=True)
