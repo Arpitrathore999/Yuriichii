@@ -73,6 +73,11 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     "q", "qhelp", "quotehelp",
     # ID
     "id", "title", "titlehelp", "whisper" 
+    # Add to ALL_COMMANDS list:
+    # WordSeek
+    "new4", "new5", "new6", "wordhelp", "wordseekhelp",
+    "wordtop", "wordleaderboard", "wordstats", "mystats",
+    "wordcancel", "wordhint",
 ]
 
 
