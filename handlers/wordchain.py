@@ -3,6 +3,7 @@
 #  handlers/wordchain.py — 🔗 Word Chain Handlers (full)
 #  - Timeout ALWAYS eliminates
 #  - "ACCEPTED!" message + next player mention
+#  - Dynamic timer (40→35→30→25→20→10) & word-length (3→4→5→6→7→8)
 #  - Last player = winner
 # --------------------------------------------------------------------------------
 
@@ -228,6 +229,11 @@ def _render_turn(game: WordChainGame, seconds_left: int) -> str:
             extras.append(
                 f"🌪 <b>{ev['name']}:</b> <code>{ev.get('desc', '')}</code>"
             )
+
+    # ✅ Show dynamic min length
+    min_len = game.current_min_len()
+    extras.append(f"📏 <b>ᴍɪɴ ʟᴇɴɢᴛʜ:</b> <code>{min_len}</code> ʟᴇᴛᴛᴇʀꜱ")
+
     extra_text = ("\n" + "\n".join(extras)) if extras else ""
 
     last_word_display = game.last_word.upper() if game.last_word else "—"
@@ -258,21 +264,21 @@ def _render_help() -> str:
         "• <code>/startchain required</code> — 🔠 ʀᴇQᴜɪʀᴇᴅ ʟᴇᴛᴛᴇʀ\n"
         "• <code>/startchain hard</code> — 🔥 ʜᴀʀᴅ ᴍᴏᴅᴇ\n"
         "• <code>/startchain chaos</code> — 🌪 ᴄʜᴀᴏꜱ ᴍᴏᴅᴇ\n\n"
-        "<b>🎯 ʜᴏᴡ ᴛᴏ ᴘʟᴀʏ:</b>\n"
-        "1. ꜱᴛᴀʀᴛ ᴡɪᴛʜ <code>/startchain</code>\n"
-        "2. ᴛᴀᴘ <b>ᴊᴏɪɴ ɢᴀᴍᴇ</b>\n"
-        "3. ᴡᴀɪᴛ ꜰᴏʀ ʟᴏʙʙʏ ᴛᴏ ᴄʟᴏꜱᴇ\n"
-        "4. ᴛʏᴘᴇ ᴀ ᴡᴏʀᴅ ꜱᴛᴀʀᴛɪɴɢ ᴡɪᴛʜ ᴛʜᴇ ʀᴇQᴜɪʀᴇᴅ ʟᴇᴛᴛᴇʀ\n"
-        "5. ᴇᴀᴄʜ ᴡᴏʀᴅ ᴍᴜꜱᴛ ꜱᴛᴀʀᴛ ᴡɪᴛʜ ᴛʜᴇ ʟᴀꜱᴛ ʟᴇᴛᴛᴇʀ ᴏꜰ ᴛʜᴇ ᴘʀᴇᴠɪᴏᴜꜱ ᴡᴏʀᴅ\n\n"
+        "<b>⏱ ᴛɪᴍᴇʀ ᴘʀᴏɢʀᴇꜱꜱɪᴏɴ:</b>\n"
+        "• 0-4 ᴡᴏʀᴅꜱ → 40s, ᴍɪɴ 3 ʟᴇᴛᴛᴇʀꜱ\n"
+        "• 5-9 ᴡᴏʀᴅꜱ → 35s, ᴍɪɴ 4 ʟᴇᴛᴛᴇʀꜱ\n"
+        "• 10-14 → 30s, ᴍɪɴ 5 ʟᴇᴛᴛᴇʀꜱ\n"
+        "• 15-19 → 25s, ᴍɪɴ 6 ʟᴇᴛᴛᴇʀꜱ\n"
+        "• 20-24 → 20s, ᴍɪɴ 7 ʟᴇᴛᴛᴇʀꜱ\n"
+        "• 25+ → 10s, ᴍɪɴ 8 ʟᴇᴛᴛᴇʀꜱ\n\n"
         "<b>📋 ᴄᴏᴍᴍᴀɴᴅꜱ:</b>\n"
         "• <code>/joinchain</code> — ᴊᴏɪɴ ʟᴏʙʙʏ\n"
-        "• <code>/leavechain</code> — ʟᴇᴀᴠᴇ ɢᴀᴍᴇ\n"
-        "• <code>/extendchain</code> — ᴇxᴛᴇɴᴅ ʟᴏʙʙʏ ᴛɪᴍᴇ\n"
+        "• <code>/leavechain</code> — ʟᴇᴀᴠᴇ\n"
         "• <code>/forcestartchain</code> — ꜱᴛᴀʀᴛ ɴᴏᴡ\n"
         "• <code>/chaininfo</code> — ɢᴀᴍᴇ ɪɴꜰᴏ\n"
         "• <code>/chainstats</code> — ʏᴏᴜʀ ꜱᴛᴀᴛꜱ\n"
         "• <code>/chaintop</code> — ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ\n"
-        "• <code>/killchain</code> — ᴄᴀɴᴄᴇʟ ɢᴀᴍᴇ (ꜱᴛᴀʀᴛᴇʀ/ᴀᴅᴍɪɴ)\n"
+        "• <code>/killchain</code> — ᴄᴀɴᴄᴇʟ ɢᴀᴍᴇ\n"
     )
 
 
@@ -362,8 +368,8 @@ async def _begin_game(chat_id: int, game: WordChainGame):
         f"🔗 <b>ᴡᴏʀᴅ ᴄʜᴀɪɴ — ɢᴀᴍᴇ ꜱᴛᴀʀᴛᴇᴅ!</b>\n\n"
         f"🎮 <b>ᴍᴏᴅᴇ:</b> {game.cfg['label']}\n"
         f"👥 <b>ᴘʟᴀʏᴇʀꜱ:</b> <code>{len(game.players)}</code>\n"
-        f"⏱ <b>ᴛᴜʀɴ ᴛɪᴍᴇ:</b> <code>{game.cfg['turn_seconds']}s</code>\n"
-        f"📏 <b>ᴡᴏʀᴅ ʟᴇɴɢᴛʜ:</b> <code>{game.cfg['min_word_len']}-{game.cfg['max_word_len']}</code>"
+        f"⏱ <b>ᴛᴜʀɴ ᴛɪᴍᴇ:</b> <code>{game.current_turn_seconds()}s</code>\n"
+        f"📏 <b>ᴡᴏʀᴅ ʟᴇɴɢᴛʜ:</b> <code>{game.current_min_len()}-{game.cfg['max_word_len']}</code>"
         f"{extra}\n\n"
         f"<b>ᴛᴜʀɴ ᴏʀᴅᴇʀ:</b>\n{order_mentions}"
     )
@@ -431,10 +437,8 @@ async def _start_turn(chat_id: int, game: WordChainGame):
 
     game.turn_started_by_player = current["user_id"]
 
-    turn_secs = game.cfg["turn_seconds"]
-    for ev in game.chaos_events:
-        if ev.get("kind") == "timer_down":
-            turn_secs = min(turn_secs, ev.get("value", turn_secs))
+    # ✅ Dynamic timer
+    turn_secs = game.current_turn_seconds()
 
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
@@ -461,41 +465,44 @@ async def _start_turn(chat_id: int, game: WordChainGame):
 
 
 async def _turn_timeout(chat_id: int, game: WordChainGame, expected_player: int, seconds: int):
-    """✅ Turn timeout — ALWAYS eliminates player (all modes)."""
+    """✅ Timeout — eliminates player, advances to next alive player."""
     try:
         await asyncio.sleep(seconds)
 
-        if game.status != "running":
-            return
-        if game.turn_started_by_player != expected_player:
-            return
-        current = game.current_player()
-        if not current or current["user_id"] != expected_player:
-            return
+        # ✅ Acquire lock for atomic check-and-eliminate
+        lock = _game_lock(chat_id)
+        async with lock:
+            if game.status != "running":
+                return
+            if game.turn_started_by_player != expected_player:
+                return
+            current = game.current_player()
+            if not current or current["user_id"] != expected_player:
+                return
 
-        # ✅ ALWAYS eliminate on timeout
-        game.eliminate(expected_player)
-        p = game.get_player(expected_player) or {"name": "Player"}
-        remaining = len(game.alive_players())
+            game.eliminate(expected_player)
+            p = game.get_player(expected_player) or {"name": "Player"}
+            remaining = len(game.alive_players())
 
-        elim_text = (
+        # Send elimination message outside lock
+        await _safe_send(
+            chat_id,
             f"❌ <b>ᴘʟᴀʏᴇʀ ᴇʟɪᴍɪɴᴀᴛᴇᴅ</b>\n\n"
             f"👤 {_mention(expected_player, p['name'])}\n"
             f"⏰ <i>ʀᴇᴀꜱᴏɴ:</i> ᴛᴜʀɴ ᴛɪᴍᴇᴅ ᴏᴜᴛ\n"
-            f"👥 <b>ʀᴇᴍᴀɪɴɪɴɢ:</b> <code>{remaining}</code>"
+            f"👥 <b>ʀᴇᴍᴀɪɴɪɴɢ:</b> <code>{remaining}</code>",
+            parse_mode=ParseMode.HTML,
         )
-        await _safe_send(chat_id, elim_text, parse_mode=ParseMode.HTML)
 
-        # ✅ Check for winner (last alive player)
         winner = game.check_winner()
         if winner:
             await _finish_game(chat_id, game, winner=winner)
             return
-
         if remaining == 0:
             await _finish_game(chat_id, game, reason="ᴀʟʟ ᴘʟᴀʏᴇʀꜱ ᴇʟɪᴍɪɴᴀᴛᴇᴅ")
             return
 
+        # ✅ Advance to next alive player
         game.next_turn()
         await _start_turn(chat_id, game)
     except asyncio.CancelledError:
@@ -541,12 +548,14 @@ async def _finish_game(chat_id: int, game: WordChainGame, winner: dict = None, r
             print(f"[WordChain record] {type(e).__name__}: {e}", flush=True)
 
     if winner:
+        # ✅ Longest word with size
         text = (
             f"🎉 <b>ᴡᴇ ʜᴀᴠᴇ ᴀ ᴡɪɴɴᴇʀ!</b> 🎉\n\n"
             f"🏆 <b>ᴡɪɴɴᴇʀ:</b> {_mention(winner['user_id'], winner['name'])}\n"
             f"🎮 <b>ᴍᴏᴅᴇ:</b> {game.cfg['label']}\n"
             f"📝 <b>ᴛᴏᴛᴀʟ ᴡᴏʀᴅꜱ:</b> <code>{total_words}</code>\n"
-            f"🔑 <b>ʟᴏɴɢᴇꜱᴛ ᴡᴏʀᴅ:</b> <code>{_esc(longest.upper())}</code>\n\n"
+            f"🔑 <b>ʟᴏɴɢᴇꜱᴛ ᴡᴏʀᴅ:</b> <code>{_esc(longest.upper())}</code> "
+            f"<i>({len(longest)} ʟᴇᴛᴛᴇʀꜱ)</i>\n\n"
             f"👉 ᴘʟᴀʏ ᴀɢᴀɪɴ: <code>/startchain</code>"
         )
     else:
@@ -834,7 +843,7 @@ async def cmd_chaininfo(_, message: Message):
     else:
         await _safe_reply(
             message,
-            _render_turn(game, game.cfg["turn_seconds"]),
+            _render_turn(game, game.current_turn_seconds()),
             parse_mode=ParseMode.HTML,
         )
 
@@ -1039,6 +1048,11 @@ async def wordchain_guess(_, message: Message):
         if not current or current["user_id"] != message.from_user.id:
             return
 
+        # ✅ CRITICAL: Cancel timer immediately on player input
+        if game.turn_task and not game.turn_task.done():
+            game.turn_task.cancel()
+            game.turn_task = None
+
         ok, reason = game.validate_word(word, message.from_user.id)
         if not ok:
             if reason.startswith("must_start_with:"):
@@ -1061,6 +1075,12 @@ async def wordchain_guess(_, message: Message):
             else:
                 msg = f"❌ ɪɴᴠᴀʟɪᴅ ᴡᴏʀᴅ ({reason})"
             await _safe_reply(message, msg, parse_mode=ParseMode.HTML)
+
+            # ✅ Restart timer with current turn seconds
+            restart_secs = game.current_turn_seconds()
+            game.turn_task = asyncio.create_task(
+                _turn_timeout(message.chat.id, game, message.from_user.id, restart_secs)
+            )
             return
 
         # Valid!
@@ -1078,7 +1098,7 @@ async def wordchain_guess(_, message: Message):
                     parse_mode=ParseMode.HTML,
                 )
 
-        # ✅ Advance turn BEFORE building success message
+        # Advance turn
         game.next_turn()
         next_player = game.current_player()
 
@@ -1092,16 +1112,20 @@ async def wordchain_guess(_, message: Message):
 
         next_letter = word[-1].upper()
 
-        # ✅ "ACCEPTED" message with next player mention
+        # ✅ ACCEPTED message with next player + progression info
+        new_min = game.current_min_len()
+        new_time = game.current_turn_seconds()
         await _safe_reply(
             message,
             f"✅ <b>ᴀᴄᴄᴇᴘᴛᴇᴅ!</b>\n\n"
             f"👤 <b>ᴘʟᴀʏᴇʀ:</b> {_mention(message.from_user.id, _user_display(message.from_user))}\n"
             f"📝 <b>ᴡᴏʀᴅ:</b> <code>{_esc(word.upper())}</code>\n"
             f"🔤 <b>ɴᴇxᴛ ʟᴇᴛᴛᴇʀ:</b> <code>{next_letter}</code>\n"
-            f"{next_player_line}",
+            f"{next_player_line}\n"
+            f"📏 <b>ᴍɪɴ ʟᴇɴɢᴛʜ:</b> <code>{new_min}</code> • "
+            f"⏱ <b>ᴛɪᴍᴇʀ:</b> <code>{new_time}s</code>",
             parse_mode=ParseMode.HTML,
         )
 
-        # Continue with next turn
+        # Continue next turn
         await _start_turn(message.chat.id, game)
