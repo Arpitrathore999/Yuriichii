@@ -6,6 +6,7 @@
 #  - Dynamic timer (40→35→30→25→20→10) & word-length (3→4→5→6→7→8)
 #  - Last player = winner
 #  - FIXED: cancel_timers no self-cancel; elimination msg has next player
+#  - FIXED: FloodWait-safe edits, lobby timer edits every 20s
 # --------------------------------------------------------------------------------
 
 from __future__ import annotations
@@ -91,30 +92,39 @@ async def _safe_reply(message: Message, text: str, **kw):
             return None
     except Exception as e:
         if type(e).__name__ == "FloodWait":
-            try:
-                await asyncio.sleep(min(int(getattr(e, "value", 5)), 60))
-                return await message.reply(text, **kw)
-            except Exception:
-                return None
+            print(f"[WordChain safe_reply] FloodWait — skipping", flush=True)
+            return None
         print(f"[WordChain safe_reply] {type(e).__name__}: {e}", flush=True)
         return None
 
 
 async def _safe_send(chat_id: int, text: str, **kw):
+    """✅ FloodWait-safe send."""
     try:
         return await app.send_message(chat_id, text, **kw)
     except Exception as e:
-        print(f"[WordChain safe_send] {type(e).__name__}: {e}", flush=True)
+        err = type(e).__name__
+        if err == "FloodWait":
+            wait = int(getattr(e, "value", 5))
+            print(f"[WordChain safe_send] FloodWait {wait}s — skipping", flush=True)
+            return None
+        print(f"[WordChain safe_send] {err}: {e}", flush=True)
         return None
 
 
 async def _safe_edit(chat_id: int, msg_id: int, text: str, **kw):
+    """✅ FloodWait-safe edit — silently skip if flood, don't retry."""
     try:
         return await app.edit_message_text(chat_id, msg_id, text, **kw)
     except Exception as e:
-        if type(e).__name__ in ("MessageNotModified",):
+        err = type(e).__name__
+        if err == "MessageNotModified":
             return None
-        print(f"[WordChain safe_edit] {type(e).__name__}: {e}", flush=True)
+        if err == "FloodWait":
+            wait = int(getattr(e, "value", 5))
+            print(f"[WordChain safe_edit] FloodWait {wait}s — skipping edit", flush=True)
+            return None
+        print(f"[WordChain safe_edit] {err}: {e}", flush=True)
         return None
 
 
@@ -227,33 +237,56 @@ def _render_help() -> str:
 #  LOBBY
 # ══════════════════════════════════════════════════════════════════════════════
 async def _run_lobby_timer(chat_id: int, game: WordChainGame):
+    """✅ Lobby timer with reduced edit frequency (avoids FloodWait)."""
     try:
         total = game.cfg["lobby_seconds"]
         elapsed = 0
-        interval = 5
+        last_edit_at = -999
+        EDIT_INTERVAL = 20   # ✅ Edit every 20 seconds only
+
         while elapsed < total:
             if game.status != "lobby":
                 return
-            await asyncio.sleep(min(interval, total - elapsed))
-            elapsed += interval
+            await asyncio.sleep(2)
+            elapsed += 2
+
             if game.is_full():
                 break
+
+            # Edit only every EDIT_INTERVAL seconds
+            if elapsed - last_edit_at < EDIT_INTERVAL:
+                continue
+
+            seconds_left = max(0, total - elapsed)
+            # Skip edits when very few seconds left
+            if seconds_left < 15:
+                continue
+
+            last_edit_at = elapsed
             if game.lobby_message_id:
-                await _safe_edit(chat_id, game.lobby_message_id,
-                                 _render_lobby(game, max(0, total - elapsed)),
-                                 parse_mode=ParseMode.HTML, reply_markup=_lobby_kb(game))
+                await _safe_edit(
+                    chat_id, game.lobby_message_id,
+                    _render_lobby(game, seconds_left),
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=_lobby_kb(game),
+                )
+
         if game.status != "lobby":
             return
+
         if not game.can_start():
             game.cancel()
             remove_game(chat_id)
             await remove_persisted_game(chat_id)
-            await _safe_send(chat_id,
+            await _safe_send(
+                chat_id,
                 "❌ <b>ɴᴏᴛ ᴇɴᴏᴜɢʜ ᴘʟᴀʏᴇʀꜱ — ɢᴀᴍᴇ ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>\n"
                 f"<i>ɴᴇᴇᴅᴇᴅ:</i> <code>{game.cfg['min_players']}</code>, "
                 f"<i>ɢᴏᴛ:</i> <code>{len(game.players)}</code>",
-                parse_mode=ParseMode.HTML)
+                parse_mode=ParseMode.HTML,
+            )
             return
+
         await _begin_game(chat_id, game)
     except asyncio.CancelledError:
         pass
