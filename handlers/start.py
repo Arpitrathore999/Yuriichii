@@ -158,6 +158,7 @@ def _rich_help() -> str:
 <tr><td>💕 <b>ꜱᴏᴄɪᴀʟ</b></td><td>ꜰᴜɴ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴꜱ</td></tr>
 <tr><td>💰 <b>ᴇᴄᴏɴᴏᴍʏ</b></td><td>ᴇᴅᴏʟʟᴇʀꜱ, ʀᴏʙ, ᴋɪʟʟ, ᴛᴏᴘ</td></tr>
 <tr><td>🛡️ <b>ᴍᴀɴᴀɢᴇᴍᴇɴᴛ</b></td><td>ɢʀᴏᴜᴘ ᴀᴅᴍɪɴ ᴛᴏᴏʟꜱ</td></tr>
+<tr><td>🎮 <b>ɢᴀᴍᴇꜱ</b></td><td>ꜰᴜɴ ɢᴀᴍᴇꜱ ᴛᴏ ᴘʟᴀʏ</td></tr>
 </table>
 </details>
 
@@ -488,6 +489,183 @@ def _rich_about() -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  🎮 GAMES SECTION
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _rich_games() -> str:
+    return """🎮 <b>ɢᴀᴍᴇ ᴄᴏᴍᴍᴀɴᴅꜱ</b> 🎮
+
+ᴄʜᴏᴏꜱᴇ ᴀ ɢᴀᴍᴇ ʙᴇʟᴏᴡ ᴛᴏ ꜱᴇᴇ ʜᴏᴡ ᴛᴏ ᴘʟᴀʏ ᴀɴᴅ ɪᴛꜱ ᴄᴏᴍᴍᴀɴᴅꜱ!
+👇
+"""
+
+def _rich_game_page(title: str, desc: str, cmds: str, tip: str = "") -> str:
+    tip_block = f"\n<blockquote>{tip}</blockquote>\n" if tip else ""
+    return f"""🎮 <b>{title}</b>
+
+<i>{desc}</i>
+
+<details open>
+<summary>📖 ᴄᴏᴍᴍᴀɴᴅꜱ & ʜᴏᴡ ᴛᴏ ᴘʟᴀʏ</summary>
+
+<table>
+<tr><th>ᴄᴏᴍᴍᴀɴᴅ</th><th>ᴋᴀᴀᴍ</th></tr>
+{cmds}
+</table>
+</details>
+{tip_block}"""
+
+
+_GAMES_DATA = {
+    "uno": {
+        "title": "🃏 ᴜɴᴏ",
+        "desc": "ᴄʟᴀꜱꜱɪᴄ ᴜɴᴏ ᴄᴀʀᴅ ɢᴀᴍᴇ. ᴘʟᴀʏ ᴡɪᴛʜ ꜰʀɪᴇɴᴅꜱ ɪɴ ɢʀᴏᴜᴘ!",
+        "cmds": """
+<tr><td><code>.uno</code></td><td>ꜱᴛᴀʀᴛ ᴀ ɴᴇᴡ ᴜɴᴏ ɢᴀᴍᴇ</td></tr>
+<tr><td><code>.join</code></td><td>ᴊᴏɪɴ ᴛʜᴇ ᴏɴɢᴏɪɴɢ ɢᴀᴍᴇ</td></tr>
+<tr><td><code>.leave</code></td><td>ʟᴇᴀᴠᴇ ᴛʜᴇ ɢᴀᴍᴇ</td></tr>
+<tr><td><code>.uno end</code></td><td>ꜰᴏʀᴄᴇ ᴇɴᴅ ᴛʜᴇ ɢᴀᴍᴇ</td></tr>
+""",
+        "tip": "💡 ᴍɪɴɪᴍᴜᴍ 2 ᴘʟᴀʏᴇʀꜱ ʀᴇǫᴜɪʀᴇᴅ."
+    },
+    "mines": {
+        "title": "💣 ᴍɪɴᴇꜱ",
+        "desc": "ᴜɴᴄᴏᴠᴇʀ ꜱᴀꜰᴇ ᴛɪʟᴇꜱ ᴀɴᴅ ᴀᴠᴏɪᴅ ᴛʜᴇ ᴍɪɴᴇꜱ!",
+        "cmds": """
+<tr><td><code>.mines</code></td><td>ꜱᴛᴀʀᴛ ᴀ ɴᴇᴡ ᴍɪɴᴇꜱ ɢᴀᴍᴇ</td></tr>
+<tr><td><code>.mines &lt;bet&gt;</code></td><td>ᴘʟᴀʏ ᴡɪᴛʜ ᴀ ꜱᴘᴇᴄɪꜰɪᴄ ʙᴇᴛ</td></tr>
+""",
+        "tip": "💡 ᴛʜᴇ ʟᴏɴɢᴇʀ ʏᴏᴜ ᴘʟᴀʏ, ᴛʜᴇ ʜɪɢʜᴇʀ ᴛʜᴇ ᴍᴜʟᴛɪᴘʟɪᴇʀ!"
+    },
+    "rps": {
+        "title": "✊ ʀᴘꜱ",
+        "desc": "ʀᴏᴄᴋ, ᴘᴀᴘᴇʀ, ꜱᴄɪꜱꜱᴏʀꜱ ᴀɢᴀɪɴꜱᴛ ᴛʜᴇ ʙᴏᴛ ᴏʀ ᴀ ꜰʀɪᴇɴᴅ.",
+        "cmds": """
+<tr><td><code>.rps rock</code></td><td>ᴘʟᴀʏ ʀᴏᴄᴋ</td></tr>
+<tr><td><code>.rps paper</code></td><td>ᴘʟᴀʏ ᴘᴀᴘᴇʀ</td></tr>
+<tr><td><code>.rps scissors</code></td><td>ᴘʟᴀʏ ꜱᴄɪꜱꜱᴏʀꜱ</td></tr>
+""",
+        "tip": "💡 ʏᴏᴜ ᴄᴀɴ ᴀʟꜱᴏ ᴜꜱᴇ ꜱʜᴏʀᴛ ꜰᴏʀᴍꜱ: <code>.rps r</code>, <code>.rps p</code>, <code>.rps s</code>."
+    },
+    "wordseek": {
+        "title": "🔍 ᴡᴏʀᴅꜱᴇᴇᴋ",
+        "desc": "ꜰɪɴᴅ ʜɪᴅᴅᴇɴ ᴡᴏʀᴅꜱ ɪɴ ᴀ ɢʀɪᴅ ᴀɴᴅ ᴛᴇꜱᴛ ʏᴏᴜʀ ᴠᴏᴄᴀʙᴜʟᴀʀʏ.",
+        "cmds": """
+<tr><td><code>.wordseek</code></td><td>ꜱᴛᴀʀᴛ ᴀ ɴᴇᴡ ᴡᴏʀᴅꜱᴇᴇᴋ ɢᴀᴍᴇ</td></tr>
+""",
+        "tip": "💡 ʏᴏᴜ ʜᴀᴠᴇ ᴀ ᴛɪᴍᴇ ʟɪᴍɪᴛ ᴛᴏ ꜰɪɴᴅ ᴀʟʟ ᴡᴏʀᴅꜱ!"
+    },
+    "wordgrid": {
+        "title": "🔤 ᴡᴏʀᴅɢʀɪᴅ",
+        "desc": "ᴄʀᴇᴀᴛᴇ ᴀꜱ ᴍᴀɴʏ ᴡᴏʀᴅꜱ ᴀꜱ ʏᴏᴜ ᴄᴀɴ ꜰʀᴏᴍ ᴛʜᴇ ɢɪᴠᴇɴ ʟᴇᴛᴛᴇʀꜱ.",
+        "cmds": """
+<tr><td><code>.wordgrid</code></td><td>ꜱᴛᴀʀᴛ ᴀ ɴᴇᴡ ᴡᴏʀᴅɢʀɪᴅ ɢᴀᴍᴇ</td></tr>
+""",
+        "tip": "💡 ᴛʜᴇ ᴍᴏʀᴇ ᴡᴏʀᴅꜱ ʏᴏᴜ ᴍᴀᴋᴇ, ᴛʜᴇ ʙᴇᴛᴛᴇʀ ʏᴏᴜʀ ꜱᴄᴏʀᴇ!"
+    },
+    "tap": {
+        "title": "⚡ ᴛᴀᴘ",
+        "desc": "ᴛᴇꜱᴛ ʏᴏᴜʀ ᴛᴀᴘᴘɪɴɢ ꜱᴘᴇᴇᴅ ɪɴ ᴛʜɪꜱ ꜰᴀꜱᴛ-ᴘᴀᴄᴇᴅ ɢᴀᴍᴇ.",
+        "cmds": """
+<tr><td><code>.tap</code></td><td>ꜱᴛᴀʀᴛ ᴛʜᴇ ᴛᴀᴘ ɢᴀᴍᴇ</td></tr>
+""",
+        "tip": "💡 ᴛᴀᴘ ᴀꜱ ꜰᴀꜱᴛ ᴀꜱ ʏᴏᴜ ᴄᴀɴ ɪɴ ᴛʜᴇ ɢɪᴠᴇɴ ᴛɪᴍᴇ!"
+    },
+    "crash": {
+        "title": "📉 ᴄʀᴀꜱʜ",
+        "desc": "ᴡᴀᴛᴄʜ ᴛʜᴇ ᴍᴜʟᴛɪᴘʟɪᴇʀ ɪɴᴄʀᴇᴀꜱᴇ ᴀɴᴅ ᴄᴀꜱʜ ᴏᴜᴛ ʙᴇꜰᴏʀᴇ ɪᴛ ᴄʀᴀꜱʜᴇꜱ!",
+        "cmds": """
+<tr><td><code>.crash &lt;bet&gt;</code></td><td>ꜱᴛᴀʀᴛ ᴄʀᴀꜱʜ ᴡɪᴛʜ ʙᴇᴛ</td></tr>
+<tr><td><code>.cashout</code></td><td>ᴄᴀꜱʜ ᴏᴜᴛ ʏᴏᴜʀ ᴡɪɴɴɪɴɢꜱ</td></tr>
+""",
+        "tip": "💡 ɪᴛ ᴄᴀɴ ᴄʀᴀꜱʜ ᴀᴛ ᴀɴʏ ᴛɪᴍᴇ! ᴅᴏɴ'ᴛ ʙᴇ ɢʀᴇᴇᴅʏ."
+    },
+    "jumble": {
+        "title": "🔀 ᴊᴜᴍʙʟᴇ",
+        "desc": "ᴜɴꜱᴄʀᴀᴍʙʟᴇ ᴛʜᴇ ᴊᴜᴍʙʟᴇᴅ ᴡᴏʀᴅꜱ ᴛᴏ ᴡɪɴ.",
+        "cmds": """
+<tr><td><code>.jumble</code></td><td>ꜱᴛᴀʀᴛ ᴀ ɴᴇᴡ ᴊᴜᴍʙʟᴇ ɢᴀᴍᴇ</td></tr>
+""",
+        "tip": "💡 ʙᴇ ᴛʜᴇ ꜰɪʀꜱᴛ ᴛᴏ ᴛʏᴘᴇ ᴛʜᴇ ᴄᴏʀʀᴇᴄᴛ ᴡᴏʀᴅ!"
+    },
+    "charades": {
+        "title": "🎭 ᴄʜᴀʀᴀᴅᴇꜱ",
+        "desc": "ɢᴜᴇꜱꜱ ᴛʜᴇ ᴡᴏʀᴅ ᴏʀ ᴍᴏᴠɪᴇ ʙᴀꜱᴇᴅ ᴏɴ ʜɪɴᴛꜱ.",
+        "cmds": """
+<tr><td><code>.charades</code></td><td>ꜱᴛᴀʀᴛ ᴛʜᴇ ᴄʜᴀʀᴀᴅᴇꜱ ɢᴀᴍᴇ</td></tr>
+""",
+        "tip": "💡 ʟɪꜱᴛᴇɴ ᴛᴏ ᴛʜᴇ ʜɪɴᴛꜱ ᴄᴀʀᴇꜰᴜʟʟʏ."
+    },
+    "wordchain": {
+        "title": "🔗 ᴡᴏʀᴅᴄʜᴀɪɴ",
+        "desc": "ᴛʜᴇ ʟᴀꜱᴛ ʟᴇᴛᴛᴇʀ ᴏꜰ ᴛʜᴇ ᴡᴏʀᴅ ꜱᴛᴀʀᴛꜱ ᴛʜᴇ ɴᴇxᴛ ᴡᴏʀᴅ.",
+        "cmds": """
+<tr><td><code>.wordchain &lt;word&gt;</code></td><td>ꜱᴛᴀʀᴛ ᴛʜᴇ ᴄʜᴀɪɴ</td></tr>
+""",
+        "tip": "💡 ᴇxᴀᴍᴘʟᴇ: ᴀᴘᴘʟᴇ -> ᴇʟᴇᴘʜᴀɴᴛ -> ᴛɪɢᴇʀ..."
+    },
+    "wordscramble": {
+        "title": "🔤 ᴡᴏʀᴅꜱᴄʀᴀᴍʙʟᴇ",
+        "desc": "ᴜɴꜱᴄʀᴀᴍʙʟᴇ ᴛʜᴇ ʟᴇᴛᴛᴇʀꜱ ᴛᴏ ꜰᴏʀᴍ ᴀ ᴡᴏʀᴅ.",
+        "cmds": """
+<tr><td><code>.ws</code></td><td>ꜱᴛᴀʀᴛ ᴡᴏʀᴅꜱᴄʀᴀᴍʙʟᴇ</td></tr>
+<tr><td><code>.wordscramble</code></td><td>ꜱᴛᴀʀᴛ ᴡᴏʀᴅꜱᴄʀᴀᴍʙʟᴇ</td></tr>
+""",
+        "tip": "💡 ꜱᴏᴍᴇᴛɪᴍᴇꜱ ᴛʜᴇ ᴡᴏʀᴅꜱ ᴀʀᴇ ᴛʀɪᴄᴋʏ!"
+    },
+    "hack": {
+        "title": "💻 ʜᴀᴄᴋ",
+        "desc": "ɢᴜᴇꜱꜱ ᴛʜᴇ ᴘᴀꜱꜱᴡᴏʀᴅ ʙʏ ᴛʀʏɪɴɢ ᴅɪꜰꜰᴇʀᴇɴᴛ ᴄᴏᴍʙɪɴᴀᴛɪᴏɴꜱ.",
+        "cmds": """
+<tr><td><code>.hack</code></td><td>ꜱᴛᴀʀᴛ ᴛʜᴇ ʜᴀᴄᴋ ɢᴀᴍᴇ</td></tr>
+""",
+        "tip": "💡 ʏᴏᴜ ɢᴇᴛ ʜɪɴᴛꜱ ᴏɴ ᴡʜɪᴄʜ ɴᴜᴍʙᴇʀꜱ ᴀʀᴇ ᴄᴏʀʀᴇᴄᴛ."
+    },
+    "card": {
+        "title": "🃏 ᴄᴀʀᴅ",
+        "desc": "ᴅʀᴀᴡ ᴀ ᴄᴀʀᴅ ᴀɴᴅ ꜱᴇᴇ ɪꜰ ʏᴏᴜ'ʀᴇ ʟᴜᴄᴋʏ.",
+        "cmds": """
+<tr><td><code>.card</code></td><td>ᴅʀᴀᴡ ᴀ ᴄᴀʀᴅ</td></tr>
+""",
+        "tip": "💡 ᴛʀʏ ʏᴏᴜʀ ʟᴜᴄᴋ ᴀɴᴅ ᴡɪɴ ʙɪɢ!"
+    },
+    "chess": {
+        "title": "♟️ ᴄʜᴇꜱꜱ",
+        "desc": "ᴘʟᴀʏ ᴄʜᴇꜱꜱ ᴀɢᴀɪɴꜱᴛ ᴛʜᴇ ʙᴏᴛ ᴏʀ ᴀ ꜰʀɪᴇɴᴅ.",
+        "cmds": """
+<tr><td><code>.chess</code></td><td>ꜱᴛᴀʀᴛ ᴀ ᴄʜᴇꜱꜱ ɢᴀᴍᴇ</td></tr>
+<tr><td><code>.move &lt;move&gt;</code></td><td>ᴍᴀᴋᴇ ᴀ ᴍᴏᴠᴇ</td></tr>
+""",
+        "tip": "💡 ᴜꜱᴇ ꜱᴛᴀɴᴅᴀʀᴅ ᴄʜᴇꜱꜱ ɴᴏᴛᴀᴛɪᴏɴ (ᴇ.ɢ., ᴇ2ᴇ4)."
+    },
+    "scribble": {
+        "title": "✏️ ꜱᴄʀɪʙʙʟᴇ",
+        "desc": "ᴅʀᴀᴡ ᴀɴᴅ ɢᴜᴇꜱꜱ ᴛʜᴇ ᴡᴏʀᴅ ɪɴ ᴀ ɢʀᴏᴜᴘ.",
+        "cmds": """
+<tr><td><code>.scribble</code></td><td>ꜱᴛᴀʀᴛ ᴀ ꜱᴄʀɪʙʙʟᴇ ɢᴀᴍᴇ</td></tr>
+""",
+        "tip": "💡 ᴏɴᴇ ᴘʟᴀʏᴇʀ ᴅʀᴀᴡꜱ, ᴏᴛʜᴇʀꜱ ɢᴜᴇꜱꜱ."
+    },
+    "subway": {
+        "title": "🏃 ꜱᴜʙᴡᴀʏ",
+        "desc": "ʀᴜɴ, ᴅᴏᴅɢᴇ, ᴀɴᴅ ᴄᴏʟʟᴇᴄᴛ ᴄᴏɪɴꜱ ɪɴ ᴛʜɪꜱ ᴇɴᴅʟᴇꜱꜱ ʀᴜɴɴᴇʀ.",
+        "cmds": """
+<tr><td><code>.subway</code></td><td>ꜱᴛᴀʀᴛ ᴀ ꜱᴜʙᴡᴀʏ ʀᴜɴ</td></tr>
+""",
+        "tip": "💡 ᴜꜱᴇ ᴀʀʀᴏᴡ ᴋᴇʏꜱ ᴛᴏ ᴍᴏᴠᴇ ʟᴇꜰᴛ ᴏʀ ʀɪɢʜᴛ."
+    },
+    "bet": {
+        "title": "🎰 ʙᴇᴛ",
+        "desc": "ᴘʟᴀᴄᴇ ᴀ ʙᴇᴛ ᴀɴᴅ ᴛᴇꜱᴛ ʏᴏᴜʀ ʟᴜᴄᴋ.",
+        "cmds": """
+<tr><td><code>.bet &lt;amount&gt;</code></td><td>ᴘʟᴀᴄᴇ ᴀ ʙᴇᴛ</td></tr>
+""",
+        "tip": "💡 ʙᴇᴛ ᴡɪꜱᴇʟʏ, ʏᴏᴜ ᴍɪɢʜᴛ ʟᴏꜱᴇ ɪᴛ ᴀʟʟ."
+    }
+}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  KEYBOARDS
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -527,6 +705,10 @@ _HELP_KB = InlineKeyboardMarkup([
         InlineKeyboardButton("💰 ᴇᴄᴏɴᴏᴍʏ", callback_data="elara:economy",
                              style=enums.ButtonStyle.SUCCESS),
         InlineKeyboardButton("🛡️ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ", callback_data="elara:management",
+                             style=enums.ButtonStyle.PRIMARY),
+    ],
+    [
+        InlineKeyboardButton("🎮 ɢᴀᴍᴇꜱ", callback_data="elara:games",
                              style=enums.ButtonStyle.PRIMARY),
     ],
     [InlineKeyboardButton("⌯ ʜᴏᴍᴇ ⌯", callback_data="elara:home",
@@ -582,6 +764,64 @@ def _mg_subpage_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("⬅️ ʙᴀᴄᴋ", callback_data="elara:management",
+                                 style=enums.ButtonStyle.PRIMARY),
+            InlineKeyboardButton("🏠 ʜᴏᴍᴇ", callback_data="elara:home",
+                                 style=enums.ButtonStyle.SUCCESS),
+            InlineKeyboardButton("✖ ᴄʟᴏꜱᴇ", callback_data="elara:close",
+                                 style=enums.ButtonStyle.DANGER),
+        ],
+    ])
+
+
+# 🎮 GAMES KEYBOARD (Matching the image layout)
+_GAMES_KB = InlineKeyboardMarkup([
+    [
+        InlineKeyboardButton("🃏 UNO", callback_data="elara:game_uno", style=enums.ButtonStyle.SUCCESS),
+        InlineKeyboardButton("💣 Mines", callback_data="elara:game_mines", style=enums.ButtonStyle.PRIMARY),
+    ],
+    [
+        InlineKeyboardButton("✊ RPS", callback_data="elara:game_rps", style=enums.ButtonStyle.SUCCESS),
+        InlineKeyboardButton("🔍 Wordseek", callback_data="elara:game_wordseek", style=enums.ButtonStyle.PRIMARY),
+    ],
+    [
+        InlineKeyboardButton("🔤 Wordgrid", callback_data="elara:game_wordgrid", style=enums.ButtonStyle.SUCCESS),
+        InlineKeyboardButton("⚡ Tap", callback_data="elara:game_tap", style=enums.ButtonStyle.PRIMARY),
+    ],
+    [
+        InlineKeyboardButton("📉 Crash", callback_data="elara:game_crash", style=enums.ButtonStyle.DANGER),
+        InlineKeyboardButton("🔀 Jumble", callback_data="elara:game_jumble", style=enums.ButtonStyle.PRIMARY),
+    ],
+    [
+        InlineKeyboardButton("🎭 Charades", callback_data="elara:game_charades", style=enums.ButtonStyle.SUCCESS),
+        InlineKeyboardButton("🔗 Wordchain", callback_data="elara:game_wordchain", style=enums.ButtonStyle.PRIMARY),
+    ],
+    [
+        InlineKeyboardButton("🔤 Wordscramble", callback_data="elara:game_wordscramble", style=enums.ButtonStyle.SUCCESS),
+        InlineKeyboardButton("💻 Hack", callback_data="elara:game_hack", style=enums.ButtonStyle.DANGER),
+    ],
+    [
+        InlineKeyboardButton("🃏 Card", callback_data="elara:game_card", style=enums.ButtonStyle.PRIMARY),
+        InlineKeyboardButton("♟️ Chess", callback_data="elara:game_chess", style=enums.ButtonStyle.SUCCESS),
+    ],
+    [
+        InlineKeyboardButton("✏️ Scribble", callback_data="elara:game_scribble", style=enums.ButtonStyle.PRIMARY),
+    ],
+    [
+        InlineKeyboardButton("🏃 Subway", callback_data="elara:game_subway", style=enums.ButtonStyle.SUCCESS),
+    ],
+    [
+        InlineKeyboardButton("🎰 Bet", callback_data="elara:game_bet", style=enums.ButtonStyle.DANGER),
+    ],
+    [
+        InlineKeyboardButton("⬅️ ʙᴀᴄᴋ", callback_data="elara:help", style=enums.ButtonStyle.PRIMARY),
+    ],
+])
+
+
+def _game_subpage_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("⬅️ ʙᴀᴄᴋ", callback_data="elara:games",
                                  style=enums.ButtonStyle.PRIMARY),
             InlineKeyboardButton("🏠 ʜᴏᴍᴇ", callback_data="elara:home",
                                  style=enums.ButtonStyle.SUCCESS),
@@ -714,8 +954,21 @@ async def help_handler(_, message: Message):
     await _send_rich(message.chat.id, _rich_help(), _HELP_KB)
 
 
+@bot.on_message(filters.command("games", prefixes=PREFIXES))
+async def games_handler(_, message: Message):
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    await _send_rich(message.chat.id, _rich_games(), _GAMES_KB)
+
+
 @bot.on_callback_query(filters.regex(
-    r"^elara:(home|help|about|social|ai|economy|management|"
+    r"^elara:(home|help|about|social|ai|economy|management|games|"
+    r"game_uno|game_mines|game_rps|game_wordseek|game_wordgrid|game_tap|"
+    r"game_crash|game_jumble|game_charades|game_wordchain|game_wordscramble|"
+    r"game_hack|game_card|game_chess|game_scribble|game_subway|game_bet|"
     r"mg_admin|mg_bans|mg_filters|mg_greetings|mg_locks|mg_pins|"
     r"mg_purges|mg_reports|mg_warnings|mg_tag|close)$"
 ))
@@ -766,6 +1019,20 @@ async def cb(_, q: CallbackQuery):
     if d == "management":
         await q.answer()
         await _edit_rich(q.message, _rich_management(), _MANAGEMENT_KB)
+        return
+
+    if d == "games":
+        await q.answer()
+        await _edit_rich(q.message, _rich_games(), _GAMES_KB)
+        return
+
+    if d.startswith("game_"):
+        game_key = d.split("_", 1)[1]
+        if game_key in _GAMES_DATA:
+            await q.answer()
+            data = _GAMES_DATA[game_key]
+            html = _rich_game_page(data["title"], data["desc"], data["cmds"], data["tip"])
+            await _edit_rich(q.message, html, _game_subpage_kb())
         return
 
     management_pages = {
