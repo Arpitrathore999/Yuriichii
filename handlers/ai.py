@@ -84,6 +84,8 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     "forceleavechain", "forceskipchain", "killchain",
     "chaininfo", "chainstats", "chaintop", "chainleaderboard",
     "chainhelp", "wordchainhelp", "playingchains", "games",
+    #Rpsgame
+    "rps", "joinrps", "rpsinfo", "rpscancel", "rpsstats", "rpstop", "rpshelp",
 ]
 
 
