@@ -1,10 +1,11 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  handlers/wordchain.py — 🔗 Word Chain Handlers (full)
+#  handlers/wordchain.py — 🔗 Word Chain Handlers (full, fixed)
 #  - Timeout ALWAYS eliminates
 #  - "ACCEPTED!" message + next player mention
 #  - Dynamic timer (40→35→30→25→20→10) & word-length (3→4→5→6→7→8)
 #  - Last player = winner
+#  - FIXED: _start_turn no longer cancels its own task
 # --------------------------------------------------------------------------------
 
 from __future__ import annotations
@@ -230,7 +231,7 @@ def _render_turn(game: WordChainGame, seconds_left: int) -> str:
                 f"🌪 <b>{ev['name']}:</b> <code>{ev.get('desc', '')}</code>"
             )
 
-    # ✅ Show dynamic min length
+    # Show dynamic min length
     min_len = game.current_min_len()
     extras.append(f"📏 <b>ᴍɪɴ ʟᴇɴɢᴛʜ:</b> <code>{min_len}</code> ʟᴇᴛᴛᴇʀꜱ")
 
@@ -427,6 +428,7 @@ async def _roll_chaos_event(game: WordChainGame):
 #  TURN MANAGEMENT
 # ══════════════════════════════════════════════════════════════════════════════
 async def _start_turn(chat_id: int, game: WordChainGame):
+    """✅ FIXED: no longer cancels its own task when called from _turn_timeout."""
     if game.status != "running":
         return
 
@@ -437,12 +439,18 @@ async def _start_turn(chat_id: int, game: WordChainGame):
 
     game.turn_started_by_player = current["user_id"]
 
-    # ✅ Dynamic timer
+    # Dynamic timer
     turn_secs = game.current_turn_seconds()
 
-    if game.turn_task and not game.turn_task.done():
+    # ✅ FIX: Don't cancel if we're inside the same task (called from timeout)
+    current_task = asyncio.current_task()
+    if (game.turn_task
+            and not game.turn_task.done()
+            and game.turn_task is not current_task):
         game.turn_task.cancel()
+    game.turn_task = None
 
+    # Render + send/edit turn message
     text = _render_turn(game, turn_secs)
     if game.board_message_id:
         edited = await _safe_edit(
@@ -458,6 +466,7 @@ async def _start_turn(chat_id: int, game: WordChainGame):
         if sent:
             game.board_message_id = sent.id
 
+    # Start new timer
     game.turn_task = asyncio.create_task(
         _turn_timeout(chat_id, game, current["user_id"], turn_secs)
     )
@@ -465,11 +474,11 @@ async def _start_turn(chat_id: int, game: WordChainGame):
 
 
 async def _turn_timeout(chat_id: int, game: WordChainGame, expected_player: int, seconds: int):
-    """✅ Timeout — eliminates player, advances to next alive player."""
+    """Timeout — eliminates player, advances to next alive player."""
     try:
         await asyncio.sleep(seconds)
 
-        # ✅ Acquire lock for atomic check-and-eliminate
+        # Acquire lock for atomic check-and-eliminate
         lock = _game_lock(chat_id)
         async with lock:
             if game.status != "running":
@@ -484,7 +493,7 @@ async def _turn_timeout(chat_id: int, game: WordChainGame, expected_player: int,
             p = game.get_player(expected_player) or {"name": "Player"}
             remaining = len(game.alive_players())
 
-        # Send elimination message outside lock
+        # Send elimination message
         await _safe_send(
             chat_id,
             f"❌ <b>ᴘʟᴀʏᴇʀ ᴇʟɪᴍɪɴᴀᴛᴇᴅ</b>\n\n"
@@ -502,7 +511,7 @@ async def _turn_timeout(chat_id: int, game: WordChainGame, expected_player: int,
             await _finish_game(chat_id, game, reason="ᴀʟʟ ᴘʟᴀʏᴇʀꜱ ᴇʟɪᴍɪɴᴀᴛᴇᴅ")
             return
 
-        # ✅ Advance to next alive player
+        # Advance to next alive player
         game.next_turn()
         await _start_turn(chat_id, game)
     except asyncio.CancelledError:
@@ -548,7 +557,6 @@ async def _finish_game(chat_id: int, game: WordChainGame, winner: dict = None, r
             print(f"[WordChain record] {type(e).__name__}: {e}", flush=True)
 
     if winner:
-        # ✅ Longest word with size
         text = (
             f"🎉 <b>ᴡᴇ ʜᴀᴠᴇ ᴀ ᴡɪɴɴᴇʀ!</b> 🎉\n\n"
             f"🏆 <b>ᴡɪɴɴᴇʀ:</b> {_mention(winner['user_id'], winner['name'])}\n"
@@ -1048,10 +1056,13 @@ async def wordchain_guess(_, message: Message):
         if not current or current["user_id"] != message.from_user.id:
             return
 
-        # ✅ CRITICAL: Cancel timer immediately on player input
-        if game.turn_task and not game.turn_task.done():
+        # Cancel timer immediately on player input
+        current_task = asyncio.current_task()
+        if (game.turn_task
+                and not game.turn_task.done()
+                and game.turn_task is not current_task):
             game.turn_task.cancel()
-            game.turn_task = None
+        game.turn_task = None
 
         ok, reason = game.validate_word(word, message.from_user.id)
         if not ok:
@@ -1076,7 +1087,7 @@ async def wordchain_guess(_, message: Message):
                 msg = f"❌ ɪɴᴠᴀʟɪᴅ ᴡᴏʀᴅ ({reason})"
             await _safe_reply(message, msg, parse_mode=ParseMode.HTML)
 
-            # ✅ Restart timer with current turn seconds
+            # Restart timer with current turn seconds
             restart_secs = game.current_turn_seconds()
             game.turn_task = asyncio.create_task(
                 _turn_timeout(message.chat.id, game, message.from_user.id, restart_secs)
@@ -1112,7 +1123,7 @@ async def wordchain_guess(_, message: Message):
 
         next_letter = word[-1].upper()
 
-        # ✅ ACCEPTED message with next player + progression info
+        # ACCEPTED message with next player + progression info
         new_min = game.current_min_len()
         new_time = game.current_turn_seconds()
         await _safe_reply(
