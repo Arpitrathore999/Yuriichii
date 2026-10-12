@@ -78,6 +78,12 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     "new4", "new5", "new6", "wordhelp", "wordseekhelp",
     "wordtop", "wordleaderboard", "wordstats", "mystats",
     "wordcancel", "wordhint",
+    # WordChain
+    "startchain", "joinchain", "leavechain", "fleechain",
+    "extendchain", "forcestartchain", "forcejoinchain",
+    "forceleavechain", "forceskipchain", "killchain",
+    "chaininfo", "chainstats", "chaintop", "chainleaderboard",
+    "chainhelp", "wordchainhelp", "playingchains",
 ]
 
 
