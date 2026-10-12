@@ -37,7 +37,6 @@ UPDATES_URL     = getattr(config, "UPDATES_URL", "")
 OWNER_URL       = getattr(config, "OWNER_URL", "")
 OWNER_ID        = getattr(config, "OWNER_ID", 0)
 
-# ✅ Hardcoded Start Image URL
 START_IMAGE_URL = "https://myimgs.org/storage/images/49868/26203.png"
 
 
@@ -110,10 +109,10 @@ def _rich_welcome(user) -> str:
 <table>
 <tr><th>ꜰᴇᴀᴛᴜʀᴇ</th><th>ᴅᴇᴛᴀɪʟꜱ</th></tr>
 <tr><td>🤖 <b>AI ᴄʜᴀᴛ</b></td><td>ɴᴀᴛᴜʀᴀʟ ᴀɪ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴꜱ</td></tr>
-<tr><td>🧠 <b>ᴍᴇᴍᴏʀʏ</b></td><td>ᴋᴇᴇᴘꜱ ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ</td></tr>
+<tr><td>🎮 <b>ɢᴀᴍᴇꜱ</b></td><td>5 ꜰᴜɴ ɢʀᴏᴜᴘ ɢᴀᴍᴇꜱ</td></tr>
 <tr><td>💕 <b>ꜱᴏᴄɪᴀʟ</b></td><td>ʜᴜɢ, ᴋɪꜱꜱ, ᴀɴᴅ ᴍᴀɴʏ ᴍᴏʀᴇ</td></tr>
 <tr><td>💰 <b>ᴇᴄᴏɴᴏᴍʏ</b></td><td>ʀᴏʙ, ᴋɪʟʟ, ᴛᴏᴘ ʀᴀɴᴋ</td></tr>
-<tr><td>⚡ <b>ꜰᴀꜱᴛ</b></td><td>ǫᴜɪᴄᴋ ʀᴇꜱᴘᴏɴꜱᴇꜱ</td></tr>
+<tr><td>🤫 <b>ᴡʜɪꜱᴘᴇʀ</b></td><td>ᴘʀɪᴠᴀᴛᴇ ᴏɴᴇ-ᴛɪᴍᴇ ᴍᴇꜱꜱᴀɢᴇꜱ</td></tr>
 </table>
 </details>
 
@@ -154,11 +153,11 @@ def _rich_help() -> str:
 
 <table>
 <tr><th>ᴄᴀᴛᴇɢᴏʀʏ</th><th>ᴅᴇꜱᴄʀɪᴘᴛɪᴏɴ</th></tr>
-<tr><td>🤖 <b>AI</b></td><td>ᴄʜᴀᴛ, ɪᴍᴀɢᴇ ɢᴇɴᴇʀᴀᴛɪᴏɴ</td></tr>
+<tr><td>🤖 <b>AI & WHISPER</b></td><td>ᴄʜᴀᴛ, ᴡʜɪꜱᴘᴇʀ</td></tr>
+<tr><td>🎮 <b>ɢᴀᴍᴇꜱ</b></td><td>5 ꜰᴜɴ ɢʀᴏᴜᴘ ɢᴀᴍᴇꜱ</td></tr>
 <tr><td>💕 <b>ꜱᴏᴄɪᴀʟ</b></td><td>ꜰᴜɴ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴꜱ</td></tr>
 <tr><td>💰 <b>ᴇᴄᴏɴᴏᴍʏ</b></td><td>ᴇᴅᴏʟʟᴇʀꜱ, ʀᴏʙ, ᴋɪʟʟ, ᴛᴏᴘ</td></tr>
 <tr><td>🛡️ <b>ᴍᴀɴᴀɢᴇᴍᴇɴᴛ</b></td><td>ɢʀᴏᴜᴘ ᴀᴅᴍɪɴ ᴛᴏᴏʟꜱ</td></tr>
-<tr><td>🎮 <b>ɢᴀᴍᴇꜱ</b></td><td>ꜰᴜɴ ɢᴀᴍᴇꜱ ᴛᴏ ᴘʟᴀʏ</td></tr>
 </table>
 </details>
 
@@ -167,12 +166,12 @@ def _rich_help() -> str:
 
 
 def _rich_ai() -> str:
-    return """🤖 <b>ᴇʟᴀʀᴀ ᴀɪ ᴄᴏᴍᴍᴀɴᴅꜱ</b>
+    return """🤖 <b>ᴇʟᴀʀᴀ ᴀɪ & ᴡʜɪꜱᴘᴇʀ</b>
 
 <i>ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code></i>
 
 <details open>
-<summary>💬 ᴀʟʟ ᴄᴏᴍᴍᴀɴᴅꜱ</summary>
+<summary>💬 ᴀɪ ᴄᴏᴍᴍᴀɴᴅꜱ</summary>
 
 <table>
 <tr><th>ᴄᴏᴍᴍᴀɴᴅ</th><th>ᴋᴀᴀᴍ</th></tr>
@@ -183,6 +182,22 @@ def _rich_ai() -> str:
 <tr><td>ʀᴇᴘʟʏ ᴛᴏ ᴇʟᴀʀᴀ</td><td>ᴄᴏɴᴛᴇxᴛ ᴄʜᴀᴛ</td></tr>
 </table>
 </details>
+
+<details open>
+<summary>🤫 ᴡʜɪꜱᴘᴇʀ ꜱʏꜱᴛᴇᴍ</summary>
+
+<table>
+<tr><th>ᴜꜱᴀɢᴇ</th><th>ᴋᴀᴀᴍ</th></tr>
+<tr><td><code>@ItzElaraBot msg @username</code></td><td>ᴡʜɪꜱᴘᴇʀ ʙʏ ᴜꜱᴇʀɴᴀᴍᴇ</td></tr>
+<tr><td><code>@ItzElaraBot msg 123456789</code></td><td>ᴡʜɪꜱᴘᴇʀ ʙʏ ᴜꜱᴇʀ ID</td></tr>
+<tr><td>👁️ <b>ʀᴇᴀᴅ ᴄᴏɴᴛᴇɴᴛ</b></td><td>ʀᴇᴄᴇɪᴠᴇʀ ᴏɴʟʏ ᴏɴᴄᴇ</td></tr>
+</table>
+</details>
+
+<blockquote>🔐 <b>ᴡʜɪꜱᴘᴇʀ ʀᴜʟᴇꜱ:</b>
+• ꜱᴇɴᴅᴇʀ → ᴜɴʟɪᴍɪᴛᴇᴅ ʀᴇᴀᴅꜱ
+• ʀᴇᴄᴇɪᴠᴇʀ → ᴏɴᴇ ᴛɪᴍᴇ ᴏɴʟʏ
+• ᴀꜰᴛᴇʀ ʀᴇᴀᴅ → ᴀᴜᴛᴏ ᴅᴇʟᴇᴛᴇᴅ 🗑️</blockquote>
 
 <blockquote>🧠 ᴇʟᴀʀᴀ ʀᴇᴍᴇᴍʙᴇʀꜱ ʀᴇᴄᴇɴᴛ ᴄᴏɴᴛᴇxᴛ ꜰᴏʀ ɴᴀᴛᴜʀᴀʟ ᴄʜᴀᴛꜱ.</blockquote>
 """
@@ -305,8 +320,6 @@ def _rich_management() -> str:
 <blockquote>ᴛᴀᴘ ᴀ ᴄᴀᴛᴇɢᴏʀʏ ʙᴇʟᴏᴡ ᴛᴏ ᴠɪᴇᴡ ᴄᴏᴍᴍᴀɴᴅꜱ 👇</blockquote>
 """
 
-
-# ── Sub-page builder ──────────────────────────────────────────────────────────
 
 def _management_page(title: str, intro: str, rows_html: str, tip: str = "") -> str:
     tip_block = f"\n<blockquote>{tip}</blockquote>\n" if tip else ""
@@ -478,9 +491,9 @@ def _rich_about() -> str:
 <tr><th>ꜰᴇᴀᴛᴜʀᴇ</th><th>ᴅᴇᴛᴀɪʟꜱ</th></tr>
 <tr><td>💬 ᴄʜᴀᴛ</td><td>ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀꜱᴀᴛɪᴏɴ</td></tr>
 <tr><td>🧠 ᴍᴇᴍᴏʀʏ</td><td>ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ</td></tr>
-<tr><td>💕 ꜱᴏᴄɪᴀʟ</td><td>ꜰᴜɴ ɢʀᴏᴜᴘ ᴄᴏᴍᴍᴀɴᴅꜱ</td></tr>
+<tr><td>🎮 ɢᴀᴍᴇꜱ</td><td>5 ꜰᴜɴ ɢʀᴏᴜᴘ ɢᴀᴍᴇꜱ</td></tr>
 <tr><td>💰 ᴇᴄᴏɴᴏᴍʏ</td><td>ᴇᴅᴏʟʟᴇʀꜱ ɢᴀᴍᴇ</td></tr>
-<tr><td>⚡ ꜱᴘᴇᴇᴅ</td><td>ꜰᴀꜱᴛ ʀᴇꜱᴘᴏɴꜱᴇꜱ</td></tr>
+<tr><td>🤫 ᴡʜɪꜱᴘᴇʀ</td><td>ᴘʀɪᴠᴀᴛᴇ ᴍᴇꜱꜱᴀɢᴇꜱ</td></tr>
 </table>
 </details>
 
@@ -489,180 +502,134 @@ def _rich_about() -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  🎮 GAMES SECTION
+#  🎮 GAMES — ACTUAL ELARA GAMES
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _rich_games() -> str:
-    return """🎮 <b>ɢᴀᴍᴇ ᴄᴏᴍᴍᴀɴᴅꜱ</b> 🎮
+    return """🎮 <b>ᴇʟᴀʀᴀ ɢᴀᴍᴇꜱ</b> 🎮
 
 ᴄʜᴏᴏꜱᴇ ᴀ ɢᴀᴍᴇ ʙᴇʟᴏᴡ ᴛᴏ ꜱᴇᴇ ʜᴏᴡ ᴛᴏ ᴘʟᴀʏ ᴀɴᴅ ɪᴛꜱ ᴄᴏᴍᴍᴀɴᴅꜱ!
-👇
+
+<details open>
+<summary>🎯 ᴀᴠᴀɪʟᴀʙʟᴇ ɢᴀᴍᴇꜱ</summary>
+
+<table>
+<tr><th>ɢᴀᴍᴇ</th><th>ᴅᴇꜱᴄʀɪᴘᴛɪᴏɴ</th></tr>
+<tr><td>🎯 <b>ᴡᴏʀᴅꜱᴇᴇᴋ</b></td><td>ɢᴜᴇꜱꜱ ᴛʜᴇ ʜɪᴅᴅᴇɴ ᴡᴏʀᴅ</td></tr>
+<tr><td>🔗 <b>ᴡᴏʀᴅ ᴄʜᴀɪɴ</b></td><td>ᴄʜᴀɪɴ ᴡᴏʀᴅꜱ ʙʏ ʟᴀꜱᴛ ʟᴇᴛᴛᴇʀ</td></tr>
+<tr><td>🎮 <b>ᴛɪᴄ ᴛᴀᴄ ᴛᴏᴇ</b></td><td>ᴄʟᴀꜱꜱɪᴄ xᴏ ɢᴀᴍᴇ</td></tr>
+<tr><td>🛸 <b>ʜᴀᴄᴋ</b></td><td>ᴄʀᴀᴄᴋ ᴛʜᴇ ꜱᴇᴄʀᴇᴛ ᴄᴏᴅᴇ</td></tr>
+<tr><td>🃏 <b>ᴄᴀʀᴅ ɢᴀᴍᴇ</b></td><td>ʜɪɢʜᴇꜱᴛ ᴄᴀʀᴅ ᴡɪɴꜱ</td></tr>
+</table>
+</details>
+
+<i>ᴛᴀᴘ ᴀ ɢᴀᴍᴇ ʙᴇʟᴏᴡ ᴛᴏ ᴠɪᴇᴡ ᴄᴏᴍᴍᴀɴᴅꜱ</i> 👇
 """
 
-def _rich_game_page(title: str, desc: str, cmds: str, tip: str = "") -> str:
+
+def _game_page(title: str, desc: str, rows_html: str, tip: str = "") -> str:
     tip_block = f"\n<blockquote>{tip}</blockquote>\n" if tip else ""
     return f"""🎮 <b>{title}</b>
 
 <i>{desc}</i>
 
 <details open>
-<summary>📖 ᴄᴏᴍᴍᴀɴᴅꜱ & ʜᴏᴡ ᴛᴏ ᴘʟᴀʏ</summary>
+<summary>📖 ᴀᴠᴀɪʟᴀʙʟᴇ ᴄᴏᴍᴍᴀɴᴅꜱ</summary>
 
 <table>
 <tr><th>ᴄᴏᴍᴍᴀɴᴅ</th><th>ᴋᴀᴀᴍ</th></tr>
-{cmds}
+{rows_html}
 </table>
 </details>
 {tip_block}"""
 
 
-_GAMES_DATA = {
-    "uno": {
-        "title": "🃏 ᴜɴᴏ",
-        "desc": "ᴄʟᴀꜱꜱɪᴄ ᴜɴᴏ ᴄᴀʀᴅ ɢᴀᴍᴇ. ᴘʟᴀʏ ᴡɪᴛʜ ꜰʀɪᴇɴᴅꜱ ɪɴ ɢʀᴏᴜᴘ!",
-        "cmds": """
-<tr><td><code>.uno</code></td><td>ꜱᴛᴀʀᴛ ᴀ ɴᴇᴡ ᴜɴᴏ ɢᴀᴍᴇ</td></tr>
-<tr><td><code>.join</code></td><td>ᴊᴏɪɴ ᴛʜᴇ ᴏɴɢᴏɪɴɢ ɢᴀᴍᴇ</td></tr>
-<tr><td><code>.leave</code></td><td>ʟᴇᴀᴠᴇ ᴛʜᴇ ɢᴀᴍᴇ</td></tr>
-<tr><td><code>.uno end</code></td><td>ꜰᴏʀᴄᴇ ᴇɴᴅ ᴛʜᴇ ɢᴀᴍᴇ</td></tr>
-""",
-        "tip": "💡 ᴍɪɴɪᴍᴜᴍ 2 ᴘʟᴀʏᴇʀꜱ ʀᴇǫᴜɪʀᴇᴅ."
-    },
-    "mines": {
-        "title": "💣 ᴍɪɴᴇꜱ",
-        "desc": "ᴜɴᴄᴏᴠᴇʀ ꜱᴀꜰᴇ ᴛɪʟᴇꜱ ᴀɴᴅ ᴀᴠᴏɪᴅ ᴛʜᴇ ᴍɪɴᴇꜱ!",
-        "cmds": """
-<tr><td><code>.mines</code></td><td>ꜱᴛᴀʀᴛ ᴀ ɴᴇᴡ ᴍɪɴᴇꜱ ɢᴀᴍᴇ</td></tr>
-<tr><td><code>.mines &lt;bet&gt;</code></td><td>ᴘʟᴀʏ ᴡɪᴛʜ ᴀ ꜱᴘᴇᴄɪꜰɪᴄ ʙᴇᴛ</td></tr>
-""",
-        "tip": "💡 ᴛʜᴇ ʟᴏɴɢᴇʀ ʏᴏᴜ ᴘʟᴀʏ, ᴛʜᴇ ʜɪɢʜᴇʀ ᴛʜᴇ ᴍᴜʟᴛɪᴘʟɪᴇʀ!"
-    },
-    "rps": {
-        "title": "✊ ʀᴘꜱ",
-        "desc": "ʀᴏᴄᴋ, ᴘᴀᴘᴇʀ, ꜱᴄɪꜱꜱᴏʀꜱ ᴀɢᴀɪɴꜱᴛ ᴛʜᴇ ʙᴏᴛ ᴏʀ ᴀ ꜰʀɪᴇɴᴅ.",
-        "cmds": """
-<tr><td><code>.rps rock</code></td><td>ᴘʟᴀʏ ʀᴏᴄᴋ</td></tr>
-<tr><td><code>.rps paper</code></td><td>ᴘʟᴀʏ ᴘᴀᴘᴇʀ</td></tr>
-<tr><td><code>.rps scissors</code></td><td>ᴘʟᴀʏ ꜱᴄɪꜱꜱᴏʀꜱ</td></tr>
-""",
-        "tip": "💡 ʏᴏᴜ ᴄᴀɴ ᴀʟꜱᴏ ᴜꜱᴇ ꜱʜᴏʀᴛ ꜰᴏʀᴍꜱ: <code>.rps r</code>, <code>.rps p</code>, <code>.rps s</code>."
-    },
-    "wordseek": {
-        "title": "🔍 ᴡᴏʀᴅꜱᴇᴇᴋ",
-        "desc": "ꜰɪɴᴅ ʜɪᴅᴅᴇɴ ᴡᴏʀᴅꜱ ɪɴ ᴀ ɢʀɪᴅ ᴀɴᴅ ᴛᴇꜱᴛ ʏᴏᴜʀ ᴠᴏᴄᴀʙᴜʟᴀʀʏ.",
-        "cmds": """
-<tr><td><code>.wordseek</code></td><td>ꜱᴛᴀʀᴛ ᴀ ɴᴇᴡ ᴡᴏʀᴅꜱᴇᴇᴋ ɢᴀᴍᴇ</td></tr>
-""",
-        "tip": "💡 ʏᴏᴜ ʜᴀᴠᴇ ᴀ ᴛɪᴍᴇ ʟɪᴍɪᴛ ᴛᴏ ꜰɪɴᴅ ᴀʟʟ ᴡᴏʀᴅꜱ!"
-    },
-    "wordgrid": {
-        "title": "🔤 ᴡᴏʀᴅɢʀɪᴅ",
-        "desc": "ᴄʀᴇᴀᴛᴇ ᴀꜱ ᴍᴀɴʏ ᴡᴏʀᴅꜱ ᴀꜱ ʏᴏᴜ ᴄᴀɴ ꜰʀᴏᴍ ᴛʜᴇ ɢɪᴠᴇɴ ʟᴇᴛᴛᴇʀꜱ.",
-        "cmds": """
-<tr><td><code>.wordgrid</code></td><td>ꜱᴛᴀʀᴛ ᴀ ɴᴇᴡ ᴡᴏʀᴅɢʀɪᴅ ɢᴀᴍᴇ</td></tr>
-""",
-        "tip": "💡 ᴛʜᴇ ᴍᴏʀᴇ ᴡᴏʀᴅꜱ ʏᴏᴜ ᴍᴀᴋᴇ, ᴛʜᴇ ʙᴇᴛᴛᴇʀ ʏᴏᴜʀ ꜱᴄᴏʀᴇ!"
-    },
-    "tap": {
-        "title": "⚡ ᴛᴀᴘ",
-        "desc": "ᴛᴇꜱᴛ ʏᴏᴜʀ ᴛᴀᴘᴘɪɴɢ ꜱᴘᴇᴇᴅ ɪɴ ᴛʜɪꜱ ꜰᴀꜱᴛ-ᴘᴀᴄᴇᴅ ɢᴀᴍᴇ.",
-        "cmds": """
-<tr><td><code>.tap</code></td><td>ꜱᴛᴀʀᴛ ᴛʜᴇ ᴛᴀᴘ ɢᴀᴍᴇ</td></tr>
-""",
-        "tip": "💡 ᴛᴀᴘ ᴀꜱ ꜰᴀꜱᴛ ᴀꜱ ʏᴏᴜ ᴄᴀɴ ɪɴ ᴛʜᴇ ɢɪᴠᴇɴ ᴛɪᴍᴇ!"
-    },
-    "crash": {
-        "title": "📉 ᴄʀᴀꜱʜ",
-        "desc": "ᴡᴀᴛᴄʜ ᴛʜᴇ ᴍᴜʟᴛɪᴘʟɪᴇʀ ɪɴᴄʀᴇᴀꜱᴇ ᴀɴᴅ ᴄᴀꜱʜ ᴏᴜᴛ ʙᴇꜰᴏʀᴇ ɪᴛ ᴄʀᴀꜱʜᴇꜱ!",
-        "cmds": """
-<tr><td><code>.crash &lt;bet&gt;</code></td><td>ꜱᴛᴀʀᴛ ᴄʀᴀꜱʜ ᴡɪᴛʜ ʙᴇᴛ</td></tr>
-<tr><td><code>.cashout</code></td><td>ᴄᴀꜱʜ ᴏᴜᴛ ʏᴏᴜʀ ᴡɪɴɴɪɴɢꜱ</td></tr>
-""",
-        "tip": "💡 ɪᴛ ᴄᴀɴ ᴄʀᴀꜱʜ ᴀᴛ ᴀɴʏ ᴛɪᴍᴇ! ᴅᴏɴ'ᴛ ʙᴇ ɢʀᴇᴇᴅʏ."
-    },
-    "jumble": {
-        "title": "🔀 ᴊᴜᴍʙʟᴇ",
-        "desc": "ᴜɴꜱᴄʀᴀᴍʙʟᴇ ᴛʜᴇ ᴊᴜᴍʙʟᴇᴅ ᴡᴏʀᴅꜱ ᴛᴏ ᴡɪɴ.",
-        "cmds": """
-<tr><td><code>.jumble</code></td><td>ꜱᴛᴀʀᴛ ᴀ ɴᴇᴡ ᴊᴜᴍʙʟᴇ ɢᴀᴍᴇ</td></tr>
-""",
-        "tip": "💡 ʙᴇ ᴛʜᴇ ꜰɪʀꜱᴛ ᴛᴏ ᴛʏᴘᴇ ᴛʜᴇ ᴄᴏʀʀᴇᴄᴛ ᴡᴏʀᴅ!"
-    },
-    "charades": {
-        "title": "🎭 ᴄʜᴀʀᴀᴅᴇꜱ",
-        "desc": "ɢᴜᴇꜱꜱ ᴛʜᴇ ᴡᴏʀᴅ ᴏʀ ᴍᴏᴠɪᴇ ʙᴀꜱᴇᴅ ᴏɴ ʜɪɴᴛꜱ.",
-        "cmds": """
-<tr><td><code>.charades</code></td><td>ꜱᴛᴀʀᴛ ᴛʜᴇ ᴄʜᴀʀᴀᴅᴇꜱ ɢᴀᴍᴇ</td></tr>
-""",
-        "tip": "💡 ʟɪꜱᴛᴇɴ ᴛᴏ ᴛʜᴇ ʜɪɴᴛꜱ ᴄᴀʀᴇꜰᴜʟʟʏ."
-    },
-    "wordchain": {
-        "title": "🔗 ᴡᴏʀᴅᴄʜᴀɪɴ",
-        "desc": "ᴛʜᴇ ʟᴀꜱᴛ ʟᴇᴛᴛᴇʀ ᴏꜰ ᴛʜᴇ ᴡᴏʀᴅ ꜱᴛᴀʀᴛꜱ ᴛʜᴇ ɴᴇxᴛ ᴡᴏʀᴅ.",
-        "cmds": """
-<tr><td><code>.wordchain &lt;word&gt;</code></td><td>ꜱᴛᴀʀᴛ ᴛʜᴇ ᴄʜᴀɪɴ</td></tr>
-""",
-        "tip": "💡 ᴇxᴀᴍᴘʟᴇ: ᴀᴘᴘʟᴇ -> ᴇʟᴇᴘʜᴀɴᴛ -> ᴛɪɢᴇʀ..."
-    },
-    "wordscramble": {
-        "title": "🔤 ᴡᴏʀᴅꜱᴄʀᴀᴍʙʟᴇ",
-        "desc": "ᴜɴꜱᴄʀᴀᴍʙʟᴇ ᴛʜᴇ ʟᴇᴛᴛᴇʀꜱ ᴛᴏ ꜰᴏʀᴍ ᴀ ᴡᴏʀᴅ.",
-        "cmds": """
-<tr><td><code>.ws</code></td><td>ꜱᴛᴀʀᴛ ᴡᴏʀᴅꜱᴄʀᴀᴍʙʟᴇ</td></tr>
-<tr><td><code>.wordscramble</code></td><td>ꜱᴛᴀʀᴛ ᴡᴏʀᴅꜱᴄʀᴀᴍʙʟᴇ</td></tr>
-""",
-        "tip": "💡 ꜱᴏᴍᴇᴛɪᴍᴇꜱ ᴛʜᴇ ᴡᴏʀᴅꜱ ᴀʀᴇ ᴛʀɪᴄᴋʏ!"
-    },
-    "hack": {
-        "title": "💻 ʜᴀᴄᴋ",
-        "desc": "ɢᴜᴇꜱꜱ ᴛʜᴇ ᴘᴀꜱꜱᴡᴏʀᴅ ʙʏ ᴛʀʏɪɴɢ ᴅɪꜰꜰᴇʀᴇɴᴛ ᴄᴏᴍʙɪɴᴀᴛɪᴏɴꜱ.",
-        "cmds": """
-<tr><td><code>.hack</code></td><td>ꜱᴛᴀʀᴛ ᴛʜᴇ ʜᴀᴄᴋ ɢᴀᴍᴇ</td></tr>
-""",
-        "tip": "💡 ʏᴏᴜ ɢᴇᴛ ʜɪɴᴛꜱ ᴏɴ ᴡʜɪᴄʜ ɴᴜᴍʙᴇʀꜱ ᴀʀᴇ ᴄᴏʀʀᴇᴄᴛ."
-    },
-    "card": {
-        "title": "🃏 ᴄᴀʀᴅ",
-        "desc": "ᴅʀᴀᴡ ᴀ ᴄᴀʀᴅ ᴀɴᴅ ꜱᴇᴇ ɪꜰ ʏᴏᴜ'ʀᴇ ʟᴜᴄᴋʏ.",
-        "cmds": """
-<tr><td><code>.card</code></td><td>ᴅʀᴀᴡ ᴀ ᴄᴀʀᴅ</td></tr>
-""",
-        "tip": "💡 ᴛʀʏ ʏᴏᴜʀ ʟᴜᴄᴋ ᴀɴᴅ ᴡɪɴ ʙɪɢ!"
-    },
-    "chess": {
-        "title": "♟️ ᴄʜᴇꜱꜱ",
-        "desc": "ᴘʟᴀʏ ᴄʜᴇꜱꜱ ᴀɢᴀɪɴꜱᴛ ᴛʜᴇ ʙᴏᴛ ᴏʀ ᴀ ꜰʀɪᴇɴᴅ.",
-        "cmds": """
-<tr><td><code>.chess</code></td><td>ꜱᴛᴀʀᴛ ᴀ ᴄʜᴇꜱꜱ ɢᴀᴍᴇ</td></tr>
-<tr><td><code>.move &lt;move&gt;</code></td><td>ᴍᴀᴋᴇ ᴀ ᴍᴏᴠᴇ</td></tr>
-""",
-        "tip": "💡 ᴜꜱᴇ ꜱᴛᴀɴᴅᴀʀᴅ ᴄʜᴇꜱꜱ ɴᴏᴛᴀᴛɪᴏɴ (ᴇ.ɢ., ᴇ2ᴇ4)."
-    },
-    "scribble": {
-        "title": "✏️ ꜱᴄʀɪʙʙʟᴇ",
-        "desc": "ᴅʀᴀᴡ ᴀɴᴅ ɢᴜᴇꜱꜱ ᴛʜᴇ ᴡᴏʀᴅ ɪɴ ᴀ ɢʀᴏᴜᴘ.",
-        "cmds": """
-<tr><td><code>.scribble</code></td><td>ꜱᴛᴀʀᴛ ᴀ ꜱᴄʀɪʙʙʟᴇ ɢᴀᴍᴇ</td></tr>
-""",
-        "tip": "💡 ᴏɴᴇ ᴘʟᴀʏᴇʀ ᴅʀᴀᴡꜱ, ᴏᴛʜᴇʀꜱ ɢᴜᴇꜱꜱ."
-    },
-    "subway": {
-        "title": "🏃 ꜱᴜʙᴡᴀʏ",
-        "desc": "ʀᴜɴ, ᴅᴏᴅɢᴇ, ᴀɴᴅ ᴄᴏʟʟᴇᴄᴛ ᴄᴏɪɴꜱ ɪɴ ᴛʜɪꜱ ᴇɴᴅʟᴇꜱꜱ ʀᴜɴɴᴇʀ.",
-        "cmds": """
-<tr><td><code>.subway</code></td><td>ꜱᴛᴀʀᴛ ᴀ ꜱᴜʙᴡᴀʏ ʀᴜɴ</td></tr>
-""",
-        "tip": "💡 ᴜꜱᴇ ᴀʀʀᴏᴡ ᴋᴇʏꜱ ᴛᴏ ᴍᴏᴠᴇ ʟᴇꜰᴛ ᴏʀ ʀɪɢʜᴛ."
-    },
-    "bet": {
-        "title": "🎰 ʙᴇᴛ",
-        "desc": "ᴘʟᴀᴄᴇ ᴀ ʙᴇᴛ ᴀɴᴅ ᴛᴇꜱᴛ ʏᴏᴜʀ ʟᴜᴄᴋ.",
-        "cmds": """
-<tr><td><code>.bet &lt;amount&gt;</code></td><td>ᴘʟᴀᴄᴇ ᴀ ʙᴇᴛ</td></tr>
-""",
-        "tip": "💡 ʙᴇᴛ ᴡɪꜱᴇʟʏ, ʏᴏᴜ ᴍɪɢʜᴛ ʟᴏꜱᴇ ɪᴛ ᴀʟʟ."
-    }
-}
+def _rich_game_wordseek() -> str:
+    return _game_page(
+        "🎯 ᴡᴏʀᴅꜱᴇᴇᴋ",
+        "ɢᴜᴇꜱꜱ ᴛʜᴇ ʜɪᴅᴅᴇɴ ᴡᴏʀᴅ ʟᴇᴛᴛᴇʀ ʙʏ ʟᴇᴛᴛᴇʀ. ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td><code>/new4</code></td><td>ꜱᴛᴀʀᴛ 4-ʟᴇᴛᴛᴇʀ ɢᴀᴍᴇ</td></tr>
+<tr><td><code>/new5</code></td><td>ꜱᴛᴀʀᴛ 5-ʟᴇᴛᴛᴇʀ ɢᴀᴍᴇ</td></tr>
+<tr><td><code>/new6</code></td><td>ꜱᴛᴀʀᴛ 6-ʟᴇᴛᴛᴇʀ ɢᴀᴍᴇ</td></tr>
+<tr><td>ᴛʏᴘᴇ ᴡᴏʀᴅ</td><td>ɢᴜᴇꜱꜱ ɪɴ ɢʀᴏᴜᴘ</td></tr>
+<tr><td><code>/wordhint</code></td><td>ɢᴇᴛ ᴀ ʜɪɴᴛ (-5 ᴘᴛꜱ)</td></tr>
+<tr><td><code>/wordcancel</code></td><td>ᴄᴀɴᴄᴇʟ ᴀᴄᴛɪᴠᴇ ɢᴀᴍᴇ</td></tr>
+<tr><td><code>/wordtop</code></td><td>ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ ᴅᴇᴋʜᴏ</td></tr>
+<tr><td><code>/wordstats</code></td><td>ʏᴏᴜʀ ꜱᴛᴀᴛꜱ</td></tr>
+<tr><td><code>/wordhelp</code></td><td>ɢᴀᴍᴇ ʜᴇʟᴘ</td></tr>""",
+        "🎨 ᴛɪʟᴇ ᴍᴇᴀɴɪɴɢꜱ: 🟩 ᴄᴏʀʀᴇᴄᴛ ᴘᴏꜱɪᴛɪᴏɴ • 🟨 ᴡʀᴏɴɢ ᴘᴏꜱɪᴛɪᴏɴ • 🟥 ɴᴏᴛ ɪɴ ᴡᴏʀᴅ"
+    )
+
+
+def _rich_game_wordchain() -> str:
+    return _game_page(
+        "🔗 ᴡᴏʀᴅ ᴄʜᴀɪɴ",
+        "ᴄʜᴀɪɴ ᴡᴏʀᴅꜱ ʙʏ ᴜꜱɪɴɢ ᴛʜᴇ ʟᴀꜱᴛ ʟᴇᴛᴛᴇʀ ᴏꜰ ᴛʜᴇ ᴘʀᴇᴠɪᴏᴜꜱ ᴡᴏʀᴅ. ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td><code>/startchain</code></td><td>ꜱᴛᴀʀᴛ ᴄʟᴀꜱꜱɪᴄ ɢᴀᴍᴇ</td></tr>
+<tr><td><code>/startchain elimination</code></td><td>ᴇʟɪᴍɪɴᴀᴛɪᴏɴ ᴍᴏᴅᴇ</td></tr>
+<tr><td><code>/startchain mixed</code></td><td>ᴍɪxᴇᴅ ᴍᴏᴅᴇ</td></tr>
+<tr><td><code>/startchain banned</code></td><td>ʙᴀɴɴᴇᴅ ʟᴇᴛᴛᴇʀꜱ</td></tr>
+<tr><td><code>/startchain chosen</code></td><td>ᴄʜᴏꜱᴇɴ ꜰɪʀꜱᴛ ʟᴇᴛᴛᴇʀ</td></tr>
+<tr><td><code>/startchain random</code></td><td>ʀᴀɴᴅᴏᴍ ꜰɪʀꜱᴛ ʟᴇᴛᴛᴇʀ</td></tr>
+<tr><td><code>/startchain required</code></td><td>ʀᴇQᴜɪʀᴇᴅ ʟᴇᴛᴛᴇʀ</td></tr>
+<tr><td><code>/startchain hard</code></td><td>ʜᴀʀᴅ ᴍᴏᴅᴇ</td></tr>
+<tr><td><code>/startchain chaos</code></td><td>ᴄʜᴀᴏꜱ ᴍᴏᴅᴇ</td></tr>
+<tr><td><code>/joinchain</code></td><td>ᴊᴏɪɴ ʟᴏʙʙʏ</td></tr>
+<tr><td><code>/leavechain</code></td><td>ʟᴇᴀᴠᴇ ʟᴏʙʙʏ/ɢᴀᴍᴇ</td></tr>
+<tr><td><code>/forcestartchain</code></td><td>ꜰᴏʀᴄᴇ ꜱᴛᴀʀᴛ</td></tr>
+<tr><td><code>/killchain</code></td><td>ᴄᴀɴᴄᴇʟ ɢᴀᴍᴇ</td></tr>
+<tr><td><code>/chaininfo</code></td><td>ɢᴀᴍᴇ ɪɴꜰᴏ</td></tr>
+<tr><td><code>/chainstats</code></td><td>ʏᴏᴜʀ ꜱᴛᴀᴛꜱ</td></tr>
+<tr><td><code>/chaintop</code></td><td>ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ</td></tr>
+<tr><td><code>/chainhelp</code></td><td>ɢᴀᴍᴇ ʜᴇʟᴘ</td></tr>""",
+        "⏱ ᴛɪᴍᴇʀ ʀᴇᴅᴜᴄᴇꜱ ᴀꜱ ᴡᴏʀᴅꜱ ɪɴᴄʀᴇᴀꜱᴇ: 40ꜱ → 35ꜱ → 30ꜱ → 25ꜱ → 20ꜱ → 10ꜱ"
+    )
+
+
+def _rich_game_ttt() -> str:
+    return _game_page(
+        "🎮 ᴛɪᴄ ᴛᴀᴄ ᴛᴏᴇ",
+        "ᴄʟᴀꜱꜱɪᴄ xᴏ ɢᴀᴍᴇ. ᴘʟᴀʏ ᴡɪᴛʜ ꜰʀɪᴇɴᴅꜱ ɪɴ ɢʀᴏᴜᴘ. ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td><code>/ttt &lt;amount&gt;</code></td><td>ꜱᴛᴀʀᴛ ɢᴀᴍᴇ ᴡɪᴛʜ ʙᴇᴛ</td></tr>
+<tr><td><code>/ttt 500 coin</code></td><td>ᴄᴏɪɴ ʙᴇᴛ</td></tr>
+<tr><td><code>/ttt 500 gems</code></td><td>ɢᴇᴍꜱ ʙᴇᴛ</td></tr>
+<tr><td>⚔️ ᴊᴏɪɴ ɢᴀᴍᴇ</td><td>ᴛᴀᴘ ʙᴜᴛᴛᴏɴ ᴛᴏ ᴊᴏɪɴ</td></tr>
+<tr><td>ᴛᴀᴘ ʙᴏᴀʀᴅ</td><td>ᴍᴀᴋᴇ ʏᴏᴜʀ ᴍᴏᴠᴇ</td></tr>
+<tr><td><code>/leaders</code></td><td>ᴄᴏᴍʙɪɴᴇᴅ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ</td></tr>""",
+        f"💡 ᴇɴᴛʀʏ: 100 - 500,000 • 2 ᴍɪɴ ʟᴏʙʙʏ • 60ꜱ ᴛᴜʀɴ"
+    )
+
+
+def _rich_game_hack() -> str:
+    return _game_page(
+        "🛸 ʜᴀᴄᴋ",
+        "ᴄʀᴀᴄᴋ ᴛʜᴇ ꜱᴇᴄʀᴇᴛ ɴᴜᴍʙᴇʀ ᴄᴏᴅᴇ. ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td><code>/hack &lt;amt&gt; &lt;digits&gt;</code></td><td>ꜱᴛᴀʀᴛ ɢᴀᴍᴇ</td></tr>
+<tr><td><code>/hack 500 3</code></td><td>3-ᴅɪɢɪᴛ ᴄᴏᴅᴇ</td></tr>
+<tr><td><code>/hack 500 4</code></td><td>4-ᴅɪɢɪᴛ ᴄᴏᴅᴇ</td></tr>
+<tr><td><code>/hack 500 5</code></td><td>5-ᴅɪɢɪᴛ ᴄᴏᴅᴇ</td></tr>
+<tr><td><code>/hack 500 6</code></td><td>6-ᴅɪɢɪᴛ ᴄᴏᴅᴇ</td></tr>
+<tr><td><code>/register &lt;amt&gt;</code></td><td>ᴊᴏɪɴ ɢᴀᴍᴇ</td></tr>
+<tr><td><code>/guess &lt;code&gt;</code></td><td>ᴛʀʏ ɢᴜᴇꜱꜱ</td></tr>
+<tr><td><code>/end</code></td><td>ᴇɴᴅ ɢᴀᴍᴇ (ʜᴏꜱᴛ)</td></tr>""",
+        "📝 ʀᴜʟᴇꜱ: ᴅɪɢɪᴛꜱ 1-9 • ɴᴏ 0 • ɴᴏ ʀᴇᴘᴇᴀᴛꜱ • 🟩 ʜᴀᴄᴋꜱ = ᴄᴏʀʀᴇᴄᴛ ᴘᴏꜱ • 🟨 ɢʟɪᴛᴄʜᴇꜱ = ᴡʀᴏɴɢ ᴘᴏꜱ"
+    )
+
+
+def _rich_game_card() -> str:
+    return _game_page(
+        "🃏 ᴄᴀʀᴅ ɢᴀᴍᴇ",
+        "ʜɪɢʜᴇꜱᴛ ᴄᴀʀᴅ ᴡɪɴꜱ ᴛʜᴇ ʀᴏᴜɴᴅ. 4 ʀᴏᴜɴᴅꜱ ᴛᴏᴛᴀʟ. ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td><code>/card &lt;amt&gt; &lt;pl&gt;</code></td><td>ꜱᴛᴀʀᴛ ɢᴀᴍᴇ</td></tr>
+<tr><td><code>/card 501 2</code></td><td>2 ᴘʟᴀʏᴇʀꜱ</td></tr>
+<tr><td><code>/bet &lt;amt&gt;</code></td><td>ᴊᴏɪɴ ɢᴀᴍᴇ</td></tr>
+<tr><td><code>/flip a</code></td><td>ꜰʟɪᴘ ᴄᴀʀᴅ ᴀ</td></tr>
+<tr><td><code>/flip b</code></td><td>ꜰʟɪᴘ ᴄᴀʀᴅ ʙ</td></tr>
+<tr><td><code>/flip c</code></td><td>ꜰʟɪᴘ ᴄᴀʀᴅ ᴄ</td></tr>
+<tr><td><code>/flip d</code></td><td>ꜰʟɪᴘ ᴄᴀʀᴅ ᴅ</td></tr>
+<tr><td><code>/leaders</code></td><td>ᴄᴏᴍʙɪɴᴇᴅ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ</td></tr>""",
+        "💰 ᴇɴᴛʀʏ: 100 - 500,000 • 4 ᴄᴀʀᴅꜱ ᴘᴇʀ ᴘʟᴀʏᴇʀ • 4 ʀᴏᴜɴᴅꜱ • ᴛɪᴍᴇᴏᴜᴛ = ᴀᴜᴛᴏ-ꜰʟɪᴘ"
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -696,7 +663,7 @@ def _welcome_kb() -> InlineKeyboardMarkup:
 
 _HELP_KB = InlineKeyboardMarkup([
     [
-        InlineKeyboardButton("🤖 ᴀɪ", callback_data="elara:ai",
+        InlineKeyboardButton("🤖 AI & ᴡʜɪꜱᴘᴇʀ", callback_data="elara:ai",
                              style=enums.ButtonStyle.PRIMARY),
         InlineKeyboardButton("💕 ꜱᴏᴄɪᴀʟ", callback_data="elara:social",
                              style=enums.ButtonStyle.SUCCESS),
@@ -773,47 +740,31 @@ def _mg_subpage_kb() -> InlineKeyboardMarkup:
     ])
 
 
-# 🎮 GAMES KEYBOARD (Matching the image layout)
+# 🎮 GAMES KEYBOARD — Actual Elara games
 _GAMES_KB = InlineKeyboardMarkup([
     [
-        InlineKeyboardButton("🃏 UNO", callback_data="elara:game_uno", style=enums.ButtonStyle.SUCCESS),
-        InlineKeyboardButton("💣 Mines", callback_data="elara:game_mines", style=enums.ButtonStyle.PRIMARY),
+        InlineKeyboardButton("🎯 ᴡᴏʀᴅꜱᴇᴇᴋ", callback_data="elara:game_wordseek",
+                             style=enums.ButtonStyle.PRIMARY),
+        InlineKeyboardButton("🔗 ᴡᴏʀᴅ ᴄʜᴀɪɴ", callback_data="elara:game_wordchain",
+                             style=enums.ButtonStyle.SUCCESS),
     ],
     [
-        InlineKeyboardButton("✊ RPS", callback_data="elara:game_rps", style=enums.ButtonStyle.SUCCESS),
-        InlineKeyboardButton("🔍 Wordseek", callback_data="elara:game_wordseek", style=enums.ButtonStyle.PRIMARY),
+        InlineKeyboardButton("🎮 ᴛɪᴄ ᴛᴀᴄ ᴛᴏᴇ", callback_data="elara:game_ttt",
+                             style=enums.ButtonStyle.PRIMARY),
+        InlineKeyboardButton("🛸 ʜᴀᴄᴋ", callback_data="elara:game_hack",
+                             style=enums.ButtonStyle.DANGER),
     ],
     [
-        InlineKeyboardButton("🔤 Wordgrid", callback_data="elara:game_wordgrid", style=enums.ButtonStyle.SUCCESS),
-        InlineKeyboardButton("⚡ Tap", callback_data="elara:game_tap", style=enums.ButtonStyle.PRIMARY),
+        InlineKeyboardButton("🃏 ᴄᴀʀᴅ ɢᴀᴍᴇ", callback_data="elara:game_card",
+                             style=enums.ButtonStyle.SUCCESS),
     ],
     [
-        InlineKeyboardButton("📉 Crash", callback_data="elara:game_crash", style=enums.ButtonStyle.DANGER),
-        InlineKeyboardButton("🔀 Jumble", callback_data="elara:game_jumble", style=enums.ButtonStyle.PRIMARY),
-    ],
-    [
-        InlineKeyboardButton("🎭 Charades", callback_data="elara:game_charades", style=enums.ButtonStyle.SUCCESS),
-        InlineKeyboardButton("🔗 Wordchain", callback_data="elara:game_wordchain", style=enums.ButtonStyle.PRIMARY),
-    ],
-    [
-        InlineKeyboardButton("🔤 Wordscramble", callback_data="elara:game_wordscramble", style=enums.ButtonStyle.SUCCESS),
-        InlineKeyboardButton("💻 Hack", callback_data="elara:game_hack", style=enums.ButtonStyle.DANGER),
-    ],
-    [
-        InlineKeyboardButton("🃏 Card", callback_data="elara:game_card", style=enums.ButtonStyle.PRIMARY),
-        InlineKeyboardButton("♟️ Chess", callback_data="elara:game_chess", style=enums.ButtonStyle.SUCCESS),
-    ],
-    [
-        InlineKeyboardButton("✏️ Scribble", callback_data="elara:game_scribble", style=enums.ButtonStyle.PRIMARY),
-    ],
-    [
-        InlineKeyboardButton("🏃 Subway", callback_data="elara:game_subway", style=enums.ButtonStyle.SUCCESS),
-    ],
-    [
-        InlineKeyboardButton("🎰 Bet", callback_data="elara:game_bet", style=enums.ButtonStyle.DANGER),
-    ],
-    [
-        InlineKeyboardButton("⬅️ ʙᴀᴄᴋ", callback_data="elara:help", style=enums.ButtonStyle.PRIMARY),
+        InlineKeyboardButton("⬅️ ʙᴀᴄᴋ", callback_data="elara:help",
+                             style=enums.ButtonStyle.PRIMARY),
+        InlineKeyboardButton("🏠 ʜᴏᴍᴇ", callback_data="elara:home",
+                             style=enums.ButtonStyle.SUCCESS),
+        InlineKeyboardButton("✖ ᴄʟᴏꜱᴇ", callback_data="elara:close",
+                             style=enums.ButtonStyle.DANGER),
     ],
 ])
 
@@ -854,7 +805,6 @@ def _kb_to_dict(kb):
 
 
 async def _send_rich(chat_id, html, kb, image=None):
-    # ✅ Image <img> tag se HTML ke andar embed hoti hai
     payload = {
         "chat_id": chat_id,
         "rich_message": {"html": html},
@@ -966,9 +916,7 @@ async def games_handler(_, message: Message):
 
 @bot.on_callback_query(filters.regex(
     r"^elara:(home|help|about|social|ai|economy|management|games|"
-    r"game_uno|game_mines|game_rps|game_wordseek|game_wordgrid|game_tap|"
-    r"game_crash|game_jumble|game_charades|game_wordchain|game_wordscramble|"
-    r"game_hack|game_card|game_chess|game_scribble|game_subway|game_bet|"
+    r"game_wordseek|game_wordchain|game_ttt|game_hack|game_card|"
     r"mg_admin|mg_bans|mg_filters|mg_greetings|mg_locks|mg_pins|"
     r"mg_purges|mg_reports|mg_warnings|mg_tag|close)$"
 ))
@@ -1026,13 +974,17 @@ async def cb(_, q: CallbackQuery):
         await _edit_rich(q.message, _rich_games(), _GAMES_KB)
         return
 
-    if d.startswith("game_"):
-        game_key = d.split("_", 1)[1]
-        if game_key in _GAMES_DATA:
-            await q.answer()
-            data = _GAMES_DATA[game_key]
-            html = _rich_game_page(data["title"], data["desc"], data["cmds"], data["tip"])
-            await _edit_rich(q.message, html, _game_subpage_kb())
+    game_pages = {
+        "game_wordseek":  _rich_game_wordseek,
+        "game_wordchain": _rich_game_wordchain,
+        "game_ttt":       _rich_game_ttt,
+        "game_hack":      _rich_game_hack,
+        "game_card":      _rich_game_card,
+    }
+
+    if d in game_pages:
+        await q.answer()
+        await _edit_rich(q.message, game_pages[d](), _game_subpage_kb())
         return
 
     management_pages = {
