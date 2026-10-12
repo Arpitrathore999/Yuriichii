@@ -7,7 +7,8 @@ def load_handlers():
         "management.greetings", "management.lock", "management.pin",
         "management.purge", "management.report", "management.warnings", "management.tagall",
         "handlers.cardgame", "handlers.hackgame", "handlers.ttt", "handlers.id", "handlers.quote",
-        "handlers.logger", "handlers.whisper", "handlers.wordseek", "handlers.wordchain",
+        "handlers.logger", "handlers.whisper", "handlers.wordseek", "handlers.wordchain", 
+        "handlers.rps",
     ]
     for module_name in modules:
         try:
