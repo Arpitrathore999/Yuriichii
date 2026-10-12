@@ -2,6 +2,7 @@
 #  Elara © 2026
 #  core/wordchain_engine.py — 🔗 Word Chain Game Engine
 #  9 modes, lobby system, turn timers, elimination, leaderboard
+#  + Dynamic timer & word-length progression
 # --------------------------------------------------------------------------------
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ MODE_CONFIG = {
         "max_players": 50,
         "lobby_seconds": 60,
         "max_lobby_seconds": 180,
-        "turn_seconds": 30,
+        "turn_seconds": 40,
         "min_word_len": 3,
         "max_word_len": 15,
         "timeout_eliminates": False,
@@ -46,7 +47,7 @@ MODE_CONFIG = {
         "max_players": 30,
         "lobby_seconds": 90,
         "max_lobby_seconds": 180,
-        "turn_seconds": 30,
+        "turn_seconds": 40,
         "min_word_len": 3,
         "max_word_len": 15,
         "timeout_eliminates": True,
@@ -57,7 +58,7 @@ MODE_CONFIG = {
         "max_players": 30,
         "lobby_seconds": 90,
         "max_lobby_seconds": 180,
-        "turn_seconds": 30,
+        "turn_seconds": 40,
         "min_word_len": 3,
         "max_word_len": 15,
         "timeout_eliminates": True,
@@ -68,7 +69,7 @@ MODE_CONFIG = {
         "max_players": 50,
         "lobby_seconds": 60,
         "max_lobby_seconds": 180,
-        "turn_seconds": 30,
+        "turn_seconds": 40,
         "min_word_len": 3,
         "max_word_len": 15,
         "timeout_eliminates": False,
@@ -79,7 +80,7 @@ MODE_CONFIG = {
         "max_players": 50,
         "lobby_seconds": 60,
         "max_lobby_seconds": 180,
-        "turn_seconds": 30,
+        "turn_seconds": 40,
         "min_word_len": 3,
         "max_word_len": 15,
         "timeout_eliminates": False,
@@ -90,7 +91,7 @@ MODE_CONFIG = {
         "max_players": 50,
         "lobby_seconds": 60,
         "max_lobby_seconds": 180,
-        "turn_seconds": 30,
+        "turn_seconds": 40,
         "min_word_len": 3,
         "max_word_len": 15,
         "timeout_eliminates": False,
@@ -101,8 +102,8 @@ MODE_CONFIG = {
         "max_players": 50,
         "lobby_seconds": 60,
         "max_lobby_seconds": 180,
-        "turn_seconds": 30,
-        "min_word_len": 4,
+        "turn_seconds": 40,
+        "min_word_len": 3,
         "max_word_len": 15,
         "timeout_eliminates": False,
     },
@@ -112,8 +113,8 @@ MODE_CONFIG = {
         "max_players": 50,
         "lobby_seconds": 60,
         "max_lobby_seconds": 180,
-        "turn_seconds": 20,
-        "min_word_len": 6,
+        "turn_seconds": 40,
+        "min_word_len": 3,
         "max_word_len": 15,
         "timeout_eliminates": True,
     },
@@ -123,7 +124,7 @@ MODE_CONFIG = {
         "max_players": 50,
         "lobby_seconds": 60,
         "max_lobby_seconds": 180,
-        "turn_seconds": 30,
+        "turn_seconds": 40,
         "min_word_len": 3,
         "max_word_len": 15,
         "timeout_eliminates": True,
@@ -139,7 +140,7 @@ CHAOS_EVENTS = [
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  DICTIONARY LOADER (reuses wordseek's word list if available)
+#  DICTIONARY LOADER (shared with wordseek)
 # ══════════════════════════════════════════════════════════════════════════════
 _DATA_DIR = Path("data")
 _WORDS_FILE = _DATA_DIR / "wordseek_words.txt"
@@ -152,7 +153,6 @@ _DICT_LOCK = asyncio.Lock()
 
 
 async def ensure_dictionary_loaded():
-    """Load word list. Reuses WordSeek's wordseek_words.txt if present."""
     global _DICT_LOADED
     if _DICT_LOADED:
         return
@@ -163,14 +163,12 @@ async def ensure_dictionary_loaded():
 
         _DATA_DIR.mkdir(exist_ok=True)
 
-        # Try cache file (shared with wordseek)
         if _WORDS_FILE.exists() and _WORDS_FILE.stat().st_size > 100_000:
             _load_file(_WORDS_FILE)
             _DICT_LOADED = True
             print(f"[WordChain] dict loaded from cache: {len(_VALID_WORDS)} words", flush=True)
             return
 
-        # Try download
         try:
             import aiohttp
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60)) as s:
@@ -185,7 +183,6 @@ async def ensure_dictionary_loaded():
         except Exception as e:
             print(f"[WordChain] download failed: {type(e).__name__}: {e}", flush=True)
 
-        # Minimal fallback
         _load_fallback()
         _DICT_LOADED = True
         print(f"[WordChain] dict fallback: {len(_VALID_WORDS)} words", flush=True)
@@ -269,19 +266,19 @@ class WordChainGame:
         self.starter_id = int(starter_id)
         self.starter_name = starter_name
 
-        # Players: list of dicts {user_id, name, alive}
+        # Players
         self.players: list[dict] = []
         self.player_order: list[int] = []
         self.turn_index: int = 0
 
         # State
-        self.status = "lobby"     # lobby | running | finished | cancelled
+        self.status = "lobby"
         self.last_word: Optional[str] = None
         self.required_letter: Optional[str] = None
         self.used_words: set[str] = set()
         self.round_no: int = 0
 
-        # Mode-specific active rules
+        # Mode-specific
         self.banned_letters: set[str] = set()
         self.required_letter_anywhere: Optional[str] = None
         self.chosen_first_letter: Optional[str] = None
@@ -354,7 +351,6 @@ class WordChainGame:
         alive = self.alive_players()
         if not alive:
             return None
-        # If current player eliminated, find next alive
         while True:
             if self.turn_index >= len(self.players):
                 self.turn_index = 0
@@ -362,7 +358,6 @@ class WordChainGame:
             if p["alive"]:
                 return p
             self.turn_index = (self.turn_index + 1) % len(self.players)
-            # Safety: if we cycled all, return first alive
             if self.turn_index == 0 and not any(x["alive"] for x in self.players):
                 return None
 
@@ -370,24 +365,39 @@ class WordChainGame:
         if not self.players:
             return
         self.turn_index = (self.turn_index + 1) % len(self.players)
-        # Skip eliminated
         for _ in range(len(self.players)):
             if self.players[self.turn_index]["alive"]:
                 return
             self.turn_index = (self.turn_index + 1) % len(self.players)
 
+    # ── ✅ Dynamic progression ──
+    def current_min_len(self) -> int:
+        """Min word length grows every 5 accepted words: 3→4→5→6→7→8."""
+        tier = min(len(self.used_words) // 5, 5)
+        return [3, 4, 5, 6, 7, 8][tier]
+
+    def current_turn_seconds(self) -> int:
+        """Turn timer shrinks every 5 accepted words: 40→35→30→25→20→10."""
+        tier = min(len(self.used_words) // 5, 5)
+        base = [40, 35, 30, 25, 20, 10][tier]
+        # Chaos override
+        for ev in self.chaos_events:
+            if ev.get("kind") == "timer_down":
+                base = min(base, ev.get("value", base))
+        return base
+
     # ── Validation ──
     def validate_word(self, word: str, user_id: int) -> tuple[bool, str]:
-        """Return (is_valid, reason)."""
         w = (word or "").strip().lower()
 
         if not w or not w.isalpha():
             return False, "invalid_characters"
 
-        min_len = self.cfg["min_word_len"]
+        # ✅ Dynamic min length
+        min_len = self.current_min_len()
         max_len = self.cfg["max_word_len"]
 
-        # Chaos: extra min_len
+        # Chaos min_len_up override
         for ev in self.chaos_events:
             if ev.get("kind") == "min_len_up":
                 min_len = max(min_len, ev.get("value", min_len))
@@ -400,30 +410,28 @@ class WordChainGame:
         if not is_english_word(w):
             return False, "not_in_dictionary"
 
-        # First word: check required starting letter if set
+        # First word
         if self.last_word is None:
             if self.chosen_first_letter and not w.startswith(self.chosen_first_letter.lower()):
                 return False, f"must_start_with:{self.chosen_first_letter.upper()}"
             if self.required_letter and not w.startswith(self.required_letter.lower()):
                 return False, f"must_start_with:{self.required_letter.upper()}"
         else:
-            # Must start with last letter of previous word
             required = self.last_word[-1].lower()
             if not w.startswith(required):
                 return False, f"must_start_with:{required.upper()}"
 
-        # Banned letters
+        # Banned
         for b in self.banned_letters:
             if b.lower() in w:
                 return False, f"banned_letter:{b.upper()}"
 
-        # Chaos banned letters
         for ev in self.chaos_events:
             if ev.get("kind") == "banned" and ev.get("letter"):
                 if ev["letter"].lower() in w:
                     return False, f"banned_letter:{ev['letter'].upper()}"
 
-        # Required letter anywhere
+        # Required anywhere
         if self.required_letter_anywhere:
             if self.required_letter_anywhere.lower() not in w:
                 return False, f"required_letter:{self.required_letter_anywhere.upper()}"
@@ -479,7 +487,7 @@ class WordChainGame:
 #  REGISTRY
 # ══════════════════════════════════════════════════════════════════════════════
 ACTIVE_GAMES: dict[int, WordChainGame] = {}
-USER_ACTIVE: dict[int, int] = {}   # user_id -> chat_id
+USER_ACTIVE: dict[int, int] = {}
 
 
 def get_game(chat_id: int) -> Optional[WordChainGame]:
@@ -667,7 +675,6 @@ async def remove_persisted_game(chat_id: int):
 
 
 async def recover_active_games() -> int:
-    """Restart recovery — for simplicity, cancel interrupted games (no wrong rewards)."""
     col = _games_col()
     if col is None:
         return 0
@@ -698,7 +705,7 @@ def compute_points(mode: str, word_count: int, longest_word_len: int, won: bool)
         base += 30
     if mode == MODE_HARD:
         base = int(base * 1.5)
-    elif mode == MODE_ELIMINATION or mode == MODE_MIXED:
+    elif mode in (MODE_ELIMINATION, MODE_MIXED):
         base = int(base * 1.2)
     elif mode == MODE_CHAOS:
         base = int(base * 1.3)
