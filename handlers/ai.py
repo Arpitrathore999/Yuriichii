@@ -83,7 +83,7 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     "extendchain", "forcestartchain", "forcejoinchain",
     "forceleavechain", "forceskipchain", "killchain",
     "chaininfo", "chainstats", "chaintop", "chainleaderboard",
-    "chainhelp", "wordchainhelp", "playingchains",
+    "chainhelp", "wordchainhelp", "playingchains", "games",
 ]
 
 
