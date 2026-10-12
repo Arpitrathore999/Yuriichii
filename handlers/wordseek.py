@@ -1,6 +1,6 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  handlers/wordseek.py — 🎯 WordSeek Game Handlers (crash-safe)
+#  handlers/wordseek.py — 🎯 WordSeek Game Handlers (crash-safe + anti-dup)
 # --------------------------------------------------------------------------------
 
 from __future__ import annotations
@@ -40,10 +40,9 @@ _PROCESSED_LIMIT = 5000
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  SAFE REPLY HELPERS — handles Telegram DC errors gracefully
+#  SAFE SEND HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
 async def _safe_send(chat_id: int, text: str, **kwargs):
-    """Send message with retry. Returns Message or None. Never raises."""
     try:
         return await app.send_message(chat_id, text, **kwargs)
     except asyncio.TimeoutError as e:
@@ -63,12 +62,10 @@ async def _safe_send(chat_id: int, text: str, **kwargs):
 
 
 async def _safe_reply(message: Message, text: str, **kwargs):
-    """Reply to a message with error handling. Never raises."""
     try:
         return await message.reply(text, **kwargs)
     except asyncio.TimeoutError as e:
         print(f"[WordSeek safe_reply] timeout: {e}", flush=True)
-        # Try sending to chat directly as fallback
         try:
             return await app.send_message(message.chat.id, text, **kwargs)
         except Exception:
@@ -84,6 +81,14 @@ async def _safe_reply(message: Message, text: str, **kwargs):
                 return None
         print(f"[WordSeek safe_reply] {err}: {e}", flush=True)
         return None
+
+
+async def _safe_react(message: Message, emoji: str = "🎉"):
+    """React to a message with an emoji. Best-effort, never raises."""
+    try:
+        await message.react(emoji=emoji)
+    except Exception as e:
+        print(f"[WordSeek react] {type(e).__name__}: {e}", flush=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -149,7 +154,8 @@ def _render_help() -> str:
         "• <code>/new6</code> — 6-ʟᴇᴛᴛᴇʀ ᴡᴏʀᴅ\n\n"
         "<b>🎯 ʜᴏᴡ ᴛᴏ ᴘʟᴀʏ:</b>\n"
         "• ꜱᴇɴᴅ ᴡᴏʀᴅꜱ ɪɴ ᴛʜᴇ ɢʀᴏᴜᴘ ᴛᴏ ɢᴜᴇꜱꜱ\n"
-        f"• ᴍᴀx <b>{MAX_ATTEMPTS}</b> ᴀᴛᴛᴇᴍᴘᴛꜱ ᴘᴇʀ ɢᴀᴍᴇ\n\n"
+        f"• ᴍᴀx <b>{MAX_ATTEMPTS}</b> ᴀᴛᴛᴇᴍᴘᴛꜱ ᴘᴇʀ ɢᴀᴍᴇ\n"
+        "• ᴇᴀᴄʜ ᴡᴏʀᴅ ᴄᴀɴ ʙᴇ ɢᴜᴇꜱꜱᴇᴅ ᴏɴʟʏ ᴏɴᴄᴇ\n\n"
         "<b>🎨 ᴛɪʟᴇ ᴍᴇᴀɴɪɴɢꜱ:</b>\n"
         "🟩 ᴄᴏʀʀᴇᴄᴛ ʟᴇᴛᴛᴇʀ, ᴄᴏʀʀᴇᴄᴛ ᴘᴏꜱɪᴛɪᴏɴ\n"
         "🟨 ᴄᴏʀʀᴇᴄᴛ ʟᴇᴛᴛᴇʀ, ᴡʀᴏɴɢ ᴘᴏꜱɪᴛɪᴏɴ\n"
@@ -163,7 +169,7 @@ def _render_help() -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  START GAME
+#  START GAME — combined handler for /new4, /new5, /new6
 # ══════════════════════════════════════════════════════════════════════════════
 async def _start_game(_, message: Message, length: int):
     if not _is_group(message):
@@ -177,6 +183,8 @@ async def _start_game(_, message: Message, length: int):
 
     if not message.from_user:
         return
+
+    print(f"[WordSeek] _start_game called — length={length} chat={message.chat.id}", flush=True)
 
     existing = get_game(message.chat.id)
     if existing and existing.is_active():
@@ -195,11 +203,14 @@ async def _start_game(_, message: Message, length: int):
         starter_name=_user_display(message.from_user),
     )
 
+    print(f"[WordSeek] game created — secret_len={len(game.secret)} secret={game.secret!r}", flush=True)
+
     if not game.secret:
         remove_game(message.chat.id)
         await _safe_reply(
             message,
-            "❌ <b>ᴅɪᴄᴛɪᴏɴᴀʀʏ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ ꜰᴏʀ ᴛʜɪꜱ ʟᴇɴɢᴛʜ.</b>",
+            f"❌ <b>ᴅɪᴄᴛɪᴏɴᴀʀʏ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ ꜰᴏʀ {length}-ʟᴇᴛᴛᴇʀ ᴡᴏʀᴅꜱ.</b>\n"
+            "<i>ᴀᴅᴍɪɴ ꜱᴇ ᴄᴏɴᴛᴀᴄᴛ ᴋᴀʀᴏ.</i>",
             parse_mode=ParseMode.HTML,
         )
         return
@@ -215,28 +226,42 @@ async def _start_game(_, message: Message, length: int):
         print(f"[WordSeek start persist] {type(e).__name__}: {e}", flush=True)
 
     text = (
-        f"🎯 <b>ᴡᴏʀᴅꜱᴇᴇᴋ sᴛᴀʀᴛᴇᴅ!</b>\n\n"
-        f"📏 <b>{length}-ʟᴇᴛᴛᴇʀ ᴡᴏʀᴅ</b>\n"
+        f"🎯 <b>ᴡᴏʀᴅꜱᴇᴇᴋ ꜱᴛᴀʀᴛᴇᴅ!</b>\n\n"
+        f"📏 <b>{length}-ʟᴇᴛᴛᴇʀ ᴍᴏᴅᴇ</b>\n"
         f"🎯 <b>ᴍᴀx ᴀᴛᴛᴇᴍᴘᴛꜱ:</b> <code>{MAX_ATTEMPTS}</code>\n"
-        f"👤 <b>sᴛᴀʀᴛᴇᴅ ʙʏ:</b> {_mention(message.from_user.id, _user_display(message.from_user))}\n\n"
-        f"💬 <i>sᴇɴᴅ ᴀ {length}-ʟᴇᴛᴛᴇʀ ᴡᴏʀᴅ ᴛᴏ ɢᴜᴇꜱꜱ!</i>"
+        f"👤 <b>ꜱᴛᴀʀᴛᴇᴅ ʙʏ:</b> {_mention(message.from_user.id, _user_display(message.from_user))}\n\n"
+        f"💬 <i>ꜱᴇɴᴅ ᴀɴʏ {length}-ʟᴇᴛᴛᴇʀ ᴡᴏʀᴅ ᴛᴏ ɢᴜᴇꜱꜱ!</i>"
     )
     await _safe_reply(message, text, parse_mode=ParseMode.HTML)
 
 
-@app.on_message(filters.command("new4", prefixes=PREFIXES) & filters.group)
-async def cmd_new4(_, message: Message):
-    await _start_game(_, message, 4)
+@app.on_message(
+    filters.command(["new4", "new5", "new6"], prefixes=PREFIXES) & filters.group
+)
+async def cmd_new_any(_, message: Message):
+    """Handle /new4, /new5, /new6 in one handler."""
+    if not message.command:
+        return
 
+    cmd = (message.command[0] or "").lower().strip()
+    # Kurigram sometimes keeps @botname in command[0]
+    cmd = cmd.split("@")[0].strip()
 
-@app.on_message(filters.command("new5", prefixes=PREFIXES) & filters.group)
-async def cmd_new5(_, message: Message):
-    await _start_game(_, message, 5)
+    print(f"[WordSeek] cmd_new_any — raw={cmd!r}", flush=True)
 
+    # Extract last char (4, 5, or 6)
+    if not cmd.startswith("new"):
+        return
+    try:
+        length = int(cmd[3:])
+    except (ValueError, IndexError):
+        print(f"[WordSeek] invalid command: {cmd!r}", flush=True)
+        return
 
-@app.on_message(filters.command("new6", prefixes=PREFIXES) & filters.group)
-async def cmd_new6(_, message: Message):
-    await _start_game(_, message, 6)
+    if length not in (4, 5, 6):
+        return
+
+    await _start_game(_, message, length)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -272,7 +297,7 @@ async def cmd_wordcancel(_, message: Message):
     if not (is_starter or is_admin):
         await _safe_reply(
             message,
-            "❌ <b>ᴏɴʟʏ ᴛʜᴇ ɢᴀᴍᴇ sᴛᴀʀᴛᴇʀ ᴏʀ ᴀᴅᴍɪɴs ᴄᴀɴ ᴄᴀɴᴄᴇʟ ɪᴛ.</b>",
+            "❌ <b>ᴏɴʟʏ ᴛʜᴇ ɢᴀᴍᴇ ꜱᴛᴀʀᴛᴇʀ ᴏʀ ᴀᴅᴍɪɴꜱ ᴄᴀɴ ᴄᴀɴᴄᴇʟ ɪᴛ.</b>",
             parse_mode=ParseMode.HTML,
         )
         return
@@ -448,6 +473,21 @@ async def wordseek_guess_handler(_, message: Message):
         if not game or not game.is_active():
             return
 
+        # ── ✅ DUPLICATE WORD CHECK ──
+        already_guessed = any(
+            g["word"].lower() == word for g in game.guesses
+        )
+        if already_guessed:
+            await _safe_reply(
+                message,
+                f"⚠️ <b>ᴀʟʀᴇᴀᴅʏ ɢᴜᴇꜱꜱᴇᴅ!</b>\n\n"
+                f"<i>ꜱᴏᴍᴇᴏɴᴇ ʜᴀꜱ ᴀʟʀᴇᴀᴅʏ ɢᴜᴇꜱꜱᴇᴅ ʏᴏᴜʀ ᴡᴏʀᴅ.</i>\n"
+                f"ᴘʟᴇᴀꜱᴇ ᴛʀʏ ᴀɴᴏᴛʜᴇʀ ᴏɴᴇ!",
+                parse_mode=ParseMode.HTML,
+            )
+            return
+
+        # ── Dictionary validation ──
         if not is_valid_word(word, game.length):
             await _safe_reply(
                 message,
@@ -484,18 +524,37 @@ async def wordseek_guess_handler(_, message: Message):
             except Exception as e:
                 print(f"[WordSeek win record] {type(e).__name__}: {e}", flush=True)
 
+            # Fetch updated stats for streak display
+            streak = 0
+            try:
+                stats = await get_stats(message.from_user.id)
+                if stats:
+                    streak = int(stats.get("win_streak", 0))
+            except Exception:
+                pass
+
             board_text = _render_board(game)
-            await _safe_reply(
-                message,
-                f"{board_text}\n\n"
-                f"🎉 <b>ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴꜱ!</b>\n\n"
-                f"🏆 <b>ᴘʟᴀʏᴇʀ:</b> {_mention(message.from_user.id, _user_display(message.from_user))}\n"
-                f"✅ ʏᴏᴜ ɢᴜᴇꜱꜱᴇᴅ ᴛʜᴇ ᴡᴏʀᴅ ᴄᴏʀʀᴇᴄᴛʟʏ!\n"
-                f"🔑 <b>ᴄᴏʀʀᴇᴄᴛ ᴡᴏʀᴅ:</b> <code>{_esc(game.secret.upper())}</code>\n"
-                f"⭐ ᴀᴅᴅᴇᴅ <code>{points}</code> ᴘᴏɪɴᴛꜱ ᴛᴏ ᴛʜᴇ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ.\n\n"
-                f"🔄 ᴛʏᴘᴇ <code>/new{game.length}</code> ꜰᴏʀ ᴀɴᴏᴛʜᴇʀ ɢᴀᴍᴇ!",
-                parse_mode=ParseMode.HTML,
+            winner_mention = _mention(
+                message.from_user.id, _user_display(message.from_user)
             )
+
+            win_msg = (
+                f"{board_text}\n\n"
+                f"🎉🎊 <b>ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴꜱ!</b> 🎊🎉\n\n"
+                f"<blockquote>"
+                f"🏆 <b>ᴡɪɴɴᴇʀ:</b> {winner_mention}\n"
+                f"🔑 <b>ᴀɴꜱᴡᴇʀ:</b> <code>{_esc(game.secret.upper())}</code>\n"
+                f"💯 <b>ᴀᴛᴛᴇᴍᴘᴛꜱ:</b> <code>{game.attempts}/{game.max_attempts}</code>\n"
+                f"⭐ <b>ᴘᴏɪɴᴛꜱ ᴇᴀʀɴᴇᴅ:</b> <code>+{points}</code>\n"
+                f"🔥 <b>ᴡɪɴ ꜱᴛʀᴇᴀᴋ:</b> <code>{streak}</code>"
+                f"</blockquote>\n\n"
+                f"🥳 <b>ɢɢ! ᴋᴇᴇᴘ ᴛʜᴇ ꜱᴛʀᴇᴀᴋ ɢᴏɪɴɢ!</b>\n\n"
+                f"👉 ᴘʟᴀʏ ᴀɢᴀɪɴ: <code>/new{game.length}</code>"
+            )
+            await _safe_reply(message, win_msg, parse_mode=ParseMode.HTML)
+
+            # Positive reaction on the winning message
+            await _safe_react(message, "🎉")
 
             remove_game(message.chat.id)
             try:
@@ -518,14 +577,17 @@ async def wordseek_guess_handler(_, message: Message):
                 pass
 
             board_text = _render_board(game)
-            await _safe_reply(
-                message,
+            loss_msg = (
                 f"{board_text}\n\n"
-                f"❌ <b>ɢᴀᴍᴇ ᴏᴠᴇʀ!</b>\n\n"
-                f"🔑 <b>ᴄᴏʀʀᴇᴄᴛ ᴡᴏʀᴅ:</b> <code>{_esc(game.secret.upper())}</code>\n\n"
-                f"ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ!",
-                parse_mode=ParseMode.HTML,
+                f"💀 <b>ɢᴀᴍᴇ ᴏᴠᴇʀ!</b>\n\n"
+                f"<blockquote>"
+                f"🔑 <b>ᴄᴏʀʀᴇᴄᴛ ᴡᴏʀᴅ:</b> <code>{_esc(game.secret.upper())}</code>\n"
+                f"💯 <b>ᴀᴛᴛᴇᴍᴘᴛꜱ ᴜꜱᴇᴅ:</b> <code>{game.attempts}/{game.max_attempts}</code>"
+                f"</blockquote>\n\n"
+                f"😔 <b>ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ!</b>\n\n"
+                f"👉 ᴛʀʏ ᴀɢᴀɪɴ: <code>/new{game.length}</code>"
             )
+            await _safe_reply(message, loss_msg, parse_mode=ParseMode.HTML)
 
             remove_game(message.chat.id)
             try:
