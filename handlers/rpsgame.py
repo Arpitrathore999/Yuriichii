@@ -1,6 +1,7 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
 #  handlers/rpsgame.py — 🪨📄✂️ RPS Arena Telegram handlers
+#  ✅ FIXED: freeze_pool() at game start + robust winner payout
 # --------------------------------------------------------------------------------
 
 from __future__ import annotations
@@ -131,6 +132,23 @@ async def _get_balance(uid: int) -> int:
         return 0
 
 
+async def _ensure_user_record(uid: int, name: str = ""):
+    """Ensure user record exists so add_coins won't silently fail."""
+    try:
+        from database.users import ensure_user
+
+        class _U:
+            id = int(uid)
+            first_name = name or "User"
+            username = None
+            is_bot = False
+            language_code = "en"
+
+        await ensure_user(_U())
+    except Exception as e:
+        print(f"[RPS ensure_user] {type(e).__name__}: {e}", flush=True)
+
+
 async def _credit_elara(amount: int) -> bool:
     if amount <= 0:
         return False
@@ -149,6 +167,58 @@ async def _credit_elara(amount: int) -> bool:
     except Exception as e:
         print(f"[RPS tax] {type(e).__name__}: {e}", flush=True)
         return False
+
+
+async def _payout_winner(uid: int, amount: int) -> bool:
+    """Robust winner payout with 2 fallbacks.
+
+    Order:
+      1. add_coins (standard Elara API)
+      2. Direct users collection $inc with upsert=True
+    """
+    if amount <= 0:
+        return False
+
+    # ── Try 1: standard add_coins ──
+    try:
+        ok = await add_coins(int(uid), int(amount))
+        if ok:
+            print(f"[RPS payout] ✅ add_coins ok: +{amount} → {uid}", flush=True)
+            return True
+        print(f"[RPS payout] ⚠️ add_coins returned False for {uid}", flush=True)
+    except Exception as e:
+        print(f"[RPS payout] ❌ add_coins raised {type(e).__name__}: {e}", flush=True)
+
+    # ── Try 2: direct MongoDB upsert ──
+    try:
+        from database.mongo import users as users_col
+        col = users_col()
+        if col is None:
+            print("[RPS payout] users collection is None", flush=True)
+            return False
+
+        result = await col.update_one(
+            {"_id": int(uid)},
+            {
+                "$inc": {"coins": int(amount)},
+                "$set": {"updated_at": datetime.now(timezone.utc)},
+                "$setOnInsert": {
+                    "_id": int(uid),
+                    "first_name": "",
+                    "username": "",
+                    "created_at": datetime.now(timezone.utc),
+                },
+            },
+            upsert=True,
+        )
+        if result.modified_count == 1 or result.upserted_id is not None:
+            print(f"[RPS payout] ✅ fallback direct DB ok: +{amount} → {uid}", flush=True)
+            return True
+        print(f"[RPS payout] ⚠️ fallback update result: {result.raw_result}", flush=True)
+    except Exception as e:
+        print(f"[RPS payout] ❌ fallback failed {type(e).__name__}: {e}", flush=True)
+
+    return False
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -181,13 +251,14 @@ def _render_lobby(game: RPSGame, secs_left: int) -> str:
     lines = "\n".join(
         f"{i}. {p['mention']}" for i, p in enumerate(game.players, 1)
     ) or "<i>No players yet — be the first!</i>"
+    gross, tax, net = game.calculate_pool()
     return (
         "🪨📄✂️ <b>ʀᴘꜱ ᴀʀᴇɴᴀ ᴏᴘᴇɴ!</b> ✂️📄🪨\n\n"
         f"💰 <b>ʙᴇᴛ ᴘᴇʀ ᴘʟᴀʏᴇʀ:</b> <code>{game.entry_fee}</code> ᴄᴏɪɴꜱ\n"
         f"👥 <b>ᴘʟᴀʏᴇʀꜱ:</b> <code>{len(game.players)}/{game.max_players}</code> "
         f"<i>(min {game.min_players})</i>\n"
         f"⏳ <b>ᴊᴏɪɴ ᴛɪᴍᴇ:</b> <code>{max(0, secs_left)}s</code>\n"
-        f"🏆 <b>ᴘʀɪᴢᴇ ᴘᴏᴏʟ:</b> <code>{game.entry_fee * len(game.players)}</code> "
+        f"🏆 <b>ᴘʀɪᴢᴇ ᴘᴏᴏʟ:</b> <code>{gross}</code> "
         f"<i>({int(GAME_FEE_PERCENT*100)}% tax)</i>\n\n"
         f"👤 <b>ᴘʟᴀʏᴇʀꜱ:</b>\n{lines}\n\n"
         "👉 ᴛᴀᴘ <b>ᴊᴏɪɴ</b> ʙᴇʟᴏᴡ ᴏʀ ᴜꜱᴇ <code>/joinrps</code>!"
@@ -199,7 +270,6 @@ def _lobby_kb(game: RPSGame) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(
             f"➕ ᴊᴏɪɴ ᴀʀᴇɴᴀ ({game.entry_fee} ᴄᴏɪɴꜱ)",
             callback_data=f"rps_join:{game.chat_id}",
-            style=None,
         )],
     ])
 
@@ -209,7 +279,7 @@ def _render_round_start(game: RPSGame) -> str:
     return (
         "⚔️ <b>ɢʟᴏᴠᴇꜱ ᴏɴ, ᴄᴜᴛɪᴇꜱ!</b>\n\n"
         "ᴛʜᴇ ꜰɪɢʜᴛ ɪꜱ ᴀʙᴏᴜᴛ ᴛᴏ ʙᴇɢɪɴ!\n\n"
-        f"👥 <b>ᴘʟᴀʏᴇʀꜱ:</b> <code>{len(game.players)}</code>\n"
+        f"👥 <b>ᴘʟᴀʏᴇʀꜱ:</b> <code>{game.initial_player_count}</code>\n"
         f"🏆 <b>ᴘᴏᴏʟ:</b> <code>{pool}</code> → ɴᴇᴛ <code>{net}</code>\n"
         f"⚡ <b>ᴛᴀx:</b> <code>{tax}</code>"
     )
@@ -238,7 +308,6 @@ def _round_kb(game: RPSGame) -> InlineKeyboardMarkup:
 
 def _render_reveal(game: RPSGame, survivors: set[int], eliminated: set[int],
                    reason: str, auto_filled: set[int]) -> str:
-    # Build the reveal list (ordered by original player order)
     all_seen = game.players + game.eliminated
     by_id = {p["user_id"]: p for p in all_seen}
     order = [p["user_id"] for p in game.players] + [p["user_id"] for p in game.eliminated]
@@ -276,8 +345,10 @@ def _render_winner(game: RPSGame) -> str:
     return (
         "🏆 <b>ᴡᴇ ʜᴀᴠᴇ ᴀ ᴡɪɴɴᴇʀ!</b> 🏆\n\n"
         f"👑 {winner['mention']} <b>ᴅᴏᴍɪɴᴀᴛᴇᴅ ᴛʜᴇ ᴀʀᴇɴᴀ!</b>\n\n"
-        f"💰 <b>ᴛᴏᴛᴀʟ ᴘʀɪᴢᴇ:</b> <code>{game.net_prize}</code> ᴄᴏɪɴꜱ\n"
-        f"⚡ <b>ᴛᴀx ᴘᴀɪᴅ:</b> <code>{game.tax_amount}</code>\n"
+        f"👥 <b>ᴛᴏᴛᴀʟ ᴘʟᴀʏᴇʀꜱ:</b> <code>{game.initial_player_count}</code>\n"
+        f"💰 <b>ɢʀᴏꜱꜱ ᴘᴏᴏʟ:</b> <code>{game.gross_pool}</code>\n"
+        f"⚡ <b>ᴛᴀx:</b> <code>{game.tax_amount}</code>\n"
+        f"🏆 <b>ᴛᴏᴛᴀʟ ᴘʀɪᴢᴇ:</b> <code>{game.net_prize}</code> ᴄᴏɪɴꜱ\n"
         f"⚡ <b>xᴘ:</b> <code>+{WINNER_XP}</code>\n\n"
         "🎉 <b>ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴꜱ!</b>"
     )
@@ -326,6 +397,9 @@ async def rps_create_or_help(_, message: Message):
             parse_mode=ParseMode.HTML,
         )
 
+    # ✅ Ensure user record exists
+    await _ensure_user_record(message.from_user.id, _name(message.from_user))
+
     balance = await _get_balance(message.from_user.id)
     if balance < amount:
         return await _safe_reply(
@@ -348,7 +422,6 @@ async def rps_create_or_help(_, message: Message):
     )
     game.state = STATE_COLLECTING
 
-    # Host is first player and already paid
     game.add_player(message.from_user.id, _name(message.from_user),
                     _mention(message.from_user.id, _name(message.from_user)))
     host_p = game.get_player(message.from_user.id)
@@ -373,7 +446,7 @@ async def rps_create_or_help(_, message: Message):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  JOIN  (command + button)
+#  JOIN
 # ══════════════════════════════════════════════════════════════════════════════
 async def _process_join(game: RPSGame, uid: int, name: str, mention: str,
                         reply_to: Message | None = None) -> tuple[bool, str]:
@@ -387,6 +460,9 @@ async def _process_join(game: RPSGame, uid: int, name: str, mention: str,
     if other and other.chat_id != game.chat_id:
         return False, "ʏᴏᴜ ᴀʀᴇ ɪɴ ᴀɴᴏᴛʜᴇʀ ᴀʀᴇɴᴀ."
 
+    # ✅ Ensure user record before deducting
+    await _ensure_user_record(uid, name)
+
     bal = await _get_balance(uid)
     if bal < game.entry_fee:
         return False, f"ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ ({bal} < {game.entry_fee})."
@@ -396,7 +472,6 @@ async def _process_join(game: RPSGame, uid: int, name: str, mention: str,
         return False, "ᴘᴀʏᴍᴇɴᴛ ꜰᴀɪʟᴇᴅ."
 
     if not game.add_player(uid, name, mention):
-        # Rollback
         try:
             await add_coins(uid, game.entry_fee)
         except Exception:
@@ -432,7 +507,6 @@ async def rps_join_cmd(_, message: Message):
     if not ok:
         return await _safe_reply(message, f"❌ {_esc(reason)}", parse_mode=ParseMode.HTML)
 
-    # edit lobby message
     if game.lobby_message_id:
         await _safe_edit(
             game.chat_id, game.lobby_message_id,
@@ -519,8 +593,13 @@ async def _begin_match(game: RPSGame):
     if not game.can_start():
         return await _cancel_and_refund(game, reason="ɴᴏᴛ ᴇɴᴏᴜɢʜ ᴘʟᴀʏᴇʀꜱ")
 
+    # ✅ FIX: Freeze initial player count + pool BEFORE any eliminations
+    game.freeze_pool()
     game.state = STATE_ACTIVE
     await persist_game(game)
+
+    print(f"[RPS] Game started — players={game.initial_player_count}, "
+          f"gross={game.total_entry_collected}", flush=True)
 
     await _safe_send(game.chat_id, _render_round_start(game), parse_mode=ParseMode.HTML)
     await asyncio.sleep(1.5)
@@ -531,7 +610,6 @@ async def _start_round(game: RPSGame):
     if game.state != STATE_ACTIVE:
         return
 
-    # Safety winner check
     if len(game.players) == 1:
         return await _finish_game(game)
 
@@ -583,11 +661,9 @@ async def _resolve_round(game: RPSGame, auto_fill: bool = False):
     survivors, eliminated, reason = game.resolve_current_round()
     auto_filled = set(game.round_auto)
 
-    # Commit elimination
     if eliminated:
         game.eliminate(eliminated)
 
-    # Disable round keyboard (edit message)
     if game.round_message_id:
         await _safe_edit(
             game.chat_id, game.round_message_id,
@@ -603,13 +679,11 @@ async def _resolve_round(game: RPSGame, auto_fill: bool = False):
 
     await persist_game(game)
 
-    # Terminal check
     if len(game.players) == 0:
         return await _cancel_and_refund(game, reason="ᴀʟʟ ᴘʟᴀʏᴇʀꜱ ᴇʟɪᴍɪɴᴀᴛᴇᴅ")
     if len(game.players) == 1:
         return await _finish_game(game)
 
-    # Next round
     await asyncio.sleep(2)
     await _start_round(game)
 
@@ -629,7 +703,6 @@ async def rps_move_cb(_, q: CallbackQuery):
     if not game or game.state != STATE_ACTIVE:
         return await q.answer("Game not active.", show_alert=True)
 
-    # Stale round guard
     if game.round_id != round_id:
         return await q.answer("Round expired.", show_alert=True)
 
@@ -646,7 +719,6 @@ async def rps_move_cb(_, q: CallbackQuery):
     await q.answer("🔒 Move locked in!", show_alert=False)
 
     if game.all_submitted():
-        # Cancel timer and resolve immediately
         if game.round_task and not game.round_task.done():
             game.round_task.cancel()
         await _resolve_round(game, auto_fill=False)
@@ -673,24 +745,35 @@ async def _finish_game(game: RPSGame):
     game.tax_amount = tax
     game.net_prize  = net
 
-    # Payout
-    try:
-        paid = await add_coins(winner["user_id"], net)
-        if not paid:
-            print(f"[RPS payout] add_coins returned False for {winner['user_id']}", flush=True)
-    except Exception as e:
-        print(f"[RPS payout] {type(e).__name__}: {e}", flush=True)
+    print(f"[RPS] FINAL POOL: players={game.initial_player_count} "
+          f"gross={gross}, tax={tax}, net={net}", flush=True)
+
+    # ✅ Ensure winner record exists before payout
+    await _ensure_user_record(winner["user_id"], winner["name"])
+
+    # ✅ Robust payout
+    payout_ok = await _payout_winner(winner["user_id"], net)
+    if not payout_ok:
+        print(f"[RPS CRITICAL] Payout FAILED for {winner['user_id']} amount={net}", flush=True)
+        await _safe_send(
+            game.chat_id,
+            f"⚠️ <b>ᴘᴀʏᴏᴜᴛ ɪꜱꜱᴜᴇ!</b>\n"
+            f"ᴀᴅᴍɪɴ ᴋᴏ ᴄᴏɴᴛᴀᴄᴛ ᴋᴀʀᴏ.\n"
+            f"ᴡɪɴɴᴇʀ ID: <code>{winner['user_id']}</code>\n"
+            f"ᴀᴍᴏᴜɴᴛ: <code>{net}</code>",
+            parse_mode=ParseMode.HTML,
+        )
+        # Don't mark payout_done; keep game in SETTLING for manual fix
+        return
 
     try:
         await add_xp(winner["user_id"], WINNER_XP)
     except Exception:
         pass
 
-    # Tax to Elara
-    try:
-        await _credit_elara(tax)
-    except Exception:
-        pass
+    # ✅ Tax to Elara (independent — runs even if XP fails)
+    tax_ok = await _credit_elara(tax)
+    print(f"[RPS] Tax {'✅' if tax_ok else '❌'}: {tax} → Elara", flush=True)
 
     game.payout_done = True
     game.state = STATE_FINISHED
@@ -806,12 +889,14 @@ async def rps_info(_, message: Message):
     if game.state == STATE_COLLECTING:
         await _safe_reply(message, _render_lobby(game, LOBBY_SECONDS), parse_mode=ParseMode.HTML)
     elif game.state == STATE_ACTIVE:
+        gross, tax, net = game.calculate_pool()
         await _safe_reply(
             message,
             f"🎮 <b>ᴀʀᴇɴᴀ ɪɴ ᴘʀᴏɢʀᴇꜱꜱ</b>\n"
             f"ʀᴏᴜɴᴅ: <code>{game.round_no}</code>\n"
             f"ᴀʟɪᴠᴇ: <code>{len(game.players)}</code>\n"
-            f"ᴇʟɪᴍɪɴᴀᴛᴇᴅ: <code>{len(game.eliminated)}</code>",
+            f"ᴇʟɪᴍɪɴᴀᴛᴇᴅ: <code>{len(game.eliminated)}</code>\n"
+            f"💰 ᴘᴏᴏʟ: <code>{gross}</code> → ɴᴇᴛ <code>{net}</code>",
             parse_mode=ParseMode.HTML,
         )
     else:
