@@ -2,6 +2,7 @@
 #  Elara © 2026
 #  core/rps_engine.py — 🪨📄✂️ RPS Arena Engine
 #  Multiplayer elimination + financial state machine + DB persistence
+#  ✅ FIXED: gross pool calculation (uses initial_player_count)
 # --------------------------------------------------------------------------------
 
 from __future__ import annotations
@@ -26,7 +27,6 @@ VALID_MOVES = (MOVE_ROCK, MOVE_PAPER, MOVE_SCISSORS)
 MOVE_EMOJI = {MOVE_ROCK: "🪨", MOVE_PAPER: "📄", MOVE_SCISSORS: "✂️"}
 MOVE_LABEL = {MOVE_ROCK: "Rock", MOVE_PAPER: "Paper", MOVE_SCISSORS: "Scissors"}
 
-# move → move it beats
 BEATS = {
     MOVE_ROCK:     MOVE_SCISSORS,
     MOVE_SCISSORS: MOVE_PAPER,
@@ -38,8 +38,8 @@ ENTRY_MIN = 100
 ENTRY_MAX = 500_000
 DEFAULT_MIN_PLAYERS = 2
 DEFAULT_MAX_PLAYERS = 5
-LOBBY_SECONDS = 50
-ROUND_SECONDS = 30
+LOBBY_SECONDS = 20
+ROUND_SECONDS = 15
 GAME_FEE_PERCENT = 0.10
 WINNER_XP = 100
 LOSER_XP = 10
@@ -69,7 +69,7 @@ def _now():
 
 
 def _new_round_id() -> str:
-    return secrets.token_hex(4)   # 8-char hex
+    return secrets.token_hex(4)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -83,7 +83,7 @@ def resolve_round(moves: dict[int, str]) -> tuple[set[int], set[int], str]:
 
     Reasons:
         "empty"           — no moves submitted
-        "draw_single"     — only 1 move type present (everyone same) → draw
+        "draw_single"     — only 1 move type present → draw
         "draw_all_three"  — all 3 move types present → draw
         "played"          — exactly 2 move types → normal RPS elimination
     """
@@ -92,22 +92,18 @@ def resolve_round(moves: dict[int, str]) -> tuple[set[int], set[int], str]:
 
     unique = set(moves.values())
 
-    # 1 move type = everyone same → draw
     if len(unique) == 1:
         return set(moves.keys()), set(), "draw_single"
 
-    # 3 move types present → draw
     if len(unique) == 3:
         return set(moves.keys()), set(), "draw_all_three"
 
-    # Exactly 2 move types → apply RPS rule
     a, b = list(unique)
     if BEATS[a] == b:
         winner_move = a
     elif BEATS[b] == a:
         winner_move = b
     else:
-        # Should never happen
         return set(moves.keys()), set(), "draw_single"
 
     survivors  = {uid for uid, mv in moves.items() if mv == winner_move}
@@ -135,11 +131,15 @@ class RPSGame:
         self.players:    list[dict] = []
         self.eliminated: list[dict] = []
 
+        # ✅ FIX: Frozen pool tracking (set at game start)
+        self.initial_player_count: int = 0
+        self.total_entry_collected: int = 0
+
         self.state       = STATE_CREATED
         self.round_no    = 0
         self.round_id:   Optional[str] = None
         self.round_moves: dict[int, str] = {}
-        self.round_auto:  set[int] = set()   # user_ids auto-filled by timeout
+        self.round_auto:  set[int] = set()
 
         self.created_at  = _now()
         self.finished_at: Optional[datetime] = None
@@ -179,12 +179,28 @@ class RPSGame:
     def is_full(self) -> bool:  return len(self.players) >= self.max_players
     def can_start(self) -> bool: return len(self.players) >= self.min_players
     def active_count(self) -> int: return len(self.players)
+    def total_joined(self) -> int: return len(self.players) + len(self.eliminated)
 
+    # ── ✅ FIX: pool calculation using frozen initial count ──────────────
     def calculate_pool(self) -> tuple[int, int, int]:
-        gross = self.entry_fee * len(self.players)
+        """Calculate (gross, tax, net).
+
+        Uses `initial_player_count` if it's been frozen (at game start),
+        otherwise falls back to total_joined() so lobby-time display works.
+        """
+        n = self.initial_player_count or self.total_joined()
+        if n <= 0:
+            return 0, 0, 0
+
+        gross = self.entry_fee * n
         tax   = int(gross * GAME_FEE_PERCENT)
         net   = gross - tax
         return gross, tax, net
+
+    def freeze_pool(self):
+        """✅ Called at game start — locks in player count + pool."""
+        self.initial_player_count = self.total_joined()
+        self.total_entry_collected = self.entry_fee * self.initial_player_count
 
     # ── round helpers ─────────────────────────────────────────────────────
     def start_new_round(self) -> str:
@@ -211,7 +227,6 @@ class RPSGame:
         return all(p["user_id"] in self.round_moves for p in self.players)
 
     def apply_timeout_policy(self, policy: str = DEFAULT_TIMEOUT_POLICY) -> list[int]:
-        """Fill in moves for players who didn't submit. Returns eliminated user ids."""
         missing = [p for p in self.players if p["user_id"] not in self.round_moves]
         if not missing:
             return []
@@ -219,7 +234,6 @@ class RPSGame:
             uid_set = {p["user_id"] for p in missing}
             self.eliminate(uid_set)
             return list(uid_set)
-        # random
         for p in missing:
             self.round_moves[p["user_id"]] = random.choice(VALID_MOVES)
             self.round_auto.add(p["user_id"])
@@ -336,8 +350,6 @@ async def record_result(user_id: int, name: str, *,
         return
     await ensure_stats(user_id, name)
 
-    net = int(gross_won) - int(wagered)
-
     inc = {
         "games_played": 1,
         "coins_wagered": int(wagered),
@@ -359,7 +371,6 @@ async def record_result(user_id: int, name: str, *,
         "$set": {"name": name, "updated_at": _now(), "last_played": _now()},
     }
 
-    # Streak handling
     if won:
         doc = await col.find_one({"_id": int(user_id)}, {"win_streak": 1, "best_streak": 1})
         cur = int((doc or {}).get("win_streak", 0)) + 1
@@ -402,6 +413,8 @@ async def persist_game(game: RPSGame):
                 "entry_fee": int(game.entry_fee),
                 "players": game.players,
                 "eliminated": game.eliminated,
+                "initial_player_count": int(game.initial_player_count),
+                "total_entry_collected": int(game.total_entry_collected),
                 "state": game.state,
                 "round_no": int(game.round_no),
                 "round_id": game.round_id,
@@ -432,10 +445,7 @@ async def remove_persisted_game(chat_id: int):
 
 
 async def recover_active_games() -> int:
-    """On boot: mark in-flight games as CANCELLED and refund players.
-
-    The engine cannot safely resume timers, so it commits a full refund.
-    """
+    """On boot: mark in-flight games as CANCELLED and refund players."""
     col = _games_col()
     if col is None:
         return 0
