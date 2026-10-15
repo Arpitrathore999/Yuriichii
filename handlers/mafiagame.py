@@ -1,7 +1,7 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
 #  handlers/mafiagame.py — 🎭 MAFIA Telegram handlers
-#  All text in English. Includes /mafiahelp.
+#  ✅ FIXED: freeze bug, Doctor role, DM join deep-link
 # --------------------------------------------------------------------------------
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 
-from pyrogram import filters
+from pyrogram import StopPropagation, filters
 from pyrogram.enums import ChatType, ParseMode
 from pyrogram.types import (
     CallbackQuery,
@@ -18,6 +18,7 @@ from pyrogram.types import (
     Message,
 )
 
+import config
 from core.bot import app
 from core.database import add_coins, add_xp, get_user, remove_coins
 from core.mafia_engine import (
@@ -32,10 +33,12 @@ from core.mafia_engine import (
     MIN_PLAYERS,
     NIGHT_SECONDS,
     ROLE_DETECTIVE,
+    ROLE_DOCTOR,
     ROLE_EMOJI,
     ROLE_LABEL,
     ROLE_MAFIA,
     ROLE_VILLAGER,
+    ROLE_WITCH,
     STATE_CANCELLED,
     STATE_DAY,
     STATE_FINISHED,
@@ -47,6 +50,7 @@ from core.mafia_engine import (
     WINNER_XP,
     MafiaGame,
     bump_detective_catches,
+    bump_doctor_saves,
     bump_mafia_kills,
     create_game,
     ensure_stats,
@@ -62,6 +66,7 @@ from core.mafia_engine import (
 
 PREFIXES = ["/", "!", "."]
 ELARA_BOT_ID = 8899359004
+BOT_USERNAME = (getattr(config, "BOT_USERNAME", "") or "ItzElaraBot").lstrip("@")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -195,149 +200,154 @@ async def _payout_winner(uid: int, amount: int) -> bool:
 #  RENDERERS
 # ══════════════════════════════════════════════════════════════════════════════
 def _render_help() -> str:
-    """Short help shown when /mafia is called without arguments."""
     return (
-        "🎭 <b>ᴍᴀꜰɪᴀ — ᴛʜᴇ ꜱᴏᴄɪᴀʟ ᴅᴇᴅᴜᴄᴛɪᴏɴ ɢᴀᴍᴇ</b>\n\n"
-        "ᴏɴᴇ ᴍᴀꜰɪᴀ ʜɪᴅᴇꜱ ᴀᴍᴏɴɢ ᴛʜᴇ ᴠɪʟʟᴀɢᴇʀꜱ ᴀɴᴅ ᴋɪʟʟꜱ ᴏɴᴇ ᴘʟᴀʏᴇʀ ᴇᴀᴄʜ ɴɪɢʜᴛ.\n"
-        "ᴛʜᴇ ᴠɪʟʟᴀɢᴇʀꜱ ᴍᴜꜱᴛ ᴠᴏᴛᴇ ᴛᴏ ꜰɪɴᴅ ᴛʜᴇ ᴍᴀꜰɪᴀ! 🔪\n\n"
-        "<b>🎮 ǫᴜɪᴄᴋ ꜱᴛᴀʀᴛ:</b>\n"
-        "• <code>/mafia free</code> — ꜱᴛᴀʀᴛ ꜰʀᴇᴇ ɢᴀᴍᴇ\n"
-        "• <code>/mafia 500</code> — ꜱᴛᴀʀᴛ ᴘᴀɪᴅ ɢᴀᴍᴇ (500 ᴄᴏɪɴꜱ ᴇɴᴛʀʏ)\n"
-        "• <code>/joinmafia</code> — ᴊᴏɪɴ ᴛʜᴇ ɢᴀᴍᴇ\n\n"
-        "📖 ꜰᴜʟʟ ʀᴜʟᴇꜱ & ᴄᴏᴍᴍᴀɴᴅꜱ: <code>/mafiahelp</code>\n"
+        "🎭 <b>MAFIA — The Social Deduction Game</b>\n\n"
+        "One Mafia hides among the Villagers and kills one player each night.\n"
+        "The Villagers must vote to find the Mafia! 🔪\n\n"
+        "<b>🎮 QUICK START:</b>\n"
+        "• <code>/mafia free</code> — start a free game\n"
+        "• <code>/mafia 500</code> — start a paid game (500 coins entry)\n"
+        "• <code>/joinmafia</code> — join the lobby\n\n"
+        "📖 Full rules & commands: <code>/mafiahelp</code>\n"
     )
 
 
 def _render_mafia_help() -> str:
-    """Full help — how to play, roles, commands."""
     return (
-        "🎭 <b>ᴍᴀꜰɪᴀ — ʜᴏᴡ ᴛᴏ ᴘʟᴀʏ & ᴄᴏᴍᴍᴀɴᴅꜱ</b> 🎭\n\n"
+        "🎭 <b>MAFIA — HOW TO PLAY & COMMANDS</b> 🎭\n\n"
 
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "📖 <b>ʜᴏᴡ ᴛᴏ ᴘʟᴀʏ</b>\n"
+        "📖 <b>HOW TO PLAY</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
-        "<b>1️⃣ ʟᴏʙʙʏ</b>\n"
-        "• ᴀ ᴘʟᴀʏᴇʀ ꜱᴛᴀʀᴛꜱ ᴀ ɢᴀᴍᴇ ᴡɪᴛʜ <code>/mafia free</code> ᴏʀ <code>/mafia 500</code>\n"
-        "• ᴏᴛʜᴇʀꜱ ᴊᴏɪɴ ᴡɪᴛʜ <code>/joinmafia</code> ᴏʀ ᴛʜᴇ <b>ᴊᴏɪɴ</b> ʙᴜᴛᴛᴏɴ\n"
-        "• 4–10 ᴘʟᴀʏᴇʀꜱ ᴛᴏ ꜱᴛᴀʀᴛ (60ꜱ ᴛᴏ ꜰɪʟʟ)\n\n"
+        "<b>1️⃣ LOBBY</b>\n"
+        "• A player starts a game with <code>/mafia free</code> or <code>/mafia 500</code>\n"
+        "• Others join with <code>/joinmafia</code> or the <b>JOIN</b> button\n"
+        "• 4–12 players required (60s to fill)\n\n"
 
-        "<b>2️⃣ ʀᴏʟᴇꜱ ᴀʀᴇ ꜱᴇɴᴛ ᴠɪᴀ DM</b>\n"
-        "• ᴇᴀᴄʜ ᴘʟᴀʏᴇʀ ɢᴇᴛꜱ ᴀ ꜱᴇᴄʀᴇᴛ ʀᴏʟᴇ ᴘʀɪᴠᴀᴛᴇʟʏ\n"
-        "• 🔪 <b>Mafia</b> ᴘɪᴄᴋꜱ ᴀ ᴛᴀʀɢᴇᴛ ᴛᴏ ᴋɪʟʟ\n"
-        "• 🕵️ <b>Detective</b> ᴘɪᴄᴋꜱ ᴀ ᴘʟᴀʏᴇʀ ᴛᴏ ɪɴᴠᴇꜱᴛɪɢᴀᴛᴇ\n"
-        "• 👥 <b>Villagers</b> ꜱʟᴇᴇᴘ ᴛʜʀᴏᴜɢʜ ᴛʜᴇ ɴɪɢʜᴛ\n\n"
+        "<b>2️⃣ ROLES ARE SENT VIA DM</b>\n"
+        "• Each player gets a secret role privately\n"
+        "• 🔪 <b>Mafia</b> picks a target to kill each night\n"
+        "• 🕵️ <b>Detective</b> investigates 1 player each night\n"
+        "• 👨‍⚕️ <b>Doctor</b> protects 1 player from being killed\n"
+        "• 🧙 <b>Witch</b> (6+ players) — heals or kills once\n"
+        "• 👥 <b>Villagers</b> have no night action\n\n"
 
-        "<b>3️⃣ ɴɪɢʜᴛ ᴘʜᴀꜱᴇ</b> 🌙 (30ꜱ)\n"
-        "• Mafia kills someone\n"
-        "• Detective learns if target is Mafia\n\n"
+        "<b>3️⃣ NIGHT PHASE</b> 🌙 (30s)\n"
+        "• Mafia kills · Detective checks · Doctor saves\n\n"
 
-        "<b>4️⃣ ᴅᴀʏ ᴘʜᴀꜱᴇ</b> ☀️ (45ꜱ)\n"
-        "• ʙᴏᴛ ᴀɴɴᴏᴜɴᴄᴇꜱ ᴛʜᴇ ᴋɪʟʟ\n"
-        "• ᴇᴠᴇʀʏᴏɴᴇ ᴅɪꜱᴄᴜꜱꜱᴇꜱ ᴡʜᴏ ᴍɪɢʜᴛ ʙᴇ ᴍᴀꜰɪᴀ\n\n"
+        "<b>4️⃣ DAY PHASE</b> ☀️ (45s)\n"
+        "• Bot announces the kill (or save!)\n"
+        "• Everyone discusses who might be Mafia\n\n"
 
-        "<b>5️⃣ ᴠᴏᴛɪɴɢ ᴘʜᴀꜱᴇ</b> 🗳️ (30ꜱ)\n"
-        "• ᴀʟʟ ᴀʟɪᴠᴇ ᴘʟᴀʏᴇʀꜱ ᴠᴏᴛᴇ ʙʏ ᴛᴀᴘᴘɪɴɢ ᴀ ʙᴜᴛᴛᴏɴ\n"
-        "• ʜɪɢʜᴇꜱᴛ ᴠᴏᴛᴇᴅ ᴘʟᴀʏᴇʀ ɪꜱ ʟʏɴᴄʜᴇᴅ (ᴛɪᴇ = ɴᴏ ʟʏɴᴄʜ)\n\n"
+        "<b>5️⃣ VOTING PHASE</b> 🗳️ (30s)\n"
+        "• All alive players vote via buttons\n"
+        "• Highest voted player is lynched (tie = no lynch)\n\n"
 
-        "<b>6️⃣ ʀᴇᴘᴇᴀᴛ</b> 🔁\n"
-        "• ɴɪɢʜᴛ → ᴅᴀʏ → ᴠᴏᴛᴇ ᴜɴᴛɪʟ ᴏɴᴇ ꜱɪᴅᴇ ᴡɪɴꜱ\n\n"
+        "<b>6️⃣ REPEAT</b> 🔁\n"
+        "• Night → Day → Vote until one side wins\n\n"
 
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "🎭 <b>ɢᴀᴍᴇ ɪɴꜰᴏʀᴍᴀᴛɪᴏɴ</b>\n"
+        "🎭 <b>ROLES</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-
-        "<b>🎯 ʀᴏʟᴇꜱ:</b>\n"
-        "🔪 <b>Mafia</b> — ᴋɪʟʟꜱ ᴏɴᴇ ᴘʟᴀʏᴇʀ ᴇᴀᴄʜ ɴɪɢʜᴛ\n"
-        "🕵️ <b>Detective</b> — ɪɴᴠᴇꜱᴛɪɢᴀᴛᴇꜱ ᴏɴᴇ ᴘʟᴀʏᴇʀ ᴇᴀᴄʜ ɴɪɢʜᴛ\n"
-        "👥 <b>Villager</b> — ᴅɪꜱᴄᴜꜱꜱᴇꜱ ᴀɴᴅ ᴠᴏᴛᴇꜱ\n\n"
-
-        "<b>🏆 ᴡɪɴ ᴄᴏɴᴅɪᴛɪᴏɴꜱ:</b>\n"
-        "✅ <b>Villagers win</b> — Mafia is lynched/killed\n"
-        "✅ <b>Mafia wins</b> — Only 2 players left alive (Mafia + 1)\n\n"
-
-        "<b>⏱ ᴛɪᴍᴇʀꜱ:</b>\n"
-        f"• ʟᴏʙʙʏ: <code>{LOBBY_SECONDS}s</code>\n"
-        f"• ɴɪɢʜᴛ: <code>{NIGHT_SECONDS}s</code>\n"
-        f"• ᴅᴀʏ: <code>{DAY_SECONDS}s</code>\n"
-        f"• ᴠᴏᴛɪɴɢ: <code>{VOTE_SECONDS}s</code>\n\n"
-
-        "<b>💰 ᴍᴏᴅᴇꜱ:</b>\n"
-        "• 🎮 <b>Free mode</b> — ɴᴏ ᴇɴᴛʀʏ, ᴏɴʟʏ XP\n"
-        f"• 💰 <b>Paid mode</b> — {ENTRY_MIN}–{ENTRY_MAX} ᴄᴏɪɴꜱ ᴇɴᴛʀʏ\n"
-        "• 🏆 ᴡɪɴɴᴇʀꜱ ꜱᴘʟɪᴛ ᴛʜᴇ ɴᴇᴛ ᴘᴏᴏʟ (10% ᴛᴀx)\n\n"
+        "🔪 <b>Mafia</b> — Kills one player each night\n"
+        "🕵️ <b>Detective</b> — Learns one player's role each night\n"
+        "👨‍⚕️ <b>Doctor</b> — Protects one player each night (can self-protect)\n"
+        "🧙 <b>Witch</b> — Has 1 heal + 1 kill potion (6+ players)\n"
+        "👥 <b>Villager</b> — Discusses and votes\n\n"
 
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "📋 <b>ᴄᴏᴍᴍᴀɴᴅꜱ</b>\n"
+        "🏆 <b>WIN CONDITIONS</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "✅ <b>Villagers win</b> — Mafia is lynched or killed\n"
+        "✅ <b>Mafia wins</b> — Only 1 non-mafia left alive\n\n"
+
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "💰 <b>MODES</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🎮 <b>Free mode</b> — No entry, only XP\n"
+        f"💰 <b>Paid mode</b> — {ENTRY_MIN}–{ENTRY_MAX} coins\n"
+        "🏆 Winners split the net pool (10% tax)\n\n"
+
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "📋 <b>COMMANDS</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
-        "🎮 <b>ɢᴀᴍᴇ</b>\n"
-        "• <code>/mafia free</code> — ꜱᴛᴀʀᴛ ꜰʀᴇᴇ ɢᴀᴍᴇ\n"
-        "• <code>/mafia &lt;amount&gt;</code> — ꜱᴛᴀʀᴛ ᴘᴀɪᴅ ɢᴀᴍᴇ\n"
-        "• <code>/joinmafia</code> — ᴊᴏɪɴ ᴛʜᴇ ʟᴏʙʙʏ\n"
-        "• <code>/mafiainfo</code> — ꜱʜᴏᴡ ɢᴀᴍᴇ ꜱᴛᴀᴛᴜꜱ\n"
-        "• <code>/mafiacancel</code> — ᴄᴀɴᴄᴇʟ (ʜᴏꜱᴛ ᴏɴʟʏ, ʟᴏʙʙʏ ᴘʜᴀꜱᴇ)\n\n"
+        "🎮 <b>Game</b>\n"
+        "• <code>/mafia free</code> — start free game\n"
+        "• <code>/mafia &lt;amount&gt;</code> — start paid game\n"
+        "• <code>/joinmafia</code> — join the lobby\n"
+        "• <code>/mafiainfo</code> — show status\n"
+        "• <code>/mafiacancel</code> — cancel (host only, lobby phase)\n\n"
 
-        "📊 <b>ꜱᴛᴀᴛꜱ</b>\n"
-        "• <code>/mafiastats</code> — ʏᴏᴜʀ ᴘʀᴏꜰɪʟᴇ\n"
-        "• <code>/mafiatop</code> — ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ\n\n"
+        "📊 <b>Stats</b>\n"
+        "• <code>/mafiastats</code> — your profile\n"
+        "• <code>/mafiatop</code> — leaderboard\n\n"
 
-        "📖 <b>ʜᴇʟᴘ</b>\n"
-        "• <code>/mafiahelp</code> — ᴛʜɪꜱ ᴍᴇꜱꜱᴀɢᴇ\n"
-        "• <code>/mafia</code> — ǫᴜɪᴄᴋ ꜱᴛᴀʀᴛ\n\n"
+        "📖 <b>Help</b>\n"
+        "• <code>/mafiahelp</code> — this message\n\n"
 
-        "💡 <i>ᴛɪᴘ: ᴛᴀᴘ ᴛʜᴇ ʙᴜᴛᴛᴏɴꜱ ɪɴ ʏᴏᴜʀ DM ᴛᴏ ᴄʜᴏᴏꜱᴇ ɴɪɢʜᴛ ᴀᴄᴛɪᴏɴꜱ.</i>"
+        "💡 <i>Tip: Click the JOIN button in the group — it opens the bot DM to confirm.</i>"
     )
 
 
 def _render_lobby(game: MafiaGame, secs_left: int) -> str:
-    mode = f"💰 ᴘᴀɪᴅ — <code>{game.entry_fee}</code> ᴄᴏɪɴꜱ/ᴘʟᴀʏᴇʀ" if game.is_paid else "🎮 ꜰʀᴇᴇ ᴍᴏᴅᴇ"
+    mode = f"💰 PAID — <code>{game.entry_fee}</code> coins/player" if game.is_paid else "🎮 FREE MODE"
     lines = "\n".join(
         f"{i}. {p['mention']}" for i, p in enumerate(game.players, 1)
     ) or "<i>No players yet — be the first!</i>"
     return (
-        "🎭 <b>ᴍᴀꜰɪᴀ — ʟᴏʙʙʏ ᴏᴘᴇɴ!</b> 🎭\n\n"
-        f"🎮 <b>ᴍᴏᴅᴇ:</b> {mode}\n"
-        f"👥 <b>ᴘʟᴀʏᴇʀꜱ:</b> <code>{len(game.players)}/{MAX_PLAYERS}</code> "
+        "🎭 <b>MAFIA — LOBBY OPEN!</b> 🎭\n\n"
+        f"🎮 <b>Mode:</b> {mode}\n"
+        f"👥 <b>Players:</b> <code>{len(game.players)}/{MAX_PLAYERS}</code> "
         f"<i>(min {MIN_PLAYERS})</i>\n"
-        f"⏳ <b>ᴊᴏɪɴ ᴛɪᴍᴇ:</b> <code>{max(0, secs_left)}s</code>\n\n"
-        f"👤 <b>ᴘʟᴀʏᴇʀꜱ:</b>\n{lines}\n\n"
-        "👉 ᴛᴀᴘ <b>ᴊᴏɪɴ</b> ᴏʀ ᴜꜱᴇ <code>/joinmafia</code>"
+        f"⏳ <b>Join time:</b> <code>{max(0, secs_left)}s</code>\n\n"
+        f"👤 <b>Players:</b>\n{lines}\n\n"
+        "👉 <b>Tap JOIN below</b> (opens DM) or use <code>/joinmafia</code>"
     )
 
 
 def _lobby_kb(game: MafiaGame) -> InlineKeyboardMarkup:
-    label = (f"➕ ᴊᴏɪɴ ɢᴀᴍᴇ ({game.entry_fee}ᴄ)" if game.is_paid else "➕ ᴊᴏɪɴ ɢᴀᴍᴇ")
+    """✅ Join button opens bot DM with deep link payload."""
+    join_label = (f"➕ JOIN GAME ({game.entry_fee} coins)"
+                  if game.is_paid else "➕ JOIN GAME (Free)")
+    dm_link = f"https://t.me/{BOT_USERNAME}?start=mafia_join_{game.chat_id}"
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(label, callback_data=f"mafia_join:{game.chat_id}")],
+        [InlineKeyboardButton(join_label, url=dm_link)],
+        [InlineKeyboardButton(
+            "❓ How to Play",
+            url=f"https://t.me/{BOT_USERNAME}?start=mafia_help",
+        )],
     ])
 
 
 def _render_night_intro(game: MafiaGame) -> str:
     return (
-        f"🌙 <b>ɴɪɢʜᴛ {game.day_no} ʙᴇɢɪɴꜱ!</b>\n\n"
-        "ᴛʜᴇ ᴍᴀꜰɪᴀ ɪꜱ ʜᴜɴᴛɪɴɢ...\n"
-        "ᴛʜᴇ ᴅᴇᴛᴇᴄᴛɪᴠᴇ ɪꜱ ɪɴᴠᴇꜱᴛɪɢᴀᴛɪɴɢ...\n\n"
-        "😴 ᴠɪʟʟᴀɢᴇʀꜱ, ꜱʟᴇᴇᴘ ᴛɪɢʜᴛ..."
+        f"🌙 <b>NIGHT {game.day_no} BEGINS</b>\n\n"
+        "The Mafia is hunting...\n"
+        "The Detective is investigating...\n"
+        "The Doctor is protecting...\n\n"
+        "😴 Villagers, sleep tight..."
     )
 
 
-def _render_day_announce(game: MafiaGame, killed_uid: int | None) -> str:
-    if killed_uid is None:
-        death = "😮 <b>ɴᴏ ᴏɴᴇ ᴅɪᴇᴅ ʟᴀꜱᴛ ɴɪɢʜᴛ!</b>\n<i>The Mafia's attack failed.</i>"
+def _render_day_announce(game: MafiaGame, killed_uid: int | None, was_saved: bool) -> str:
+    if was_saved:
+        death = ("🩺 <b>THE DOCTOR SAVED A LIFE LAST NIGHT!</b>\n"
+                 "<i>The Mafia's attack was blocked.</i>")
+    elif killed_uid is None:
+        death = "😮 <b>NO ONE DIED LAST NIGHT!</b>"
     else:
         p = game.get_player(killed_uid)
         name = p["mention"] if p else f"<code>{killed_uid}</code>"
-        death = f"💀 <b>{name}</b> ᴡᴀꜱ ᴋɪʟʟᴇᴅ ʟᴀꜱᴛ ɴɪɢʜᴛ!"
+        death = f"💀 <b>{name}</b> was killed last night!"
 
-    alive_list = "\n".join(
-        f"• {p['mention']}" for p in game.alive_players()
-    )
+    alive_list = "\n".join(f"• {p['mention']}" for p in game.alive_players())
     return (
-        f"☀️ <b>ᴅᴀʏ {game.day_no}</b>\n\n"
+        f"☀️ <b>DAY {game.day_no}</b>\n\n"
         f"{death}\n\n"
-        f"👥 <b>ᴀʟɪᴠᴇ ({game.alive_count()}):</b>\n{alive_list}\n\n"
-        f"🗣 <b>ᴅɪꜱᴄᴜꜱꜱɪᴏɴ:</b> Who is the Mafia? 🤔\n"
+        f"👥 <b>Alive ({game.alive_count()}):</b>\n{alive_list}\n\n"
+        f"🗣 <b>DISCUSSION:</b> Who is the Mafia? 🤔\n"
         f"⏱ <code>{DAY_SECONDS}s</code> to discuss, then voting starts!"
     )
 
@@ -352,12 +362,11 @@ def _vote_kb(game: MafiaGame) -> InlineKeyboardMarkup:
             callback_data=f"mafia_vote:{game.chat_id}:{p['user_id']}",
         ))
         if len(row) == 2:
-            rows.append(row)
-            row = []
+            rows.append(row); row = []
     if row:
         rows.append(row)
     rows.append([InlineKeyboardButton(
-        "⏭️ ꜱᴋɪᴘ ᴠᴏᴛᴇ",
+        "⏭️ SKIP VOTE",
         callback_data=f"mafia_vote:{game.chat_id}:-1",
     )])
     return InlineKeyboardMarkup(rows)
@@ -365,7 +374,7 @@ def _vote_kb(game: MafiaGame) -> InlineKeyboardMarkup:
 
 def _render_voting(game: MafiaGame) -> str:
     return (
-        f"🗳️ <b>ᴠᴏᴛɪɴɢ ᴛɪᴍᴇ — ᴅᴀʏ {game.day_no}</b>\n\n"
+        f"🗳️ <b>VOTING TIME — DAY {game.day_no}</b>\n\n"
         "Who should be lynched?\n"
         f"⏱ <code>{VOTE_SECONDS}s</code>\n\n"
         "👇 Vote below! (One vote per player)"
@@ -374,18 +383,18 @@ def _render_voting(game: MafiaGame) -> str:
 
 def _render_vote_result(game: MafiaGame, lynched: int | None, counts: dict) -> str:
     if not counts:
-        return f"🗳️ <b>ᴠᴏᴛᴇ ʀᴇꜱᴜʟᴛ</b>\n\n😮 No votes were cast. Nobody eliminated."
+        return "🗳️ <b>VOTE RESULT</b>\n\n😮 No votes were cast. Nobody eliminated."
 
     lines = []
     for uid, c in sorted(counts.items(), key=lambda x: -x[1]):
         p = game.get_player(uid)
         nm = p["name"] if p else str(uid)
-        lines.append(f"• <b>{_esc(nm)}</b> — <code>{c}</code> ᴠᴏᴛᴇꜱ")
+        lines.append(f"• <b>{_esc(nm)}</b> — <code>{c}</code> votes")
 
-    header = f"🗳️ <b>ᴠᴏᴛᴇ ʀᴇꜱᴜʟᴛ — ᴅᴀʏ {game.day_no}</b>\n\n" + "\n".join(lines)
+    header = f"🗳️ <b>VOTE RESULT — DAY {game.day_no}</b>\n\n" + "\n".join(lines)
 
     if lynched is None:
-        return header + "\n\n🤝 <b>ᴛɪᴇ!</b> ɴᴏ ᴏɴᴇ ᴡᴀꜱ ʟʏɴᴄʜᴇᴅ."
+        return header + "\n\n🤝 <b>TIE!</b> No one was lynched."
 
     p = game.get_player(lynched)
     nm = p["name"] if p else str(lynched)
@@ -395,27 +404,129 @@ def _render_vote_result(game: MafiaGame, lynched: int | None, counts: dict) -> s
 
     return (
         header + "\n\n"
-        f"💀 <b>{_esc(nm)}</b> ᴡᴀꜱ ʟʏɴᴄʜᴇᴅ!\n"
-        f"🎭 ʀᴏʟᴇ: {role_emoji} <b>{role_label}</b>"
+        f"💀 <b>{_esc(nm)}</b> was lynched!\n"
+        f"🎭 Role: {role_emoji} <b>{role_label}</b>"
     )
 
 
 def _render_win(game: MafiaGame) -> str:
     if game.winner_side == "villagers":
         return (
-            "🎉 <b>ᴠɪʟʟᴀɢᴇʀꜱ ᴡɪɴ!</b> 🎉\n\n"
-            "🔪 ᴛʜᴇ ᴍᴀꜰɪᴀ ʜᴀꜱ ʙᴇᴇɴ ᴇʟɪᴍɪɴᴀᴛᴇᴅ!\n"
-            "👥 ᴛʜᴇ ᴠɪʟʟᴀɢᴇ ɪꜱ ꜱᴀꜰᴇ ᴀɢᴀɪɴ."
+            "🎉 <b>VILLAGERS WIN!</b> 🎉\n\n"
+            "🔪 The Mafia has been eliminated!\n"
+            "👥 The village is safe again."
         )
     return (
-        "🔪 <b>ᴍᴀꜰɪᴀ ᴡɪɴꜱ!</b> 🔪\n\n"
-        "💀 ᴛʜᴇ ᴍᴀꜰɪᴀ ʜᴀꜱ ᴛᴀᴋᴇɴ ᴏᴠᴇʀ ᴛʜᴇ ᴠɪʟʟᴀɢᴇ!\n"
-        "😈 ɴᴏ ᴏɴᴇ ᴄᴀɴ ꜱᴛᴏᴘ ᴛʜᴇᴍ ɴᴏᴡ..."
+        "🔪 <b>MAFIA WINS!</b> 🔪\n\n"
+        "💀 The Mafia has taken over the village!\n"
+        "😈 No one can stop them now..."
     )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  /mafiahelp  — Full help
+#  DEEP-LINK HANDLER  (DM: /start mafia_join_<chat_id> | mafia_help)
+# ══════════════════════════════════════════════════════════════════════════════
+@app.on_message(filters.command("start", prefixes=PREFIXES) & filters.private, group=-1)
+async def mafia_deeplink(_, message: Message):
+    if not message.command or len(message.command) < 2:
+        return   # let other handlers process
+
+    payload = message.command[1].strip()
+
+    # ── Help deep link ──
+    if payload == "mafia_help":
+        await _safe_reply(message, _render_mafia_help(), parse_mode=ParseMode.HTML)
+        raise StopPropagation
+
+    # ── Join deep link ──
+    if not payload.startswith("mafia_join_"):
+        return
+
+    try:
+        chat_id = int(payload[len("mafia_join_"):])
+    except ValueError:
+        await _safe_reply(message, "❌ Invalid join link.", parse_mode=ParseMode.HTML)
+        raise StopPropagation
+
+    game = get_game(chat_id)
+    user = message.from_user
+
+    if not game:
+        await _safe_reply(
+            message,
+            "❌ <b>No active Mafia lobby in that group.</b>\n"
+            "<i>The lobby may have closed or been cancelled.</i>",
+            parse_mode=ParseMode.HTML,
+        )
+        raise StopPropagation
+
+    if game.state != STATE_LOBBY:
+        await _safe_reply(
+            message,
+            "❌ <b>The lobby has already closed.</b>",
+            parse_mode=ParseMode.HTML,
+        )
+        raise StopPropagation
+
+    if game.has_player(user.id):
+        await _safe_reply(
+            message,
+            "⚠️ <b>Hey, you're already in the game!</b>\n"
+            "<i>Wait for the lobby to close and roles to be assigned.</i>",
+            parse_mode=ParseMode.HTML,
+        )
+        raise StopPropagation
+
+    ok, reason = await _process_join(
+        game, user.id,
+        _name(user),
+        _mention(user.id, _name(user)),
+    )
+
+    if not ok:
+        await _safe_reply(
+            message,
+            f"❌ <b>Could not join:</b> {_esc(reason)}",
+            parse_mode=ParseMode.HTML,
+        )
+        raise StopPropagation
+
+    # ✅ Success → confirm in DM
+    await _safe_reply(
+        message,
+        f"✅ <b>You joined the Mafia game!</b>\n\n"
+        f"📍 Group: <code>{chat_id}</code>\n"
+        f"👥 Players: <code>{len(game.players)}/{MAX_PLAYERS}</code>\n\n"
+        "🎭 Your role will be sent here once the lobby closes.\n"
+        "⏳ Please wait...",
+        parse_mode=ParseMode.HTML,
+    )
+
+    # ✅ Also announce in group
+    await _safe_send(
+        game.chat_id,
+        f"🔥 {_mention(user.id, _name(user))} joined the game!",
+        parse_mode=ParseMode.HTML,
+    )
+
+    # Update lobby message in group
+    if game.lobby_message_id:
+        await _safe_edit(
+            game.chat_id, game.lobby_message_id,
+            _render_lobby(game, LOBBY_SECONDS),
+            parse_mode=ParseMode.HTML, reply_markup=_lobby_kb(game),
+        )
+
+    if game.is_full():
+        if game.lobby_task and not game.lobby_task.done():
+            game.lobby_task.cancel()
+        await _begin_match(game)
+
+    raise StopPropagation
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  /mafiahelp  /mhelp
 # ══════════════════════════════════════════════════════════════════════════════
 @app.on_message(filters.command(["mafiahelp", "mhelp"], prefixes=PREFIXES))
 async def mafia_help_cmd(_, message: Message):
@@ -451,14 +562,14 @@ async def mafia_cmd(_, message: Message):
         except ValueError:
             return await _safe_reply(
                 message,
-                "❌ <b>ɪɴᴠᴀʟɪᴅ ᴀᴍᴏᴜɴᴛ.</b>\n"
-                "ᴜꜱᴇ <code>/mafia free</code> ᴏʀ <code>/mafia 500</code>.",
+                "❌ <b>Invalid amount.</b>\n"
+                "Use <code>/mafia free</code> or <code>/mafia 500</code>.",
                 parse_mode=ParseMode.HTML,
             )
         if entry_fee < ENTRY_MIN or entry_fee > ENTRY_MAX:
             return await _safe_reply(
                 message,
-                f"❌ ᴇɴᴛʀʏ ᴍᴜꜱᴛ ʙᴇ ʙᴇᴛᴡᴇᴇɴ <code>{ENTRY_MIN}</code> ᴀɴᴅ <code>{ENTRY_MAX}</code>.",
+                f"❌ Entry must be between <code>{ENTRY_MIN}</code> and <code>{ENTRY_MAX}</code>.",
                 parse_mode=ParseMode.HTML,
             )
 
@@ -466,7 +577,7 @@ async def mafia_cmd(_, message: Message):
     if existing and not existing.is_terminal():
         return await _safe_reply(
             message,
-            "⚠️ <b>ᴀ ᴍᴀꜰɪᴀ ɢᴀᴍᴇ ɪꜱ ᴀʟʀᴇᴀᴅʏ ʀᴜɴɴɪɴɢ ɪɴ ᴛʜɪꜱ ᴄʜᴀᴛ.</b>",
+            "⚠️ <b>A Mafia game is already running in this chat.</b>",
             parse_mode=ParseMode.HTML,
         )
 
@@ -474,7 +585,7 @@ async def mafia_cmd(_, message: Message):
     if user_game and user_game.chat_id != message.chat.id:
         return await _safe_reply(
             message,
-            "⚠️ <b>ʏᴏᴜ ᴀʀᴇ ɪɴ ᴀɴᴏᴛʜᴇʀ ᴍᴀꜰɪᴀ ɢᴀᴍᴇ.</b>",
+            "⚠️ <b>You are in another Mafia game.</b>",
             parse_mode=ParseMode.HTML,
         )
 
@@ -485,13 +596,13 @@ async def mafia_cmd(_, message: Message):
         if bal < entry_fee:
             return await _safe_reply(
                 message,
-                f"⚡ <b>ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ.</b>\n"
-                f"ʏᴏᴜ ʜᴀᴠᴇ <code>{bal}</code>, ɴᴇᴇᴅ <code>{entry_fee}</code>.",
+                f"⚡ <b>Insufficient balance.</b>\n"
+                f"You have <code>{bal}</code>, need <code>{entry_fee}</code>.",
                 parse_mode=ParseMode.HTML,
             )
         ok = await remove_coins(message.from_user.id, entry_fee)
         if not ok:
-            return await _safe_reply(message, "❌ ᴅᴇᴅᴜᴄᴛ ꜰᴀɪʟᴇᴅ.", parse_mode=ParseMode.HTML)
+            return await _safe_reply(message, "❌ Deduct failed.", parse_mode=ParseMode.HTML)
 
     game = create_game(
         chat_id=message.chat.id,
@@ -527,7 +638,7 @@ async def mafia_cmd(_, message: Message):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  JOIN
+#  JOIN (command in group)
 # ══════════════════════════════════════════════════════════════════════════════
 async def _process_join(game: MafiaGame, uid: int, name: str, mention: str) -> tuple[bool, str]:
     if game.state != STATE_LOBBY:
@@ -577,7 +688,7 @@ async def mafia_join_cmd(_, message: Message):
         return
     game = get_game(message.chat.id)
     if not game or game.state != STATE_LOBBY:
-        return await _safe_reply(message, "❌ <b>ɴᴏ ᴀᴄᴛɪᴠᴇ ʟᴏʙʙʏ.</b>", parse_mode=ParseMode.HTML)
+        return await _safe_reply(message, "❌ <b>No active lobby.</b>", parse_mode=ParseMode.HTML)
 
     ok, reason = await _process_join(
         game, message.from_user.id,
@@ -595,7 +706,7 @@ async def mafia_join_cmd(_, message: Message):
         )
     await _safe_send(
         game.chat_id,
-        f"🔥 {_mention(message.from_user.id, _name(message.from_user))} ᴊᴏɪɴᴇᴅ ᴛʜᴇ ɢᴀᴍᴇ!",
+        f"🔥 {_mention(message.from_user.id, _name(message.from_user))} joined the game!",
         parse_mode=ParseMode.HTML,
     )
     try:
@@ -603,42 +714,6 @@ async def mafia_join_cmd(_, message: Message):
     except Exception:
         pass
 
-    if game.is_full():
-        if game.lobby_task and not game.lobby_task.done():
-            game.lobby_task.cancel()
-        await _begin_match(game)
-
-
-@app.on_callback_query(filters.regex(r"^mafia_join:"))
-async def mafia_join_cb(_, q: CallbackQuery):
-    try:
-        chat_id = int(q.data.split(":", 1)[1])
-    except (ValueError, IndexError):
-        return await q.answer()
-    game = get_game(chat_id)
-    if not game or game.state != STATE_LOBBY:
-        return await q.answer("Lobby closed.", show_alert=True)
-
-    ok, reason = await _process_join(
-        game, q.from_user.id,
-        _name(q.from_user),
-        _mention(q.from_user.id, _name(q.from_user)),
-    )
-    if not ok:
-        return await q.answer(reason, show_alert=True)
-
-    await q.answer("✅ Joined!")
-    if game.lobby_message_id:
-        await _safe_edit(
-            game.chat_id, game.lobby_message_id,
-            _render_lobby(game, LOBBY_SECONDS),
-            parse_mode=ParseMode.HTML, reply_markup=_lobby_kb(game),
-        )
-    await _safe_send(
-        game.chat_id,
-        f"🔥 {_mention(q.from_user.id, _name(q.from_user))} ᴊᴏɪɴᴇᴅ ᴛʜᴇ ɢᴀᴍᴇ!",
-        parse_mode=ParseMode.HTML,
-    )
     if game.is_full():
         if game.lobby_task and not game.lobby_task.done():
             game.lobby_task.cancel()
@@ -685,10 +760,10 @@ async def _begin_match(game: MafiaGame):
 
     await _safe_send(
         game.chat_id,
-        "🎭 <b>ɢᴀᴍᴇ ꜱᴛᴀʀᴛɪɴɢ!</b>\n\n"
-        f"👥 ᴘʟᴀʏᴇʀꜱ: <code>{len(game.players)}</code>\n"
-        "📩 ʀᴏʟᴇꜱ ᴀʀᴇ ʙᴇɪɴɢ ꜱᴇɴᴛ ᴠɪᴀ DM...\n"
-        "⏱ ᴘʟᴇᴀꜱᴇ ᴄʜᴇᴄᴋ ʏᴏᴜʀ DM!",
+        "🎭 <b>GAME STARTING!</b>\n\n"
+        f"👥 Players: <code>{len(game.players)}</code>\n"
+        "📩 Roles are being sent via DM...\n"
+        "⏱ Please check your DM!",
         parse_mode=ParseMode.HTML,
     )
 
@@ -711,7 +786,7 @@ async def _begin_match(game: MafiaGame):
                 game.alive.remove(p["user_id"])
         await _safe_send(
             game.chat_id,
-            f"⚠️ ᴄᴏᴜʟᴅ ɴᴏᴛ DM: {names}\n<i>They were removed.</i>",
+            f"⚠️ Could not DM: {names}\n<i>They were removed.</i>",
             parse_mode=ParseMode.HTML,
         )
 
@@ -726,131 +801,111 @@ async def _send_role_dm(game: MafiaGame, uid: int, role: str) -> bool:
     emoji = ROLE_EMOJI.get(role, "❔")
     label = ROLE_LABEL.get(role, role.upper())
 
-    text = f"🎭 <b>ʏᴏᴜʀ ʀᴏʟᴇ: {emoji} {label}</b>\n\n"
+    text = f"🎭 <b>YOUR ROLE: {emoji} {label}</b>\n\n"
     kb = None
 
     if role == ROLE_MAFIA:
         text += (
-            "🔪 ʏᴏᴜ ᴀʀᴇ ᴛʜᴇ <b>MAFIA</b>!\n\n"
-            "ᴇᴀᴄʜ ɴɪɢʜᴛ, ᴄʜᴏᴏꜱᴇ ᴏɴᴇ ᴘʟᴀʏᴇʀ ᴛᴏ ᴋɪʟʟ.\n"
-            "ᴅᴜʀɪɴɢ ᴛʜᴇ ᴅᴀʏ, ᴘʀᴇᴛᴇɴᴅ ᴛᴏ ʙᴇ ᴀ ᴠɪʟʟᴀɢᴇʀ!\n\n"
-            "👇 ᴄʜᴏᴏꜱᴇ ʏᴏᴜʀ ᴛᴀʀɢᴇᴛ:"
+            "🔪 You are the <b>MAFIA</b>!\n\n"
+            "Each night, choose one player to kill.\n"
+            "During the day, pretend to be a Villager!\n\n"
+            "👇 Choose your target:"
         )
-        rows, row = [], []
-        for p in game.players:
-            if p["user_id"] == uid:
-                continue
-            row.append(InlineKeyboardButton(
-                p["name"],
-                callback_data=f"mafia_nk:{game.chat_id}:{p['user_id']}",
-            ))
-            if len(row) == 2:
-                rows.append(row); row = []
-        if row:
-            rows.append(row)
-        kb = InlineKeyboardMarkup(rows) if rows else None
+        kb = _target_kb(game, uid, "mafia_nk")
 
     elif role == ROLE_DETECTIVE:
         text += (
-            "🕵️ ʏᴏᴜ ᴀʀᴇ ᴛʜᴇ <b>DETECTIVE</b>!\n\n"
-            "ᴇᴀᴄʜ ɴɪɢʜᴛ, ᴄʜᴏᴏꜱᴇ ᴏɴᴇ ᴘʟᴀʏᴇʀ ᴛᴏ ɪɴᴠᴇꜱᴛɪɢᴀᴛᴇ.\n"
-            "ᴛʜᴇ ʙᴏᴛ ᴡɪʟʟ ᴛᴇʟʟ ʏᴏᴜ ᴛʜᴇɪʀ ʀᴏʟᴇ ᴘʀɪᴠᴀᴛᴇʟʏ.\n\n"
-            "👇 ᴄʜᴏᴏꜱᴇ ʏᴏᴜʀ ᴛᴀʀɢᴇᴛ:"
+            "🕵️ You are the <b>DETECTIVE</b>!\n\n"
+            "Each night, choose one player to investigate.\n"
+            "The bot will tell you their role privately.\n\n"
+            "👇 Choose your target:"
         )
-        rows, row = [], []
-        for p in game.players:
-            if p["user_id"] == uid:
-                continue
-            row.append(InlineKeyboardButton(
-                p["name"],
-                callback_data=f"mafia_nc:{game.chat_id}:{p['user_id']}",
-            ))
-            if len(row) == 2:
-                rows.append(row); row = []
-        if row:
-            rows.append(row)
-        kb = InlineKeyboardMarkup(rows) if rows else None
+        kb = _target_kb(game, uid, "mafia_nc")
+
+    elif role == ROLE_DOCTOR:
+        text += (
+            "👨‍⚕️ You are the <b>DOCTOR</b>!\n\n"
+            "Each night, choose one player to protect.\n"
+            "If the Mafia targets them, they will be saved!\n"
+            "You CAN protect yourself.\n\n"
+            "👇 Choose your target:"
+        )
+        kb = _target_kb(game, uid, "mafia_nd", include_self=True)
+
+    elif role == ROLE_WITCH:
+        text += (
+            "🧙 You are the <b>WITCH</b>!\n\n"
+            "You have TWO potions (each usable once):\n"
+            "• 💚 Heal — revive/protect a player\n"
+            "• ☠️ Kill — instantly kill a player\n\n"
+            "<i>Witch potions are not active in this version — you play as a Villager.</i>"
+        )
 
     else:
         text += (
-            "👥 ʏᴏᴜ ᴀʀᴇ ᴀ <b>VILLAGER</b>!\n\n"
-            "ʏᴏᴜ ʜᴀᴠᴇ ɴᴏ ɴɪɢʜᴛ ᴀᴄᴛɪᴏɴ.\n"
-            "ᴅᴜʀɪɴɢ ᴛʜᴇ ᴅᴀʏ, ᴅɪꜱᴄᴜꜱꜱ ᴀɴᴅ ᴠᴏᴛᴇ ᴛᴏ ꜰɪɴᴅ ᴛʜᴇ ᴍᴀꜰɪᴀ!"
+            "👥 You are a <b>VILLAGER</b>!\n\n"
+            "You have no night action.\n"
+            "During the day, discuss and vote to find the Mafia!"
         )
 
     sent = await _safe_dm(uid, text, parse_mode=ParseMode.HTML, reply_markup=kb)
     return sent is not None
 
 
+def _target_kb(game: MafiaGame, actor_uid: int, prefix: str,
+               include_self: bool = False) -> InlineKeyboardMarkup:
+    rows, row = [], []
+    for p in game.players:
+        if not include_self and p["user_id"] == actor_uid:
+            continue
+        row.append(InlineKeyboardButton(
+            p["name"],
+            callback_data=f"{prefix}:{game.chat_id}:{p['user_id']}",
+        ))
+        if len(row) == 2:
+            rows.append(row); row = []
+    if row:
+        rows.append(row)
+    return InlineKeyboardMarkup(rows) if rows else None
+
+
 async def _start_night(game: MafiaGame):
-    if game.state not in (STATE_NIGHT,):
+    """✅ FIXED: allow transition from VOTING/DAY/LOBBY."""
+    if game.state in (STATE_FINISHED, STATE_CANCELLED):
         return
 
     game.day_no += 1
+    game.reset_night_actions()
     game.state = STATE_NIGHT
-    game.night_kill = None
-    game.night_check = None
-    game.night_kill_done = False
-    game.night_check_done = False
     await persist_game(game)
 
     await _safe_send(game.chat_id, _render_night_intro(game), parse_mode=ParseMode.HTML)
 
+    # Re-send night action DMs for surviving special roles
     if game.day_no > 1:
         mafia_uid = game.get_mafia()
         det_uid = game.get_detective()
+        doc_uid = game.get_doctor()
         if mafia_uid and mafia_uid in game.alive:
-            await _send_mafia_dm(game)
+            await _send_action_dm(game, mafia_uid, "mafia_nk",
+                                  "🔪 Choose who to kill", "🔪 NIGHT — CHOOSE KILL TARGET")
         if det_uid and det_uid in game.alive:
-            await _send_detective_dm(game)
+            await _send_action_dm(game, det_uid, "mafia_nc",
+                                  "Choose who to investigate", "🕵️ NIGHT — CHOOSE TARGET")
+        if doc_uid and doc_uid in game.alive:
+            await _send_action_dm(game, doc_uid, "mafia_nd",
+                                  "Choose who to protect", "👨‍⚕️ NIGHT — CHOOSE PROTECT",
+                                  include_self=True)
 
     game.phase_task = asyncio.create_task(_night_timer(game, game.day_no))
 
 
-async def _send_mafia_dm(game: MafiaGame):
-    mafia_uid = game.get_mafia()
-    if not mafia_uid or mafia_uid not in game.alive:
-        return
-    rows, row = [], []
-    for p in game.alive_players():
-        if p["user_id"] == mafia_uid:
-            continue
-        row.append(InlineKeyboardButton(
-            p["name"],
-            callback_data=f"mafia_nk:{game.chat_id}:{p['user_id']}",
-        ))
-        if len(row) == 2:
-            rows.append(row); row = []
-    if row:
-        rows.append(row)
-    kb = InlineKeyboardMarkup(rows) if rows else None
+async def _send_action_dm(game: MafiaGame, uid: int, prefix: str,
+                          desc: str, title: str, include_self: bool = False):
+    kb = _target_kb(game, uid, prefix, include_self=include_self)
     await _safe_dm(
-        mafia_uid,
-        f"🔪 <b>ɴɪɢʜᴛ {game.day_no} — ᴄʜᴏᴏꜱᴇ ᴡʜᴏ ᴛᴏ ᴋɪʟʟ</b>\n\n👇 ᴛᴀʀɢᴇᴛ:",
-        parse_mode=ParseMode.HTML, reply_markup=kb,
-    )
-
-
-async def _send_detective_dm(game: MafiaGame):
-    det_uid = game.get_detective()
-    if not det_uid or det_uid not in game.alive:
-        return
-    rows, row = [], []
-    for p in game.alive_players():
-        if p["user_id"] == det_uid:
-            continue
-        row.append(InlineKeyboardButton(
-            p["name"],
-            callback_data=f"mafia_nc:{game.chat_id}:{p['user_id']}",
-        ))
-        if len(row) == 2:
-            rows.append(row); row = []
-    if row:
-        rows.append(row)
-    kb = InlineKeyboardMarkup(rows) if rows else None
-    await _safe_dm(
-        det_uid,
-        f"🕵️ <b>ɴɪɢʜᴛ {game.day_no} — ᴄʜᴏᴏꜱᴇ ᴡʜᴏ ᴛᴏ ɪɴᴠᴇꜱᴛɪɢᴀᴛᴇ</b>\n\n👇 ᴛᴀʀɢᴇᴛ:",
+        uid,
+        f"{title}\n\n{desc}:\n\n👇",
         parse_mode=ParseMode.HTML, reply_markup=kb,
     )
 
@@ -870,13 +925,19 @@ async def _night_timer(game: MafiaGame, day_no: int):
 async def _maybe_advance_from_night(game: MafiaGame):
     if game.state != STATE_NIGHT:
         return
-    mafia_alive = game.get_mafia() in game.alive if game.get_mafia() else False
-    det_alive = game.get_detective() in game.alive if game.get_detective() else False
+    mafia_uid = game.get_mafia()
+    det_uid = game.get_detective()
+    doc_uid = game.get_doctor()
+
+    mafia_alive = mafia_uid in game.alive if mafia_uid else False
+    det_alive = det_uid in game.alive if det_uid else False
+    doc_alive = doc_uid in game.alive if doc_uid else False
 
     mafia_ready = (not mafia_alive) or game.night_kill_done
     det_ready = (not det_alive) or game.night_check_done
+    doc_ready = (not doc_alive) or game.night_save_done
 
-    if mafia_ready and det_ready:
+    if mafia_ready and det_ready and doc_ready:
         if game.phase_task and not game.phase_task.done():
             game.phase_task.cancel()
         await _resolve_night(game)
@@ -886,14 +947,33 @@ async def _resolve_night(game: MafiaGame):
     if game.state != STATE_NIGHT:
         return
 
-    killed_uid = game.resolve_night()
-    if killed_uid and game.get_mafia():
+    killed_uid, was_saved = game.resolve_night()
+
+    # Mafia kill stat
+    if game.night_kill_done and game.get_mafia():
         try:
             await bump_mafia_kills(game.get_mafia())
         except Exception:
             pass
 
-    if game.night_check and game.get_detective():
+    # Doctor save stat
+    if was_saved and game.get_doctor():
+        try:
+            await bump_doctor_saves(game.get_doctor())
+        except Exception:
+            pass
+        try:
+            await _safe_dm(
+                game.get_doctor(),
+                "🩺 <b>YOUR SAVE WORKED!</b>\n\n"
+                "The Mafia attacked your target, but you saved them! ✅",
+                parse_mode=ParseMode.HTML,
+            )
+        except Exception:
+            pass
+
+    # Detective result
+    if game.night_check_done and game.get_detective():
         target_uid = game.night_check
         target_role = game.roles.get(target_uid, "?")
         target_p = game.get_player(target_uid)
@@ -902,9 +982,9 @@ async def _resolve_night(game: MafiaGame):
         try:
             await _safe_dm(
                 game.get_detective(),
-                f"🕵️ <b>ɪɴᴠᴇꜱᴛɪɢᴀᴛɪᴏɴ ʀᴇꜱᴜʟᴛ</b>\n\n"
-                f"ᴛᴀʀɢᴇᴛ: <b>{_esc(target_name)}</b>\n"
-                f"ʀᴇꜱᴜʟᴛ: {'🔪 <b>MAFIA!</b>' if is_mafia else '👥 <b>Innocent</b>'}",
+                f"🕵️ <b>INVESTIGATION RESULT</b>\n\n"
+                f"Target: <b>{_esc(target_name)}</b>\n"
+                f"Result: {'🔪 <b>MAFIA!</b>' if is_mafia else '👥 <b>Innocent</b>'}",
                 parse_mode=ParseMode.HTML,
             )
             if is_mafia:
@@ -922,7 +1002,11 @@ async def _resolve_night(game: MafiaGame):
     if winner:
         return await _finish_game(game, winner)
 
-    await _safe_send(game.chat_id, _render_day_announce(game, killed_uid), parse_mode=ParseMode.HTML)
+    await _safe_send(
+        game.chat_id,
+        _render_day_announce(game, killed_uid, was_saved),
+        parse_mode=ParseMode.HTML,
+    )
 
     game.phase_task = asyncio.create_task(_day_timer(game, game.day_no))
 
@@ -983,6 +1067,7 @@ async def _maybe_resolve_voting_early(game: MafiaGame):
 
 
 async def _resolve_voting(game: MafiaGame):
+    """✅ FIXED: properly transitions to next night."""
     if game.state != STATE_VOTING:
         return
 
@@ -1010,6 +1095,7 @@ async def _resolve_voting(game: MafiaGame):
     if winner:
         return await _finish_game(game, winner)
 
+    # ✅ Now we safely transition: state → NIGHT via _start_night
     await asyncio.sleep(2)
     await _start_night(game)
 
@@ -1021,25 +1107,20 @@ async def _resolve_voting(game: MafiaGame):
 async def mafia_nk_cb(_, q: CallbackQuery):
     try:
         _, cid_str, target_str = q.data.split(":", 2)
-        chat_id = int(cid_str)
-        target_uid = int(target_str)
+        chat_id = int(cid_str); target_uid = int(target_str)
     except (ValueError, IndexError):
         return await q.answer()
 
     game = get_game(chat_id)
     if not game or game.state != STATE_NIGHT:
         return await q.answer("Not night phase.", show_alert=True)
-
     if int(q.from_user.id) != game.get_mafia():
         return await q.answer("Not your action.", show_alert=True)
 
     ok, reason = game.submit_night_kill(target_uid)
     if not ok:
-        msg = {
-            "already_done": "Already chosen!",
-            "self_target": "Can't target yourself!",
-            "not_alive": "Target is dead.",
-        }.get(reason, reason)
+        msg = {"already_done": "Already chosen!", "self_target": "Can't target yourself!",
+               "not_alive": "Target is dead."}.get(reason, reason)
         return await q.answer(msg, show_alert=True)
 
     target_p = game.get_player(target_uid)
@@ -1048,8 +1129,8 @@ async def mafia_nk_cb(_, q: CallbackQuery):
 
     try:
         await q.message.edit_text(
-            f"🔪 <b>ᴛᴀʀɢᴇᴛ ʟᴏᴄᴋᴇᴅ:</b> {_esc(target_name)}\n\n"
-            "ᴡᴀɪᴛ ꜰᴏʀ ᴛʜᴇ ɴɪɢʜᴛ ᴛᴏ ᴇɴᴅ...",
+            f"🔪 <b>Target locked:</b> {_esc(target_name)}\n\n"
+            "Wait for the night to end...",
             parse_mode=ParseMode.HTML, reply_markup=None,
         )
     except Exception:
@@ -1062,15 +1143,13 @@ async def mafia_nk_cb(_, q: CallbackQuery):
 async def mafia_nc_cb(_, q: CallbackQuery):
     try:
         _, cid_str, target_str = q.data.split(":", 2)
-        chat_id = int(cid_str)
-        target_uid = int(target_str)
+        chat_id = int(cid_str); target_uid = int(target_str)
     except (ValueError, IndexError):
         return await q.answer()
 
     game = get_game(chat_id)
     if not game or game.state != STATE_NIGHT:
         return await q.answer("Not night phase.", show_alert=True)
-
     if int(q.from_user.id) != game.get_detective():
         return await q.answer("Not your action.", show_alert=True)
 
@@ -1084,8 +1163,42 @@ async def mafia_nc_cb(_, q: CallbackQuery):
 
     try:
         await q.message.edit_text(
-            f"🕵️ <b>ɪɴᴠᴇꜱᴛɪɢᴀᴛɪɴɢ:</b> {_esc(target_name)}\n\n"
-            "ʀᴇꜱᴜʟᴛ ᴡɪʟʟ ʙᴇ ꜱᴇɴᴛ ᴀꜰᴛᴇʀ ɴɪɢʜᴛ ᴇɴᴅꜱ...",
+            f"🕵️ <b>Investigating:</b> {_esc(target_name)}\n\n"
+            "Result will be sent after night ends...",
+            parse_mode=ParseMode.HTML, reply_markup=None,
+        )
+    except Exception:
+        pass
+
+    await _maybe_advance_from_night(game)
+
+
+@app.on_callback_query(filters.regex(r"^mafia_nd:"))
+async def mafia_nd_cb(_, q: CallbackQuery):
+    try:
+        _, cid_str, target_str = q.data.split(":", 2)
+        chat_id = int(cid_str); target_uid = int(target_str)
+    except (ValueError, IndexError):
+        return await q.answer()
+
+    game = get_game(chat_id)
+    if not game or game.state != STATE_NIGHT:
+        return await q.answer("Not night phase.", show_alert=True)
+    if int(q.from_user.id) != game.get_doctor():
+        return await q.answer("Not your action.", show_alert=True)
+
+    ok, reason = game.submit_night_save(target_uid)
+    if not ok:
+        return await q.answer(reason, show_alert=True)
+
+    target_p = game.get_player(target_uid)
+    target_name = target_p["name"] if target_p else str(target_uid)
+    await q.answer(f"✅ Protecting {target_name}...", show_alert=True)
+
+    try:
+        await q.message.edit_text(
+            f"👨‍⚕️ <b>Protecting:</b> {_esc(target_name)}\n\n"
+            "Wait for the night to end...",
             parse_mode=ParseMode.HTML, reply_markup=None,
         )
     except Exception:
@@ -1101,8 +1214,7 @@ async def mafia_nc_cb(_, q: CallbackQuery):
 async def mafia_vote_cb(_, q: CallbackQuery):
     try:
         _, cid_str, target_str = q.data.split(":", 2)
-        chat_id = int(cid_str)
-        target_uid = int(target_str)
+        chat_id = int(cid_str); target_uid = int(target_str)
     except (ValueError, IndexError):
         return await q.answer()
 
@@ -1112,11 +1224,8 @@ async def mafia_vote_cb(_, q: CallbackQuery):
 
     ok, reason = game.submit_vote(q.from_user.id, target_uid)
     if not ok:
-        msg = {
-            "not_alive": "You are dead.",
-            "target_not_alive": "Target already dead.",
-            "self_vote": "Can't vote for yourself.",
-        }.get(reason, reason)
+        msg = {"not_alive": "You are dead.", "target_not_alive": "Target already dead.",
+               "self_vote": "Can't vote for yourself."}.get(reason, reason)
         return await q.answer(msg, show_alert=True)
 
     await q.answer("✅ Vote recorded!")
@@ -1127,14 +1236,14 @@ async def mafia_vote_cb(_, q: CallbackQuery):
             continue
         counts[t] = counts.get(t, 0) + 1
 
-    lines = ["🗳️ <b>ᴠᴏᴛɪɴɢ — ʟɪᴠᴇ ᴛᴀʟʟʏ</b>\n"]
+    lines = ["🗳️ <b>VOTING — LIVE TALLY</b>\n"]
     for p in game.alive_players():
         c = counts.get(p["user_id"], 0)
         lines.append(f"• <b>{_esc(p['name'])}</b> — <code>{c}</code>")
     skips = sum(1 for t in game.votes.values() if t == -1)
     if skips:
-        lines.append(f"• ⏭️ ꜱᴋɪᴘ — <code>{skips}</code>")
-    lines.append(f"\n👥 ᴠᴏᴛᴇᴅ: <code>{len(game.votes)}/{game.alive_count()}</code>")
+        lines.append(f"• ⏭️ SKIP — <code>{skips}</code>")
+    lines.append(f"\n👥 Voted: <code>{len(game.votes)}/{game.alive_count()}</code>")
 
     try:
         await q.message.edit_text(
@@ -1164,6 +1273,7 @@ async def _finish_game(game: MafiaGame, winner_side: str):
 
     await _safe_send(game.chat_id, _render_win(game), parse_mode=ParseMode.HTML)
 
+    # Reveal all roles
     role_lines = []
     for p in game.players:
         r = game.roles.get(p["user_id"], "?")
@@ -1174,7 +1284,7 @@ async def _finish_game(game: MafiaGame, winner_side: str):
 
     await _safe_send(
         game.chat_id,
-        "🎭 <b>ʀᴏʟᴇ ʀᴇᴠᴇᴀʟ:</b>\n" + "\n".join(role_lines),
+        "🎭 <b>ROLE REVEAL:</b>\n" + "\n".join(role_lines),
         parse_mode=ParseMode.HTML,
     )
 
@@ -1247,10 +1357,10 @@ async def _payout_paid_game(game: MafiaGame, winner_side: str):
 
     await _safe_send(
         game.chat_id,
-        "💰 <b>ᴘᴀʏᴏᴜᴛ</b>\n\n"
-        f"🏆 ᴡɪɴɴᴇʀꜱ: {len(recipients)}\n"
-        f"💰 ᴘᴏᴏʟ: <code>{game.gross_pool}</code> → ɴᴇᴛ <code>{pool}</code>\n"
-        f"⚡ ᴛᴀx: <code>{game.tax_amount}</code>\n\n"
+        "💰 <b>PAYOUT</b>\n\n"
+        f"🏆 Winners: {len(recipients)}\n"
+        f"💰 Pool: <code>{game.gross_pool}</code> → Net <code>{pool}</code>\n"
+        f"⚡ Tax: <code>{game.tax_amount}</code>\n\n"
         + "\n".join(payout_lines),
         parse_mode=ParseMode.HTML,
     )
@@ -1296,9 +1406,9 @@ async def _cancel_and_refund(game: MafiaGame, reason: str):
 
     await _safe_send(
         game.chat_id,
-        f"🚫 <b>ᴍᴀꜰɪᴀ ᴄᴀɴᴄᴇʟʟᴇᴅ</b>\n\n"
+        f"🚫 <b>MAFIA CANCELLED</b>\n\n"
         f"<i>{_esc(reason)}</i>\n"
-        + (f"💰 ʀᴇꜰᴜɴᴅᴇᴅ: <code>{refunded}</code> ᴘʟᴀʏᴇʀ(ꜱ)" if game.is_paid else ""),
+        + (f"💰 Refunded: <code>{refunded}</code> player(s)" if game.is_paid else ""),
         parse_mode=ParseMode.HTML,
     )
 
@@ -1318,14 +1428,11 @@ async def mafia_cancel(_, message: Message):
         return
     game = get_game(message.chat.id)
     if not game:
-        return await _safe_reply(message, "❌ ɴᴏ ᴀᴄᴛɪᴠᴇ ɢᴀᴍᴇ.", parse_mode=ParseMode.HTML)
-
+        return await _safe_reply(message, "❌ No active game.", parse_mode=ParseMode.HTML)
     if int(message.from_user.id) != int(game.host_id):
-        return await _safe_reply(message, "❌ ᴏɴʟʏ ᴛʜᴇ ʜᴏꜱᴛ ᴄᴀɴ ᴄᴀɴᴄᴇʟ.", parse_mode=ParseMode.HTML)
-
+        return await _safe_reply(message, "❌ Only the host can cancel.", parse_mode=ParseMode.HTML)
     if game.state != STATE_LOBBY:
-        return await _safe_reply(message, "⚠️ ɢᴀᴍᴇ ᴀʟʀᴇᴀᴅʏ ꜱᴛᴀʀᴛᴇᴅ. ᴄᴀɴ'ᴛ ᴄᴀɴᴄᴇʟ.", parse_mode=ParseMode.HTML)
-
+        return await _safe_reply(message, "⚠️ Game already started. Can't cancel.", parse_mode=ParseMode.HTML)
     await _cancel_and_refund(game, reason="Cancelled by host")
 
 
@@ -1333,19 +1440,18 @@ async def mafia_cancel(_, message: Message):
 async def mafia_info(_, message: Message):
     game = get_game(message.chat.id)
     if not game:
-        return await _safe_reply(message, "❌ ɴᴏ ᴀᴄᴛɪᴠᴇ ɢᴀᴍᴇ.", parse_mode=ParseMode.HTML)
-
+        return await _safe_reply(message, "❌ No active game.", parse_mode=ParseMode.HTML)
     if game.state == STATE_LOBBY:
         await _safe_reply(message, _render_lobby(game, LOBBY_SECONDS), parse_mode=ParseMode.HTML)
     else:
         alive_lines = "\n".join(f"• {p['mention']}" for p in game.alive_players())
         await _safe_reply(
             message,
-            f"🎭 <b>ᴍᴀꜰɪᴀ — {game.state}</b>\n"
-            f"ᴅᴀʏ: <code>{game.day_no}</code>\n"
-            f"ᴀʟɪᴠᴇ: <code>{game.alive_count()}</code>\n"
-            f"ᴅᴇᴀᴅ: <code>{len(game.dead)}</code>\n\n"
-            f"<b>ᴀʟɪᴠᴇ ᴘʟᴀʏᴇʀꜱ:</b>\n{alive_lines}",
+            f"🎭 <b>MAFIA — {game.state}</b>\n"
+            f"Day: <code>{game.day_no}</code>\n"
+            f"Alive: <code>{game.alive_count()}</code>\n"
+            f"Dead: <code>{len(game.dead)}</code>\n\n"
+            f"<b>Alive players:</b>\n{alive_lines}",
             parse_mode=ParseMode.HTML,
         )
 
@@ -1367,27 +1473,30 @@ async def mafia_stats_cmd(_, message: Message):
     if not doc:
         return await _safe_reply(
             message,
-            f"📊 <b>{_esc(name)}'ꜱ ᴍᴀꜰɪᴀ ꜱᴛᴀᴛꜱ</b>\n\n❌ ɴᴏ ɢᴀᴍᴇꜱ ᴘʟᴀʏᴇᴅ ʏᴇᴛ.",
+            f"📊 <b>{_esc(name)}'s Mafia stats</b>\n\n❌ No games played yet.",
             parse_mode=ParseMode.HTML,
         )
 
     played = int(doc.get("games_played", 0))
-    wins = int(doc.get("villager_wins", 0)) + int(doc.get("mafia_wins", 0)) + int(doc.get("detective_wins", 0))
+    wins = (int(doc.get("villager_wins", 0)) + int(doc.get("mafia_wins", 0)) +
+            int(doc.get("detective_wins", 0)) + int(doc.get("doctor_wins", 0)))
     wr = (wins / played * 100) if played else 0.0
 
     await _safe_reply(
         message,
-        f"📊 <b>{_esc(name)}'ꜱ ᴍᴀꜰɪᴀ ꜱᴛᴀᴛꜱ</b>\n\n"
-        f"🎮 ɢᴀᴍᴇꜱ: <code>{played}</code>\n"
-        f"🏆 ᴛᴏᴛᴀʟ ᴡɪɴꜱ: <code>{wins}</code> ({wr:.1f}%)\n"
-        f"👥 ᴠɪʟʟᴀɢᴇʀ ᴡɪɴꜱ: <code>{int(doc.get('villager_wins', 0))}</code>\n"
-        f"🔪 ᴍᴀꜰɪᴀ ᴡɪɴꜱ: <code>{int(doc.get('mafia_wins', 0))}</code>\n"
-        f"🕵️ ᴅᴇᴛᴇᴄᴛɪᴠᴇ ᴡɪɴꜱ: <code>{int(doc.get('detective_wins', 0))}</code>\n"
-        f"❌ ʟᴏꜱꜱᴇꜱ: <code>{int(doc.get('losses', 0))}</code>\n"
-        f"🔪 ᴋɪʟʟꜱ: <code>{int(doc.get('mafia_kills', 0))}</code>\n"
-        f"🕵️ ᴄᴀᴛᴄʜᴇꜱ: <code>{int(doc.get('detective_catches', 0))}</code>\n"
-        f"💰 ᴡᴀɢᴇʀᴇᴅ: <code>{int(doc.get('coins_wagered', 0))}</code>\n"
-        f"📊 ɴᴇᴛ: <code>{int(doc.get('net_coins', 0)):+d}</code>",
+        f"📊 <b>{_esc(name)}'s Mafia stats</b>\n\n"
+        f"🎮 Games: <code>{played}</code>\n"
+        f"🏆 Total wins: <code>{wins}</code> ({wr:.1f}%)\n"
+        f"👥 Villager wins: <code>{int(doc.get('villager_wins', 0))}</code>\n"
+        f"🔪 Mafia wins: <code>{int(doc.get('mafia_wins', 0))}</code>\n"
+        f"🕵️ Detective wins: <code>{int(doc.get('detective_wins', 0))}</code>\n"
+        f"👨‍⚕️ Doctor wins: <code>{int(doc.get('doctor_wins', 0))}</code>\n"
+        f"❌ Losses: <code>{int(doc.get('losses', 0))}</code>\n"
+        f"🔪 Kills: <code>{int(doc.get('mafia_kills', 0))}</code>\n"
+        f"🕵️ Catches: <code>{int(doc.get('detective_catches', 0))}</code>\n"
+        f"🩺 Saves: <code>{int(doc.get('doctor_saves', 0))}</code>\n"
+        f"💰 Wagered: <code>{int(doc.get('coins_wagered', 0))}</code>\n"
+        f"📊 Net: <code>{int(doc.get('net_coins', 0)):+d}</code>",
         parse_mode=ParseMode.HTML,
     )
 
@@ -1401,16 +1510,17 @@ async def mafia_top(_, message: Message):
 
     if not rows:
         return await _safe_reply(
-            message, "🏆 <b>ᴍᴀꜰɪᴀ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ</b>\n\n❌ ɴᴏ ɢᴀᴍᴇꜱ ʏᴇᴛ.",
+            message, "🏆 <b>Mafia Leaderboard</b>\n\n❌ No games yet.",
             parse_mode=ParseMode.HTML,
         )
 
     medals = {1: "🥇", 2: "🥈", 3: "🥉"}
-    lines = ["🏆 <b>ᴍᴀꜰɪᴀ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ</b>\n"]
+    lines = ["🏆 <b>Mafia Leaderboard</b>\n"]
     for i, row in enumerate(rows, 1):
         rank = medals.get(i, f"{i}.")
         nm = row.get("name") or str(row["_id"])
         net = int(row.get("net_coins", 0))
-        wins = int(row.get("villager_wins", 0)) + int(row.get("mafia_wins", 0)) + int(row.get("detective_wins", 0))
+        wins = (int(row.get("villager_wins", 0)) + int(row.get("mafia_wins", 0)) +
+                int(row.get("detective_wins", 0)) + int(row.get("doctor_wins", 0)))
         lines.append(f"{rank} <b>{_esc(nm)}</b> — 🏆 <code>{wins}</code> • 📊 <code>{net:+d}</code>")
     await _safe_reply(message, "\n".join(lines), parse_mode=ParseMode.HTML)
