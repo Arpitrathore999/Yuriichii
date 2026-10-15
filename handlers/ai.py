@@ -86,6 +86,9 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     "chainhelp", "wordchainhelp", "playingchains", "games",
     #Rpsgame
     "rps", "joinrps", "rpsinfo", "rpscancel", "rpsstats", "rpstop", "rpshelp",
+    # mafiaGame
+    "mafia", "mafiahelp", "mhelp", "joinmafia", "mafiainfo",
+    "mafiacancel", "mafiastats", "mafiatop", "mafialeaderboard",
 ]
 
 
