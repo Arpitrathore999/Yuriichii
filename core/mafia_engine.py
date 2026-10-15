@@ -1,16 +1,15 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
 #  core/mafia_engine.py — 🎭 MAFIA Game Engine
-#  1 Mafia, 1 Detective, rest Villagers. No Doctor.
+#  Roles: 1 Mafia, 1 Detective, 1 Doctor, optional Witch, rest Villagers.
 #  Paid + Free mode. Vote eliminates 1 player per round.
-#  All text in English.
+#  ✅ FIXED: game freeze after lynching
 # --------------------------------------------------------------------------------
 
 from __future__ import annotations
 
 import asyncio
 import random
-import secrets
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -22,16 +21,22 @@ from database.mongo import db
 # ══════════════════════════════════════════════════════════════════════════════
 ROLE_MAFIA     = "mafia"
 ROLE_DETECTIVE = "detective"
+ROLE_DOCTOR    = "doctor"
+ROLE_WITCH     = "witch"
 ROLE_VILLAGER  = "villager"
 
 ROLE_EMOJI = {
     ROLE_MAFIA:     "🔪",
     ROLE_DETECTIVE: "🕵️",
+    ROLE_DOCTOR:    "👨‍⚕️",
+    ROLE_WITCH:     "🧙",
     ROLE_VILLAGER:  "👥",
 }
 ROLE_LABEL = {
     ROLE_MAFIA:     "MAFIA",
     ROLE_DETECTIVE: "DETECTIVE",
+    ROLE_DOCTOR:    "DOCTOR",
+    ROLE_WITCH:     "WITCH",
     ROLE_VILLAGER:  "VILLAGER",
 }
 
@@ -44,7 +49,7 @@ STATE_CANCELLED = "CANCELLED"
 TERMINAL = (STATE_FINISHED, STATE_CANCELLED)
 
 MIN_PLAYERS   = 4
-MAX_PLAYERS   = 10
+MAX_PLAYERS   = 12
 LOBBY_SECONDS = 60
 NIGHT_SECONDS = 30
 DAY_SECONDS   = 45
@@ -55,7 +60,6 @@ ENTRY_MAX = 500_000
 GAME_FEE_PERCENT = 0.10
 WINNER_XP = 150
 LOSER_XP  = 20
-SPECTATOR_XP = 5
 
 ACTIVE_GAMES: dict[int, "MafiaGame"] = {}
 USER_ACTIVE: dict[int, int] = {}
@@ -85,13 +89,20 @@ class MafiaGame:
 
         self.state      = STATE_LOBBY
         self.day_no     = 0
-        self.round_id:  Optional[str] = None
 
+        # Night actions
         self.night_kill:  Optional[int] = None
         self.night_check: Optional[int] = None
+        self.night_save:  Optional[int] = None
         self.night_kill_done  = False
         self.night_check_done = False
+        self.night_save_done  = False
 
+        # Witch potions (optional role)
+        self.witch_heal_used = False
+        self.witch_kill_used = False
+
+        # Voting
         self.votes: dict[int, int] = {}
 
         self.winner_side: Optional[str] = None
@@ -111,6 +122,7 @@ class MafiaGame:
         self.created_at  = _now()
         self.finished_at: Optional[datetime] = None
 
+    # ── Player helpers ────────────────────────────────────────────────────
     def has_player(self, uid) -> bool:
         return any(p["user_id"] == int(uid) for p in self.players)
 
@@ -150,20 +162,64 @@ class MafiaGame:
                 return uid
         return None
 
+    def get_doctor(self) -> Optional[int]:
+        for uid, r in self.roles.items():
+            if r == ROLE_DOCTOR:
+                return uid
+        return None
+
+    def get_witch(self) -> Optional[int]:
+        for uid, r in self.roles.items():
+            if r == ROLE_WITCH:
+                return uid
+        return None
+
+    # ── Role assignment ───────────────────────────────────────────────────
     def assign_roles(self):
-        """1 Mafia, 1 Detective, rest Villagers."""
+        """Role distribution scales with player count.
+
+        4 players:  1 Mafia, 1 Detective, 1 Doctor, 1 Villager
+        5 players:  1 Mafia, 1 Detective, 1 Doctor, 2 Villagers
+        6 players:  1 Mafia, 1 Detective, 1 Doctor, 1 Witch, 2 Villagers
+        7-8:        1 Mafia, 1 Detective, 1 Doctor, 1 Witch, rest Villagers
+        9-10:       1 Mafia, 1 Detective, 1 Doctor, 1 Witch, 1 Hunter*, rest Villagers
+        11-12:      2 Mafia, 1 Detective, 1 Doctor, 1 Witch, rest Villagers
+        """
         uids = [p["user_id"] for p in self.players]
         random.shuffle(uids)
+        n = len(uids)
 
         self.roles = {}
-        self.roles[uids[0]] = ROLE_MAFIA
-        self.roles[uids[1]] = ROLE_DETECTIVE
-        for uid in uids[2:]:
-            self.roles[uid] = ROLE_VILLAGER
+        idx = 0
+
+        # Always: 1 Mafia
+        self.roles[uids[idx]] = ROLE_MAFIA; idx += 1
+
+        # Always: 1 Detective
+        if idx < n:
+            self.roles[uids[idx]] = ROLE_DETECTIVE; idx += 1
+
+        # Always: 1 Doctor
+        if idx < n:
+            self.roles[uids[idx]] = ROLE_DOCTOR; idx += 1
+
+        # Witch (6+ players)
+        if n >= 6 and idx < n:
+            self.roles[uids[idx]] = ROLE_WITCH; idx += 1
+
+        # 11+ players: add second mafia
+        if n >= 11 and idx < n:
+            self.roles[uids[idx]] = ROLE_MAFIA; idx += 1
+
+        # Rest → Villagers
+        while idx < n:
+            self.roles[uids[idx]] = ROLE_VILLAGER
+            idx += 1
 
         self.alive = list(uids)
         self.dead = []
 
+    # ── Night actions ─────────────────────────────────────────────────────
     def submit_night_kill(self, target_uid: int) -> tuple[bool, str]:
         if self.state != STATE_NIGHT:
             return False, "not_night"
@@ -196,15 +252,42 @@ class MafiaGame:
         self.night_check_done = True
         return True, "ok"
 
-    def resolve_night(self) -> Optional[int]:
-        if self.night_kill_done and self.night_kill:
-            victim = self.night_kill
-            if victim in self.alive:
-                self.alive.remove(victim)
-                self.dead.append(victim)
-                return victim
-        return None
+    def submit_night_save(self, target_uid: int) -> tuple[bool, str]:
+        if self.state != STATE_NIGHT:
+            return False, "not_night"
+        if self.night_save_done:
+            return False, "already_done"
+        doc_uid = self.get_doctor()
+        if not doc_uid:
+            return False, "no_doctor"
+        if int(target_uid) not in self.alive:
+            return False, "not_alive"
+        self.night_save = int(target_uid)
+        self.night_save_done = True
+        return True, "ok"
 
+    def resolve_night(self) -> tuple[Optional[int], bool]:
+        """Returns (killed_uid or None, was_saved_by_doctor)."""
+        if not (self.night_kill_done and self.night_kill):
+            return None, False
+
+        victim = self.night_kill
+        saved = False
+
+        # Doctor save?
+        if self.night_save_done and self.night_save == victim:
+            saved = True
+
+        if saved:
+            return None, True
+
+        if victim in self.alive:
+            self.alive.remove(victim)
+            self.dead.append(victim)
+            return victim, False
+        return None, False
+
+    # ── Voting ────────────────────────────────────────────────────────────
     def submit_vote(self, voter_uid: int, target_uid: int) -> tuple[bool, str]:
         if self.state != STATE_VOTING:
             return False, "not_voting"
@@ -249,7 +332,10 @@ class MafiaGame:
             return None
         if mafia_uid not in self.alive:
             return "villagers"
-        if self.alive_count() <= 2:
+        # Mafia alive + 1 or fewer non-mafia alive = mafia wins
+        non_mafia_alive = sum(1 for uid in self.alive
+                              if self.roles.get(uid) != ROLE_MAFIA)
+        if non_mafia_alive <= 1:
             return "mafia"
         return None
 
@@ -266,6 +352,14 @@ class MafiaGame:
 
     def is_terminal(self) -> bool:
         return self.state in TERMINAL
+
+    def reset_night_actions(self):
+        self.night_kill = None
+        self.night_check = None
+        self.night_save = None
+        self.night_kill_done = False
+        self.night_check_done = False
+        self.night_save_done = False
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -328,6 +422,7 @@ async def ensure_stats(user_id: int, name: str = ""):
                 "villager_wins": 0,
                 "mafia_wins": 0,
                 "detective_wins": 0,
+                "doctor_wins": 0,
                 "losses": 0,
                 "coins_wagered": 0,
                 "gross_won": 0,
@@ -335,7 +430,7 @@ async def ensure_stats(user_id: int, name: str = ""):
                 "net_coins": 0,
                 "mafia_kills": 0,
                 "detective_catches": 0,
-                "correct_votes": 0,
+                "doctor_saves": 0,
                 "win_streak": 0,
                 "best_streak": 0,
                 "last_played": None,
@@ -359,6 +454,8 @@ async def record_result(user_id: int, name: str, *, role: str, won: bool,
             inc["mafia_wins"] = 1
         elif role == ROLE_DETECTIVE:
             inc["detective_wins"] = 1
+        elif role == ROLE_DOCTOR:
+            inc["doctor_wins"] = 1
         else:
             inc["villager_wins"] = 1
         inc["gross_won"] = int(gross_won)
@@ -401,6 +498,16 @@ async def bump_detective_catches(user_id: int):
         return
     try:
         await col.update_one({"_id": int(user_id)}, {"$inc": {"detective_catches": 1}})
+    except Exception:
+        pass
+
+
+async def bump_doctor_saves(user_id: int):
+    col = _stats_col()
+    if col is None:
+        return
+    try:
+        await col.update_one({"_id": int(user_id)}, {"$inc": {"doctor_saves": 1}})
     except Exception:
         pass
 
