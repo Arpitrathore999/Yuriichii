@@ -1,12 +1,14 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  handlers/mafiagame.py — 🎭 MAFIA Telegram handlers
-#  ✅ FIXED: freeze bug, Doctor role, DM join deep-link
+#  handlers/mafiagame.py — 🎭 MAFIA v2
+#  ✅ GIF night/day, winner PFP, group name, "Go to Bot" button
 # --------------------------------------------------------------------------------
 
 from __future__ import annotations
 
 import asyncio
+import os
+import random
 from datetime import datetime, timezone
 
 from pyrogram import StopPropagation, filters
@@ -70,6 +72,14 @@ BOT_USERNAME = (getattr(config, "BOT_USERNAME", "") or "ItzElaraBot").lstrip("@"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  🎬 GIF URLs — set in config.py OR replace with your own
+# ══════════════════════════════════════════════════════════════════════════════
+NIGHT_GIF_URL = getattr(config, "MAFIA_NIGHT_GIF", "") or ""
+DAY_GIF_URL   = getattr(config, "MAFIA_DAY_GIF", "") or ""
+WIN_GIF_URL   = getattr(config, "MAFIA_WIN_GIF", "") or ""
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
 def _esc(v):
@@ -122,6 +132,32 @@ async def _safe_dm(uid: int, text, **kw):
     except Exception as e:
         print(f"[Mafia DM] {type(e).__name__}: {e}", flush=True)
         return None
+
+
+async def _send_gif(chat_id, gif_url: str, caption: str, kb=None):
+    """Send a GIF with caption. Falls back to text if no URL or error."""
+    if not gif_url:
+        return await _safe_send(chat_id, caption, parse_mode=ParseMode.HTML, reply_markup=kb)
+    try:
+        return await app.send_animation(
+            chat_id=chat_id,
+            animation=gif_url,
+            caption=caption,
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb,
+        )
+    except Exception as e:
+        print(f"[Mafia GIF] {type(e).__name__}: {e}", flush=True)
+        return await _safe_send(chat_id, caption, parse_mode=ParseMode.HTML, reply_markup=kb)
+
+
+async def _get_group_name(chat_id: int) -> str:
+    """Fetch group title safely."""
+    try:
+        chat = await app.get_chat(chat_id)
+        return getattr(chat, "title", "") or f"Group {chat_id}"
+    except Exception:
+        return f"Group {chat_id}"
 
 
 async def _get_balance(uid: int) -> int:
@@ -227,11 +263,11 @@ def _render_mafia_help() -> str:
 
         "<b>2️⃣ ROLES ARE SENT VIA DM</b>\n"
         "• Each player gets a secret role privately\n"
-        "• 🔪 <b>Mafia</b> picks a target to kill each night\n"
-        "• 🕵️ <b>Detective</b> investigates 1 player each night\n"
-        "• 👨‍⚕️ <b>Doctor</b> protects 1 player from being killed\n"
-        "• 🧙 <b>Witch</b> (6+ players) — heals or kills once\n"
-        "• 👥 <b>Villagers</b> have no night action\n\n"
+        "• 🔪 <b>Mafia</b> — kills 1 player each night\n"
+        "• 🕵️ <b>Detective</b> — investigates 1 player each night\n"
+        "• 👨‍⚕️ <b>Doctor</b> — protects 1 player each night\n"
+        "• 🧙 <b>Witch</b> (6+ players) — has heal + kill potions\n"
+        "• 👥 <b>Villagers</b> — no night action\n\n"
 
         "<b>3️⃣ NIGHT PHASE</b> 🌙 (30s)\n"
         "• Mafia kills · Detective checks · Doctor saves\n\n"
@@ -242,19 +278,9 @@ def _render_mafia_help() -> str:
 
         "<b>5️⃣ VOTING PHASE</b> 🗳️ (30s)\n"
         "• All alive players vote via buttons\n"
-        "• Highest voted player is lynched (tie = no lynch)\n\n"
+        "• Highest voted = lynched (tie = no lynch)\n\n"
 
-        "<b>6️⃣ REPEAT</b> 🔁\n"
-        "• Night → Day → Vote until one side wins\n\n"
-
-        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "🎭 <b>ROLES</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "🔪 <b>Mafia</b> — Kills one player each night\n"
-        "🕵️ <b>Detective</b> — Learns one player's role each night\n"
-        "👨‍⚕️ <b>Doctor</b> — Protects one player each night (can self-protect)\n"
-        "🧙 <b>Witch</b> — Has 1 heal + 1 kill potion (6+ players)\n"
-        "👥 <b>Villager</b> — Discusses and votes\n\n"
+        "<b>6️⃣ REPEAT</b> 🔁 — Night → Day → Vote until one side wins\n\n"
 
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "🏆 <b>WIN CONDITIONS</b>\n"
@@ -272,22 +298,13 @@ def _render_mafia_help() -> str:
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "📋 <b>COMMANDS</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-
         "🎮 <b>Game</b>\n"
-        "• <code>/mafia free</code> — start free game\n"
-        "• <code>/mafia &lt;amount&gt;</code> — start paid game\n"
-        "• <code>/joinmafia</code> — join the lobby\n"
-        "• <code>/mafiainfo</code> — show status\n"
-        "• <code>/mafiacancel</code> — cancel (host only, lobby phase)\n\n"
-
+        "• <code>/mafia free</code> · <code>/mafia &lt;amount&gt;</code>\n"
+        "• <code>/joinmafia</code> · <code>/mafiainfo</code> · <code>/mafiacancel</code>\n\n"
         "📊 <b>Stats</b>\n"
-        "• <code>/mafiastats</code> — your profile\n"
-        "• <code>/mafiatop</code> — leaderboard\n\n"
-
+        "• <code>/mafiastats</code> · <code>/mafiatop</code>\n\n"
         "📖 <b>Help</b>\n"
-        "• <code>/mafiahelp</code> — this message\n\n"
-
-        "💡 <i>Tip: Click the JOIN button in the group — it opens the bot DM to confirm.</i>"
+        "• <code>/mafiahelp</code>\n"
     )
 
 
@@ -298,36 +315,35 @@ def _render_lobby(game: MafiaGame, secs_left: int) -> str:
     ) or "<i>No players yet — be the first!</i>"
     return (
         "🎭 <b>MAFIA — LOBBY OPEN!</b> 🎭\n\n"
+        f"📍 <b>Group:</b> {_esc(game.chat_name or 'this group')}\n"
         f"🎮 <b>Mode:</b> {mode}\n"
         f"👥 <b>Players:</b> <code>{len(game.players)}/{MAX_PLAYERS}</code> "
         f"<i>(min {MIN_PLAYERS})</i>\n"
         f"⏳ <b>Join time:</b> <code>{max(0, secs_left)}s</code>\n\n"
         f"👤 <b>Players:</b>\n{lines}\n\n"
-        "👉 <b>Tap JOIN below</b> (opens DM) or use <code>/joinmafia</code>"
+        "👉 <b>Tap JOIN below</b> (opens bot DM) or use <code>/joinmafia</code>"
     )
 
 
 def _lobby_kb(game: MafiaGame) -> InlineKeyboardMarkup:
-    """✅ Join button opens bot DM with deep link payload."""
+    """✅ 'Go to Bot' button opens DM. Shows group name after click."""
     join_label = (f"➕ JOIN GAME ({game.entry_fee} coins)"
                   if game.is_paid else "➕ JOIN GAME (Free)")
     dm_link = f"https://t.me/{BOT_USERNAME}?start=mafia_join_{game.chat_id}"
+    help_link = f"https://t.me/{BOT_USERNAME}?start=mafia_help"
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(join_label, url=dm_link)],
-        [InlineKeyboardButton(
-            "❓ How to Play",
-            url=f"https://t.me/{BOT_USERNAME}?start=mafia_help",
-        )],
+        [InlineKeyboardButton("🎭 Go to Bot", url=help_link)],
     ])
 
 
 def _render_night_intro(game: MafiaGame) -> str:
     return (
-        f"🌙 <b>NIGHT {game.day_no} BEGINS</b>\n\n"
-        "The Mafia is hunting...\n"
-        "The Detective is investigating...\n"
-        "The Doctor is protecting...\n\n"
-        "😴 Villagers, sleep tight..."
+        f"🌃 <b>The Night Falls — Night {game.day_no}</b>\n"
+        f"<i>Only the most brave and fearless ones are out in the streets.\n"
+        f"We'll try to count the fallen ones in the morning...</i>\n\n"
+        f"😴 Villagers, sleep tight...\n"
+        f"⏱ <code>{NIGHT_SECONDS}s</code> left to sleep"
     )
 
 
@@ -336,19 +352,24 @@ def _render_day_announce(game: MafiaGame, killed_uid: int | None, was_saved: boo
         death = ("🩺 <b>THE DOCTOR SAVED A LIFE LAST NIGHT!</b>\n"
                  "<i>The Mafia's attack was blocked.</i>")
     elif killed_uid is None:
-        death = "😮 <b>NO ONE DIED LAST NIGHT!</b>"
+        death = "🤷 <b>What a surprise! Everyone made it through the night</b>"
     else:
         p = game.get_player(killed_uid)
         name = p["mention"] if p else f"<code>{killed_uid}</code>"
         death = f"💀 <b>{name}</b> was killed last night!"
 
-    alive_list = "\n".join(f"• {p['mention']}" for p in game.alive_players())
+    alive_list = "\n".join(
+        f"{i}. {p['mention']}" for i, p in enumerate(game.alive_players(), 1)
+    )
+
     return (
-        f"☀️ <b>DAY {game.day_no}</b>\n\n"
+        f"🏙️ <b>Day {game.day_no}</b>\n"
+        f"<i>The sun rises and dries the blood spilled on the asphalt last night...</i>\n\n"
         f"{death}\n\n"
-        f"👥 <b>Alive ({game.alive_count()}):</b>\n{alive_list}\n\n"
-        f"🗣 <b>DISCUSSION:</b> Who is the Mafia? 🤔\n"
-        f"⏱ <code>{DAY_SECONDS}s</code> to discuss, then voting starts!"
+        f"<b>Players alive:</b>\n{alive_list}\n\n"
+        f"👥 <b>Alive:</b> <code>{game.alive_count()}</code>\n\n"
+        f"🗣 <b>Discussion time!</b> Try to figure out who the Mafia is...\n"
+        f"⏱ <code>{DAY_SECONDS}s</code> until voting starts!"
     )
 
 
@@ -374,7 +395,7 @@ def _vote_kb(game: MafiaGame) -> InlineKeyboardMarkup:
 
 def _render_voting(game: MafiaGame) -> str:
     return (
-        f"🗳️ <b>VOTING TIME — DAY {game.day_no}</b>\n\n"
+        f"🗳️ <b>Voting Time — Day {game.day_no}</b>\n\n"
         "Who should be lynched?\n"
         f"⏱ <code>{VOTE_SECONDS}s</code>\n\n"
         "👇 Vote below! (One vote per player)"
@@ -383,7 +404,7 @@ def _render_voting(game: MafiaGame) -> str:
 
 def _render_vote_result(game: MafiaGame, lynched: int | None, counts: dict) -> str:
     if not counts:
-        return "🗳️ <b>VOTE RESULT</b>\n\n😮 No votes were cast. Nobody eliminated."
+        return "🗳️ <b>Vote Result</b>\n\n😮 No votes were cast. Nobody eliminated."
 
     lines = []
     for uid, c in sorted(counts.items(), key=lambda x: -x[1]):
@@ -391,7 +412,7 @@ def _render_vote_result(game: MafiaGame, lynched: int | None, counts: dict) -> s
         nm = p["name"] if p else str(uid)
         lines.append(f"• <b>{_esc(nm)}</b> — <code>{c}</code> votes")
 
-    header = f"🗳️ <b>VOTE RESULT — DAY {game.day_no}</b>\n\n" + "\n".join(lines)
+    header = f"🗳️ <b>Vote Result — Day {game.day_no}</b>\n\n" + "\n".join(lines)
 
     if lynched is None:
         return header + "\n\n🤝 <b>TIE!</b> No one was lynched."
@@ -409,36 +430,58 @@ def _render_vote_result(game: MafiaGame, lynched: int | None, counts: dict) -> s
     )
 
 
-def _render_win(game: MafiaGame) -> str:
+def _render_win_text(game: MafiaGame) -> str:
     if game.winner_side == "villagers":
         return (
-            "🎉 <b>VILLAGERS WIN!</b> 🎉\n\n"
+            "🎉 <b>Villagers WIN!</b> 🎉\n\n"
             "🔪 The Mafia has been eliminated!\n"
             "👥 The village is safe again."
         )
     return (
-        "🔪 <b>MAFIA WINS!</b> 🔪\n\n"
+        "🔪 <b>Mafia WINS!</b> 🔪\n\n"
         "💀 The Mafia has taken over the village!\n"
         "😈 No one can stop them now..."
     )
 
 
+def _render_winner_card(game: MafiaGame, winner_name: str, share: int,
+                        winners_count: int) -> str:
+    """Winner announcement in card-game style."""
+    payouts = []
+    for uid in game.winner_ids:
+        p = game.get_player(uid)
+        nm = p["name"] if p else str(uid)
+        payouts.append(f"• {_esc(nm)} — <code>+{share}</code>")
+
+    players_line = ", ".join(_esc(p["name"]) for p in game.players)
+
+    return (
+        "👑 <b>Final Winner(s)</b> 👑\n\n"
+        f"🎯 <b>Winning Side:</b> {game.winner_side.title()}\n"
+        f"💰 <b>Won:</b> <code>{game.net_prize}</code> ({int(GAME_FEE_PERCENT*100)}% fee)\n"
+        f"⚡ <b>XP gained:</b> <code>+{WINNER_XP}</code>\n"
+        f"🏆 <b>Total Winners:</b> <code>{winners_count}</code>\n\n"
+        "<b>Payouts:</b>\n" + "\n".join(payouts) + "\n\n"
+        f"👥 <b>Players:</b> {players_line}\n\n"
+        + (f"👉 Play again using: <code>/mafia {game.entry_fee}</code>"
+           if game.is_paid else "👉 Play again using: <code>/mafia free</code>")
+    )
+
+
 # ══════════════════════════════════════════════════════════════════════════════
-#  DEEP-LINK HANDLER  (DM: /start mafia_join_<chat_id> | mafia_help)
+#  DEEP-LINK HANDLER
 # ══════════════════════════════════════════════════════════════════════════════
 @app.on_message(filters.command("start", prefixes=PREFIXES) & filters.private, group=-1)
 async def mafia_deeplink(_, message: Message):
     if not message.command or len(message.command) < 2:
-        return   # let other handlers process
+        return
 
     payload = message.command[1].strip()
 
-    # ── Help deep link ──
     if payload == "mafia_help":
         await _safe_reply(message, _render_mafia_help(), parse_mode=ParseMode.HTML)
         raise StopPropagation
 
-    # ── Join deep link ──
     if not payload.startswith("mafia_join_"):
         return
 
@@ -451,10 +494,15 @@ async def mafia_deeplink(_, message: Message):
     game = get_game(chat_id)
     user = message.from_user
 
+    # ✅ Fetch group name
+    group_name = await _get_group_name(chat_id) if chat_id else "Unknown"
+    if game and game.chat_name:
+        group_name = game.chat_name
+
     if not game:
         await _safe_reply(
             message,
-            "❌ <b>No active Mafia lobby in that group.</b>\n"
+            f"❌ <b>No active Mafia lobby in</b> <b>{_esc(group_name)}</b>.\n"
             "<i>The lobby may have closed or been cancelled.</i>",
             parse_mode=ParseMode.HTML,
         )
@@ -463,7 +511,7 @@ async def mafia_deeplink(_, message: Message):
     if game.state != STATE_LOBBY:
         await _safe_reply(
             message,
-            "❌ <b>The lobby has already closed.</b>",
+            f"❌ <b>The lobby in {_esc(group_name)} has already closed.</b>",
             parse_mode=ParseMode.HTML,
         )
         raise StopPropagation
@@ -471,7 +519,7 @@ async def mafia_deeplink(_, message: Message):
     if game.has_player(user.id):
         await _safe_reply(
             message,
-            "⚠️ <b>Hey, you're already in the game!</b>\n"
+            f"⚠️ <b>Hey, you're already in the game in {_esc(group_name)}!</b>\n"
             "<i>Wait for the lobby to close and roles to be assigned.</i>",
             parse_mode=ParseMode.HTML,
         )
@@ -491,25 +539,23 @@ async def mafia_deeplink(_, message: Message):
         )
         raise StopPropagation
 
-    # ✅ Success → confirm in DM
+    # ✅ Confirm in DM with GROUP NAME
     await _safe_reply(
         message,
         f"✅ <b>You joined the Mafia game!</b>\n\n"
-        f"📍 Group: <code>{chat_id}</code>\n"
+        f"📍 Group: <b>{_esc(group_name)}</b>\n"
         f"👥 Players: <code>{len(game.players)}/{MAX_PLAYERS}</code>\n\n"
         "🎭 Your role will be sent here once the lobby closes.\n"
         "⏳ Please wait...",
         parse_mode=ParseMode.HTML,
     )
 
-    # ✅ Also announce in group
     await _safe_send(
         game.chat_id,
         f"🔥 {_mention(user.id, _name(user))} joined the game!",
         parse_mode=ParseMode.HTML,
     )
 
-    # Update lobby message in group
     if game.lobby_message_id:
         await _safe_edit(
             game.chat_id, game.lobby_message_id,
@@ -526,7 +572,7 @@ async def mafia_deeplink(_, message: Message):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  /mafiahelp  /mhelp
+#  /mafiahelp
 # ══════════════════════════════════════════════════════════════════════════════
 @app.on_message(filters.command(["mafiahelp", "mhelp"], prefixes=PREFIXES))
 async def mafia_help_cmd(_, message: Message):
@@ -613,6 +659,8 @@ async def mafia_cmd(_, message: Message):
         is_paid=is_paid,
     )
     game.state = STATE_LOBBY
+    # ✅ Store group name
+    game.chat_name = getattr(message.chat, "title", "") or f"Group {message.chat.id}"
 
     game.add_player(message.from_user.id, _name(message.from_user),
                     _mention(message.from_user.id, _name(message.from_user)))
@@ -638,7 +686,7 @@ async def mafia_cmd(_, message: Message):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  JOIN (command in group)
+#  JOIN (group command)
 # ══════════════════════════════════════════════════════════════════════════════
 async def _process_join(game: MafiaGame, uid: int, name: str, mention: str) -> tuple[bool, str]:
     if game.state != STATE_LOBBY:
@@ -838,7 +886,7 @@ async def _send_role_dm(game: MafiaGame, uid: int, role: str) -> bool:
             "You have TWO potions (each usable once):\n"
             "• 💚 Heal — revive/protect a player\n"
             "• ☠️ Kill — instantly kill a player\n\n"
-            "<i>Witch potions are not active in this version — you play as a Villager.</i>"
+            "<i>Witch potions are not active in this version.</i>"
         )
 
     else:
@@ -870,7 +918,6 @@ def _target_kb(game: MafiaGame, actor_uid: int, prefix: str,
 
 
 async def _start_night(game: MafiaGame):
-    """✅ FIXED: allow transition from VOTING/DAY/LOBBY."""
     if game.state in (STATE_FINISHED, STATE_CANCELLED):
         return
 
@@ -879,22 +926,34 @@ async def _start_night(game: MafiaGame):
     game.state = STATE_NIGHT
     await persist_game(game)
 
-    await _safe_send(game.chat_id, _render_night_intro(game), parse_mode=ParseMode.HTML)
+    # ✅ Send NIGHT GIF with caption
+    await _send_gif(
+        game.chat_id,
+        NIGHT_GIF_URL,
+        _render_night_intro(game),
+        kb=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🎭 Go to Bot",
+                                 url=f"https://t.me/{BOT_USERNAME}?start=mafia_help")
+        ]]),
+    )
 
-    # Re-send night action DMs for surviving special roles
+    # Re-send action DMs for surviving special roles
     if game.day_no > 1:
         mafia_uid = game.get_mafia()
         det_uid = game.get_detective()
         doc_uid = game.get_doctor()
         if mafia_uid and mafia_uid in game.alive:
             await _send_action_dm(game, mafia_uid, "mafia_nk",
-                                  "🔪 Choose who to kill", "🔪 NIGHT — CHOOSE KILL TARGET")
+                                  "Choose who to kill",
+                                  "🔪 NIGHT — CHOOSE KILL TARGET")
         if det_uid and det_uid in game.alive:
             await _send_action_dm(game, det_uid, "mafia_nc",
-                                  "Choose who to investigate", "🕵️ NIGHT — CHOOSE TARGET")
+                                  "Choose who to investigate",
+                                  "🕵️ NIGHT — CHOOSE TARGET")
         if doc_uid and doc_uid in game.alive:
             await _send_action_dm(game, doc_uid, "mafia_nd",
-                                  "Choose who to protect", "👨‍⚕️ NIGHT — CHOOSE PROTECT",
+                                  "Choose who to protect",
+                                  "👨‍⚕️ NIGHT — CHOOSE PROTECT",
                                   include_self=True)
 
     game.phase_task = asyncio.create_task(_night_timer(game, game.day_no))
@@ -949,14 +1008,12 @@ async def _resolve_night(game: MafiaGame):
 
     killed_uid, was_saved = game.resolve_night()
 
-    # Mafia kill stat
     if game.night_kill_done and game.get_mafia():
         try:
             await bump_mafia_kills(game.get_mafia())
         except Exception:
             pass
 
-    # Doctor save stat
     if was_saved and game.get_doctor():
         try:
             await bump_doctor_saves(game.get_doctor())
@@ -972,7 +1029,6 @@ async def _resolve_night(game: MafiaGame):
         except Exception:
             pass
 
-    # Detective result
     if game.night_check_done and game.get_detective():
         target_uid = game.night_check
         target_role = game.roles.get(target_uid, "?")
@@ -1002,10 +1058,15 @@ async def _resolve_night(game: MafiaGame):
     if winner:
         return await _finish_game(game, winner)
 
-    await _safe_send(
+    # ✅ Send DAY GIF with caption
+    await _send_gif(
         game.chat_id,
+        DAY_GIF_URL,
         _render_day_announce(game, killed_uid, was_saved),
-        parse_mode=ParseMode.HTML,
+        kb=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🎭 Go to Bot",
+                                 url=f"https://t.me/{BOT_USERNAME}?start=mafia_help")
+        ]]),
     )
 
     game.phase_task = asyncio.create_task(_day_timer(game, game.day_no))
@@ -1067,7 +1128,6 @@ async def _maybe_resolve_voting_early(game: MafiaGame):
 
 
 async def _resolve_voting(game: MafiaGame):
-    """✅ FIXED: properly transitions to next night."""
     if game.state != STATE_VOTING:
         return
 
@@ -1095,13 +1155,12 @@ async def _resolve_voting(game: MafiaGame):
     if winner:
         return await _finish_game(game, winner)
 
-    # ✅ Now we safely transition: state → NIGHT via _start_night
     await asyncio.sleep(2)
     await _start_night(game)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  NIGHT ACTION CALLBACKS (DM)
+#  NIGHT ACTION CALLBACKS
 # ══════════════════════════════════════════════════════════════════════════════
 @app.on_callback_query(filters.regex(r"^mafia_nk:"))
 async def mafia_nk_cb(_, q: CallbackQuery):
@@ -1208,7 +1267,7 @@ async def mafia_nd_cb(_, q: CallbackQuery):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  VOTE CALLBACK (Group)
+#  VOTE CALLBACK
 # ══════════════════════════════════════════════════════════════════════════════
 @app.on_callback_query(filters.regex(r"^mafia_vote:"))
 async def mafia_vote_cb(_, q: CallbackQuery):
@@ -1271,9 +1330,28 @@ async def _finish_game(game: MafiaGame, winner_side: str):
     game.finished_at = datetime.now(timezone.utc)
     game.cancel_timers()
 
-    await _safe_send(game.chat_id, _render_win(game), parse_mode=ParseMode.HTML)
+    # ✅ Determine winners
+    if winner_side == "mafia":
+        mafia_uid = game.get_mafia()
+        game.winner_ids = [mafia_uid] if mafia_uid else []
+    else:
+        # All alive non-mafia
+        game.winner_ids = [p["user_id"] for p in game.alive_players()
+                           if game.roles.get(p["user_id"]) != ROLE_MAFIA]
+        # Fallback: all non-mafia players even if dead
+        if not game.winner_ids:
+            game.winner_ids = [p["user_id"] for p in game.players
+                               if game.roles.get(p["user_id"]) != ROLE_MAFIA]
 
-    # Reveal all roles
+    if not game.winner_ids:
+        return await _cancel_and_refund(game, reason="No winners determined")
+
+    # Send win GIF + text
+    await _send_gif(
+        game.chat_id, WIN_GIF_URL, _render_win_text(game),
+    )
+
+    # Role reveal
     role_lines = []
     for p in game.players:
         r = game.roles.get(p["user_id"], "?")
@@ -1288,18 +1366,20 @@ async def _finish_game(game: MafiaGame, winner_side: str):
         parse_mode=ParseMode.HTML,
     )
 
+    # Payout / XP
     if game.is_paid and game.net_prize > 0:
-        await _payout_paid_game(game, winner_side)
+        share = await _payout_paid_game(game, winner_side)
     else:
+        share = 0
         await _award_xp_only(game, winner_side)
 
+    # ✅ Send WINNER ANNOUNCEMENT with PFP
+    await _send_winner_card(game, share)
+
+    # Stats
     for p in game.players:
         role = game.roles.get(p["user_id"], ROLE_VILLAGER)
-        won = False
-        if winner_side == "villagers" and role != ROLE_MAFIA:
-            won = True
-        elif winner_side == "mafia" and role == ROLE_MAFIA:
-            won = True
+        won = p["user_id"] in game.winner_ids
         try:
             await record_result(
                 p["user_id"], p["name"], role=role, won=won,
@@ -1320,64 +1400,74 @@ async def _finish_game(game: MafiaGame, winner_side: str):
         pass
 
 
-async def _payout_paid_game(game: MafiaGame, winner_side: str):
+async def _payout_paid_game(game: MafiaGame, winner_side: str) -> int:
+    """Returns per-winner share."""
     pool = game.net_prize
-    if pool <= 0:
-        return
+    if pool <= 0 or not game.winner_ids:
+        return 0
 
-    recipients: list[int] = []
-    if winner_side == "mafia":
-        mafia_uid = game.get_mafia()
-        if mafia_uid:
-            recipients = [mafia_uid]
-    else:
-        recipients = [p["user_id"] for p in game.alive_players()
-                      if game.roles.get(p["user_id"]) != ROLE_MAFIA]
-
-    if not recipients:
-        recipients = [p["user_id"] for p in game.players
-                      if game.roles.get(p["user_id"]) != ROLE_MAFIA]
-
-    if not recipients:
-        return
-
-    share = pool // len(recipients)
+    share = pool // len(game.winner_ids)
     if share <= 0:
-        return
+        return 0
 
-    payout_lines = []
-    for uid in recipients:
+    for uid in game.winner_ids:
         await _ensure_user_record(uid)
-        ok = await _payout_winner(uid, share)
-        p = game.get_player(uid)
-        nm = p["name"] if p else str(uid)
-        payout_lines.append(f"• {_esc(nm)} — <code>+{share}</code> {'✅' if ok else '❌'}")
+        await _payout_winner(uid, share)
 
     await _credit_elara(game.tax_amount)
-
-    await _safe_send(
-        game.chat_id,
-        "💰 <b>PAYOUT</b>\n\n"
-        f"🏆 Winners: {len(recipients)}\n"
-        f"💰 Pool: <code>{game.gross_pool}</code> → Net <code>{pool}</code>\n"
-        f"⚡ Tax: <code>{game.tax_amount}</code>\n\n"
-        + "\n".join(payout_lines),
-        parse_mode=ParseMode.HTML,
-    )
+    return share
 
 
 async def _award_xp_only(game: MafiaGame, winner_side: str):
     for p in game.players:
-        role = game.roles.get(p["user_id"], ROLE_VILLAGER)
-        won = False
-        if winner_side == "villagers" and role != ROLE_MAFIA:
-            won = True
-        elif winner_side == "mafia" and role == ROLE_MAFIA:
-            won = True
+        won = p["user_id"] in game.winner_ids
         try:
             await add_xp(p["user_id"], WINNER_XP if won else LOSER_XP)
         except Exception:
             pass
+
+
+async def _send_winner_card(game: MafiaGame, share: int):
+    """✅ Send winner announcement with random winner's PFP."""
+    if not game.winner_ids:
+        return
+
+    # Pick random winner for PFP
+    pick_uid = random.choice(game.winner_ids)
+    pick_p = game.get_player(pick_uid)
+    pick_name = pick_p["name"] if pick_p else str(pick_uid)
+
+    card_text = _render_winner_card(game, pick_name, share, len(game.winner_ids))
+
+    # Try to download winner's PFP
+    photo_path = None
+    try:
+        async for ph in app.get_chat_photos(pick_uid, limit=1):
+            photo_path = await app.download_media(
+                ph.file_id, file_name=f"/tmp/mafia_winner_{pick_uid}.jpg"
+            )
+            break
+    except Exception as e:
+        print(f"[Mafia winner PFP] {type(e).__name__}: {e}", flush=True)
+
+    if photo_path and os.path.exists(photo_path):
+        try:
+            await app.send_photo(
+                game.chat_id,
+                photo=photo_path,
+                caption=card_text,
+                parse_mode=ParseMode.HTML,
+            )
+        except Exception as e:
+            print(f"[Mafia winner photo send] {type(e).__name__}: {e}", flush=True)
+            await _safe_send(game.chat_id, card_text, parse_mode=ParseMode.HTML)
+        finally:
+            try:
+                os.remove(photo_path)
+            except Exception:
+                pass
+    else:
+        await _safe_send(game.chat_id, card_text, parse_mode=ParseMode.HTML)
 
 
 async def _cancel_and_refund(game: MafiaGame, reason: str):
