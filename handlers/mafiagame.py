@@ -1,7 +1,7 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  handlers/mafiagame.py — 🎭 MAFIA v2
-#  ✅ GIF night/day, winner PFP, group name, "Go to Bot" button
+#  handlers/mafiagame.py — 🎭 MAFIA v4
+#  ✅ NEW: Auto-cleanup — deletes all game messages except role reveal + winner
 # --------------------------------------------------------------------------------
 
 from __future__ import annotations
@@ -72,11 +72,14 @@ BOT_USERNAME = (getattr(config, "BOT_USERNAME", "") or "ItzElaraBot").lstrip("@"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  🎬 GIF URLs — set in config.py OR replace with your own
+#  🎬 GIF URLs
 # ══════════════════════════════════════════════════════════════════════════════
-NIGHT_GIF_URL = getattr(config, "MAFIA_NIGHT_GIF", "") or ""
-DAY_GIF_URL   = getattr(config, "MAFIA_DAY_GIF", "") or ""
-WIN_GIF_URL   = getattr(config, "MAFIA_WIN_GIF", "") or ""
+NIGHT_GIF_URL = getattr(config, "MAFIA_NIGHT_GIF", "") or \
+    "https://media.giphy.com/media/l0HlHFRbmaZtBRhXG/giphy.gif"
+DAY_GIF_URL   = getattr(config, "MAFIA_DAY_GIF", "") or \
+    "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif"
+WIN_GIF_URL   = getattr(config, "MAFIA_WIN_GIF", "") or \
+    "https://media.giphy.com/media/g9582DNuQppxC/giphy.gif"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -100,6 +103,7 @@ def _is_group(message: Message) -> bool:
     return message.chat and message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP)
 
 
+# ── Core send helpers ─────────────────────────────────────────────────────────
 async def _safe_send(chat_id, text, **kw):
     try:
         return await app.send_message(chat_id, text, **kw)
@@ -134,25 +138,85 @@ async def _safe_dm(uid: int, text, **kw):
         return None
 
 
+# ── ✅ TRACKED SEND HELPERS (auto-deleted at game end) ────────────────────────
+async def _send_tracked(game: MafiaGame, text: str, **kw):
+    """Send message and track ID for cleanup."""
+    msg = await _safe_send(game.chat_id, text, **kw)
+    if msg and getattr(msg, "id", None):
+        try:
+            game.game_messages.append(msg.id)
+        except Exception:
+            pass
+    return msg
+
+
 async def _send_gif(chat_id, gif_url: str, caption: str, kb=None):
-    """Send a GIF with caption. Falls back to text if no URL or error."""
+    """✅ Send a GIF with caption. Multiple fallbacks."""
     if not gif_url:
         return await _safe_send(chat_id, caption, parse_mode=ParseMode.HTML, reply_markup=kb)
+
     try:
         return await app.send_animation(
-            chat_id=chat_id,
-            animation=gif_url,
-            caption=caption,
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb,
+            chat_id=chat_id, animation=gif_url, caption=caption,
+            parse_mode=ParseMode.HTML, reply_markup=kb,
         )
     except Exception as e:
-        print(f"[Mafia GIF] {type(e).__name__}: {e}", flush=True)
-        return await _safe_send(chat_id, caption, parse_mode=ParseMode.HTML, reply_markup=kb)
+        print(f"[Mafia GIF send_animation] {type(e).__name__}: {e}", flush=True)
+
+    try:
+        return await app.send_document(
+            chat_id=chat_id, document=gif_url, caption=caption,
+            parse_mode=ParseMode.HTML, reply_markup=kb,
+        )
+    except Exception as e:
+        print(f"[Mafia GIF send_document] {type(e).__name__}: {e}", flush=True)
+
+    return await _safe_send(chat_id, caption, parse_mode=ParseMode.HTML, reply_markup=kb)
 
 
+async def _send_gif_tracked(game: MafiaGame, gif_url: str, caption: str, kb=None):
+    """Send GIF and track ID for cleanup."""
+    msg = await _send_gif(game.chat_id, gif_url, caption, kb=kb)
+    if msg and getattr(msg, "id", None):
+        try:
+            game.game_messages.append(msg.id)
+        except Exception:
+            pass
+    return msg
+
+
+async def _cleanup_game_messages(game: MafiaGame, keep_ids: list[int] | None = None):
+    """✅ Delete all tracked game messages except keep_ids."""
+    keep_set = set(int(x) for x in (keep_ids or []) if x)
+    to_delete = [int(mid) for mid in game.game_messages if int(mid) not in keep_set]
+
+    if not to_delete:
+        return 0
+
+    deleted = 0
+    # Bulk delete in chunks of 100
+    for i in range(0, len(to_delete), 100):
+        chunk = to_delete[i:i+100]
+        try:
+            await app.delete_messages(game.chat_id, chunk)
+            deleted += len(chunk)
+        except Exception as e:
+            print(f"[Mafia cleanup bulk] {type(e).__name__}: {e}", flush=True)
+            # Fallback: one by one
+            for mid in chunk:
+                try:
+                    await app.delete_messages(game.chat_id, mid)
+                    deleted += 1
+                except Exception:
+                    pass
+
+    game.game_messages.clear()
+    print(f"[Mafia cleanup] Deleted {deleted} messages", flush=True)
+    return deleted
+
+
+# ── Other helpers ─────────────────────────────────────────────────────────────
 async def _get_group_name(chat_id: int) -> str:
-    """Fetch group title safely."""
     try:
         chat = await app.get_chat(chat_id)
         return getattr(chat, "title", "") or f"Group {chat_id}"
@@ -232,6 +296,67 @@ async def _payout_winner(uid: int, amount: int) -> bool:
         return False
 
 
+async def _fetch_user_photo(uid: int) -> str | None:
+    try:
+        user = await app.get_users(int(uid))
+        photo = getattr(user, "photo", None)
+        if photo:
+            file_id = (getattr(photo, "big_file_id", None) or
+                       getattr(photo, "small_file_id", None))
+            if file_id:
+                path = await app.download_media(
+                    file_id, file_name=f"/tmp/mafia_winner_{uid}.jpg"
+                )
+                if path and os.path.exists(path):
+                    return path
+    except Exception as e:
+        print(f"[Mafia PFP get_users] {type(e).__name__}: {e}", flush=True)
+
+    try:
+        async for ph in app.get_chat_photos(int(uid), limit=1):
+            file_id = (getattr(ph, "big_file_id", None) or
+                       getattr(ph, "file_id", None) or
+                       getattr(ph, "small_file_id", None))
+            if file_id:
+                path = await app.download_media(
+                    file_id, file_name=f"/tmp/mafia_winner_{uid}.jpg"
+                )
+                if path and os.path.exists(path):
+                    return path
+            break
+    except Exception as e:
+        print(f"[Mafia PFP get_chat_photos] {type(e).__name__}: {e}", flush=True)
+
+    return None
+
+
+def _auto_fill_night_actions(game: MafiaGame):
+    alive = [p["user_id"] for p in game.alive_players()]
+    if not alive:
+        return
+
+    mafia_uid = game.get_mafia()
+    if mafia_uid and mafia_uid in game.alive and not game.night_kill_done:
+        targets = [u for u in alive if u != mafia_uid]
+        if targets:
+            game.night_kill = random.choice(targets)
+            game.night_kill_done = True
+
+    doc_uid = game.get_doctor()
+    if doc_uid and doc_uid in game.alive and not game.night_save_done:
+        targets = list(alive)
+        if targets:
+            game.night_save = random.choice(targets)
+            game.night_save_done = True
+
+    det_uid = game.get_detective()
+    if det_uid and det_uid in game.alive and not game.night_check_done:
+        targets = [u for u in alive if u != det_uid]
+        if targets:
+            game.night_check = random.choice(targets)
+            game.night_check_done = True
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  RENDERERS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -251,7 +376,6 @@ def _render_help() -> str:
 def _render_mafia_help() -> str:
     return (
         "🎭 <b>MAFIA — HOW TO PLAY & COMMANDS</b> 🎭\n\n"
-
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "📖 <b>HOW TO PLAY</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -270,7 +394,8 @@ def _render_mafia_help() -> str:
         "• 👥 <b>Villagers</b> — no night action\n\n"
 
         "<b>3️⃣ NIGHT PHASE</b> 🌙 (30s)\n"
-        "• Mafia kills · Detective checks · Doctor saves\n\n"
+        "• Mafia kills · Detective checks · Doctor saves\n"
+        "• <i>If you don't act in time, the bot auto-picks for you!</i>\n\n"
 
         "<b>4️⃣ DAY PHASE</b> ☀️ (45s)\n"
         "• Bot announces the kill (or save!)\n"
@@ -326,7 +451,6 @@ def _render_lobby(game: MafiaGame, secs_left: int) -> str:
 
 
 def _lobby_kb(game: MafiaGame) -> InlineKeyboardMarkup:
-    """✅ 'Go to Bot' button opens DM. Shows group name after click."""
     join_label = (f"➕ JOIN GAME ({game.entry_fee} coins)"
                   if game.is_paid else "➕ JOIN GAME (Free)")
     dm_link = f"https://t.me/{BOT_USERNAME}?start=mafia_join_{game.chat_id}"
@@ -423,10 +547,15 @@ def _render_vote_result(game: MafiaGame, lynched: int | None, counts: dict) -> s
     role_emoji = ROLE_EMOJI.get(role, "❔")
     role_label = ROLE_LABEL.get(role, role.upper())
 
+    alive_list = "\n".join(
+        f"{i}. {p['mention']}" for i, p in enumerate(game.alive_players(), 1)
+    ) or "<i>Nobody</i>"
+
     return (
         header + "\n\n"
         f"💀 <b>{_esc(nm)}</b> was lynched!\n"
-        f"🎭 Role: {role_emoji} <b>{role_label}</b>"
+        f"🎭 Role: {role_emoji} <b>{role_label}</b>\n\n"
+        f"<b>Players alive ({game.alive_count()}):</b>\n{alive_list}"
     )
 
 
@@ -446,7 +575,6 @@ def _render_win_text(game: MafiaGame) -> str:
 
 def _render_winner_card(game: MafiaGame, winner_name: str, share: int,
                         winners_count: int) -> str:
-    """Winner announcement in card-game style."""
     payouts = []
     for uid in game.winner_ids:
         p = game.get_player(uid)
@@ -494,7 +622,6 @@ async def mafia_deeplink(_, message: Message):
     game = get_game(chat_id)
     user = message.from_user
 
-    # ✅ Fetch group name
     group_name = await _get_group_name(chat_id) if chat_id else "Unknown"
     if game and game.chat_name:
         group_name = game.chat_name
@@ -539,7 +666,6 @@ async def mafia_deeplink(_, message: Message):
         )
         raise StopPropagation
 
-    # ✅ Confirm in DM with GROUP NAME
     await _safe_reply(
         message,
         f"✅ <b>You joined the Mafia game!</b>\n\n"
@@ -550,8 +676,8 @@ async def mafia_deeplink(_, message: Message):
         parse_mode=ParseMode.HTML,
     )
 
-    await _safe_send(
-        game.chat_id,
+    await _send_tracked(
+        game,
         f"🔥 {_mention(user.id, _name(user))} joined the game!",
         parse_mode=ParseMode.HTML,
     )
@@ -659,7 +785,6 @@ async def mafia_cmd(_, message: Message):
         is_paid=is_paid,
     )
     game.state = STATE_LOBBY
-    # ✅ Store group name
     game.chat_name = getattr(message.chat, "title", "") or f"Group {message.chat.id}"
 
     game.add_player(message.from_user.id, _name(message.from_user),
@@ -678,15 +803,16 @@ async def mafia_cmd(_, message: Message):
         parse_mode=ParseMode.HTML,
         reply_markup=_lobby_kb(game),
     )
-    if sent:
+    if sent and getattr(sent, "id", None):
         game.lobby_message_id = sent.id
+        game.game_messages.append(sent.id)
     await persist_game(game)
 
     game.lobby_task = asyncio.create_task(_lobby_timer(game))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  JOIN (group command)
+#  JOIN
 # ══════════════════════════════════════════════════════════════════════════════
 async def _process_join(game: MafiaGame, uid: int, name: str, mention: str) -> tuple[bool, str]:
     if game.state != STATE_LOBBY:
@@ -752,8 +878,8 @@ async def mafia_join_cmd(_, message: Message):
             _render_lobby(game, LOBBY_SECONDS),
             parse_mode=ParseMode.HTML, reply_markup=_lobby_kb(game),
         )
-    await _safe_send(
-        game.chat_id,
+    await _send_tracked(
+        game,
         f"🔥 {_mention(message.from_user.id, _name(message.from_user))} joined the game!",
         parse_mode=ParseMode.HTML,
     )
@@ -806,8 +932,8 @@ async def _begin_match(game: MafiaGame):
     game.state = STATE_NIGHT
     await persist_game(game)
 
-    await _safe_send(
-        game.chat_id,
+    await _send_tracked(
+        game,
         "🎭 <b>GAME STARTING!</b>\n\n"
         f"👥 Players: <code>{len(game.players)}</code>\n"
         "📩 Roles are being sent via DM...\n"
@@ -832,8 +958,8 @@ async def _begin_match(game: MafiaGame):
             game.roles.pop(p["user_id"], None)
             if p["user_id"] in game.alive:
                 game.alive.remove(p["user_id"])
-        await _safe_send(
-            game.chat_id,
+        await _send_tracked(
+            game,
             f"⚠️ Could not DM: {names}\n<i>They were removed.</i>",
             parse_mode=ParseMode.HTML,
         )
@@ -903,7 +1029,7 @@ async def _send_role_dm(game: MafiaGame, uid: int, role: str) -> bool:
 def _target_kb(game: MafiaGame, actor_uid: int, prefix: str,
                include_self: bool = False) -> InlineKeyboardMarkup:
     rows, row = [], []
-    for p in game.players:
+    for p in game.alive_players():
         if not include_self and p["user_id"] == actor_uid:
             continue
         row.append(InlineKeyboardButton(
@@ -926,9 +1052,8 @@ async def _start_night(game: MafiaGame):
     game.state = STATE_NIGHT
     await persist_game(game)
 
-    # ✅ Send NIGHT GIF with caption
-    await _send_gif(
-        game.chat_id,
+    await _send_gif_tracked(
+        game,
         NIGHT_GIF_URL,
         _render_night_intro(game),
         kb=InlineKeyboardMarkup([[
@@ -937,7 +1062,6 @@ async def _start_night(game: MafiaGame):
         ]]),
     )
 
-    # Re-send action DMs for surviving special roles
     if game.day_no > 1:
         mafia_uid = game.get_mafia()
         det_uid = game.get_detective()
@@ -974,6 +1098,7 @@ async def _night_timer(game: MafiaGame, day_no: int):
         await asyncio.sleep(NIGHT_SECONDS)
         if game.state != STATE_NIGHT or game.day_no != day_no:
             return
+        _auto_fill_night_actions(game)
         await _resolve_night(game)
     except asyncio.CancelledError:
         pass
@@ -1005,6 +1130,8 @@ async def _maybe_advance_from_night(game: MafiaGame):
 async def _resolve_night(game: MafiaGame):
     if game.state != STATE_NIGHT:
         return
+
+    _auto_fill_night_actions(game)
 
     killed_uid, was_saved = game.resolve_night()
 
@@ -1058,9 +1185,8 @@ async def _resolve_night(game: MafiaGame):
     if winner:
         return await _finish_game(game, winner)
 
-    # ✅ Send DAY GIF with caption
-    await _send_gif(
-        game.chat_id,
+    await _send_gif_tracked(
+        game,
         DAY_GIF_URL,
         _render_day_announce(game, killed_uid, was_saved),
         kb=InlineKeyboardMarkup([[
@@ -1096,11 +1222,12 @@ async def _start_voting(game: MafiaGame):
     game.votes = {}
     await persist_game(game)
 
-    sent = await _safe_send(
-        game.chat_id, _render_voting(game),
+    sent = await _send_tracked(
+        game,
+        _render_voting(game),
         parse_mode=ParseMode.HTML, reply_markup=_vote_kb(game),
     )
-    if sent:
+    if sent and getattr(sent, "id", None):
         game.phase_message_id = sent.id
 
     game.phase_task = asyncio.create_task(_vote_timer(game, game.day_no))
@@ -1143,8 +1270,8 @@ async def _resolve_voting(game: MafiaGame):
             parse_mode=ParseMode.HTML, reply_markup=None,
         )
     else:
-        await _safe_send(
-            game.chat_id,
+        await _send_tracked(
+            game,
             _render_vote_result(game, lynched, counts),
             parse_mode=ParseMode.HTML,
         )
@@ -1317,7 +1444,7 @@ async def mafia_vote_cb(_, q: CallbackQuery):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  FINISH  /  CANCEL
+#  FINISH
 # ══════════════════════════════════════════════════════════════════════════════
 async def _finish_game(game: MafiaGame, winner_side: str):
     if game.state in (STATE_FINISHED, STATE_CANCELLED):
@@ -1330,15 +1457,12 @@ async def _finish_game(game: MafiaGame, winner_side: str):
     game.finished_at = datetime.now(timezone.utc)
     game.cancel_timers()
 
-    # ✅ Determine winners
     if winner_side == "mafia":
         mafia_uid = game.get_mafia()
         game.winner_ids = [mafia_uid] if mafia_uid else []
     else:
-        # All alive non-mafia
         game.winner_ids = [p["user_id"] for p in game.alive_players()
                            if game.roles.get(p["user_id"]) != ROLE_MAFIA]
-        # Fallback: all non-mafia players even if dead
         if not game.winner_ids:
             game.winner_ids = [p["user_id"] for p in game.players
                                if game.roles.get(p["user_id"]) != ROLE_MAFIA]
@@ -1346,12 +1470,12 @@ async def _finish_game(game: MafiaGame, winner_side: str):
     if not game.winner_ids:
         return await _cancel_and_refund(game, reason="No winners determined")
 
-    # Send win GIF + text
-    await _send_gif(
-        game.chat_id, WIN_GIF_URL, _render_win_text(game),
+    # ✅ WIN GIF (tracked — will be deleted)
+    await _send_gif_tracked(
+        game, WIN_GIF_URL, _render_win_text(game),
     )
 
-    # Role reveal
+    # ── ✅ KEEP MESSAGE 1: Role reveal ─────────────────────────────────────
     role_lines = []
     for p in game.players:
         r = game.roles.get(p["user_id"], "?")
@@ -1360,11 +1484,12 @@ async def _finish_game(game: MafiaGame, winner_side: str):
         tag = " ☠️" if p["user_id"] in game.dead else " ✅"
         role_lines.append(f"• {p['mention']} — {e} <b>{l}</b>{tag}")
 
-    await _safe_send(
+    role_msg = await _safe_send(
         game.chat_id,
         "🎭 <b>ROLE REVEAL:</b>\n" + "\n".join(role_lines),
         parse_mode=ParseMode.HTML,
     )
+    role_reveal_id = getattr(role_msg, "id", None)
 
     # Payout / XP
     if game.is_paid and game.net_prize > 0:
@@ -1373,8 +1498,8 @@ async def _finish_game(game: MafiaGame, winner_side: str):
         share = 0
         await _award_xp_only(game, winner_side)
 
-    # ✅ Send WINNER ANNOUNCEMENT with PFP
-    await _send_winner_card(game, share)
+    # ── ✅ KEEP MESSAGE 2: Winner card with PFP ────────────────────────────
+    winner_msg_id = await _send_winner_card(game, share)
 
     # Stats
     for p in game.players:
@@ -1393,6 +1518,13 @@ async def _finish_game(game: MafiaGame, winner_side: str):
     game.payout_done = True
     await persist_game(game)
 
+    # ✅ CLEANUP: Delete all tracked messages EXCEPT role reveal + winner
+    keep_ids = [x for x in (role_reveal_id, winner_msg_id) if x]
+    try:
+        await _cleanup_game_messages(game, keep_ids=keep_ids)
+    except Exception as e:
+        print(f"[Mafia cleanup] {type(e).__name__}: {e}", flush=True)
+
     remove_game(game.chat_id)
     try:
         await remove_persisted_game(game.chat_id)
@@ -1401,7 +1533,6 @@ async def _finish_game(game: MafiaGame, winner_side: str):
 
 
 async def _payout_paid_game(game: MafiaGame, winner_side: str) -> int:
-    """Returns per-winner share."""
     pool = game.net_prize
     if pool <= 0 or not game.winner_ids:
         return 0
@@ -1427,47 +1558,42 @@ async def _award_xp_only(game: MafiaGame, winner_side: str):
             pass
 
 
-async def _send_winner_card(game: MafiaGame, share: int):
-    """✅ Send winner announcement with random winner's PFP."""
+async def _send_winner_card(game: MafiaGame, share: int) -> int | None:
+    """✅ Send winner announcement with random winner's PFP. Returns msg ID."""
     if not game.winner_ids:
-        return
+        return None
 
-    # Pick random winner for PFP
     pick_uid = random.choice(game.winner_ids)
     pick_p = game.get_player(pick_uid)
     pick_name = pick_p["name"] if pick_p else str(pick_uid)
 
     card_text = _render_winner_card(game, pick_name, share, len(game.winner_ids))
 
-    # Try to download winner's PFP
-    photo_path = None
-    try:
-        async for ph in app.get_chat_photos(pick_uid, limit=1):
-            photo_path = await app.download_media(
-                ph.file_id, file_name=f"/tmp/mafia_winner_{pick_uid}.jpg"
-            )
-            break
-    except Exception as e:
-        print(f"[Mafia winner PFP] {type(e).__name__}: {e}", flush=True)
+    photo_path = await _fetch_user_photo(pick_uid)
 
+    msg = None
     if photo_path and os.path.exists(photo_path):
         try:
-            await app.send_photo(
+            msg = await app.send_photo(
                 game.chat_id,
                 photo=photo_path,
                 caption=card_text,
                 parse_mode=ParseMode.HTML,
             )
+            print(f"[Mafia winner] PFP sent for {pick_uid}", flush=True)
         except Exception as e:
             print(f"[Mafia winner photo send] {type(e).__name__}: {e}", flush=True)
-            await _safe_send(game.chat_id, card_text, parse_mode=ParseMode.HTML)
+            msg = await _safe_send(game.chat_id, card_text, parse_mode=ParseMode.HTML)
         finally:
             try:
                 os.remove(photo_path)
             except Exception:
                 pass
     else:
-        await _safe_send(game.chat_id, card_text, parse_mode=ParseMode.HTML)
+        print(f"[Mafia winner] No PFP for {pick_uid}, sending text only", flush=True)
+        msg = await _safe_send(game.chat_id, card_text, parse_mode=ParseMode.HTML)
+
+    return getattr(msg, "id", None)
 
 
 async def _cancel_and_refund(game: MafiaGame, reason: str):
@@ -1494,13 +1620,19 @@ async def _cancel_and_refund(game: MafiaGame, reason: str):
     game.refund_done = True
     game.finished_at = datetime.now(timezone.utc)
 
-    await _safe_send(
-        game.chat_id,
+    await _send_tracked(
+        game,
         f"🚫 <b>MAFIA CANCELLED</b>\n\n"
         f"<i>{_esc(reason)}</i>\n"
         + (f"💰 Refunded: <code>{refunded}</code> player(s)" if game.is_paid else ""),
         parse_mode=ParseMode.HTML,
     )
+
+    # ✅ Cleanup everything since no winner
+    try:
+        await _cleanup_game_messages(game, keep_ids=[])
+    except Exception:
+        pass
 
     remove_game(game.chat_id)
     try:
