@@ -92,7 +92,11 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     # pixelBattle
     "pixel", "pixelhelp", "phelp", "joinpixel", "pixelinfo",
     "pixelcancel", "pixelstats", "pixeltop", "pixelleaderboard",
+    # shadowSyndicate
+    "syndicate", "joinsyndicate", "leavesyndicate", "syndicateinfo",
+    "syndicatestats", "syndicatetop", "shadowhelp", "syndicatehelp",
 ]
+
 
 
 # ══════════════════════════════════════════════════════════════════════════════
