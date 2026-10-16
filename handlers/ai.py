@@ -89,6 +89,9 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     # mafiaGame
     "mafia", "mafiahelp", "mhelp", "joinmafia", "mafiainfo",
     "mafiacancel", "mafiastats", "mafiatop", "mafialeaderboard",
+    # pixelBattle
+    "pixel", "pixelhelp", "phelp", "joinpixel", "pixelinfo",
+    "pixelcancel", "pixelstats", "pixeltop", "pixelleaderboard",
 ]
 
 
