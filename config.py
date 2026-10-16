@@ -20,5 +20,9 @@ SUPPORT_URL = os.getenv("SUPPORT_URL", "")
 UPDATES_URL = os.getenv("UPDATES_URL", "")
 OWNER_URL = os.getenv("OWNER_URL", "")
 PING_IMAGE_URL = os.getenv("PING_IMAGE_URL", "https://i.ibb.co/mFRwHqq5/file-00000000c3a881f594d564c2e944c2f1.png")
+# Mafia game GIFs
+MAFIA_NIGHT_GIF = "https://media.giphy.com/media/.../night.gif"
+MAFIA_DAY_GIF   = "https://media.giphy.com/media/.../day.gif"
+MAFIA_WIN_GIF   = "https://media.giphy.com/media/.../win.gif"
 
 ECONOMY_TZ = os.getenv("ECONOMY_TZ", "Asia/Kolkata")
