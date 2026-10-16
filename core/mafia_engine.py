@@ -1,9 +1,10 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  core/mafia_engine.py — 🎭 MAFIA Game Engine
+#  core/mafia_engine.py — 🎭 MAFIA Game Engine v2
 #  Roles: 1 Mafia, 1 Detective, 1 Doctor, optional Witch, rest Villagers.
 #  Paid + Free mode. Vote eliminates 1 player per round.
 #  ✅ FIXED: game freeze after lynching
+#  ✅ NEW: chat_name, winner_ids, GIFs support
 # --------------------------------------------------------------------------------
 
 from __future__ import annotations
@@ -76,6 +77,7 @@ class MafiaGame:
     def __init__(self, chat_id: int, host_id: int, host_name: str,
                  host_mention: str, entry_fee: int = 0, is_paid: bool = True):
         self.chat_id      = int(chat_id)
+        self.chat_name    = ""                 # ✅ NEW — group name
         self.host_id      = int(host_id)
         self.host_name    = host_name
         self.host_mention = host_mention
@@ -106,6 +108,7 @@ class MafiaGame:
         self.votes: dict[int, int] = {}
 
         self.winner_side: Optional[str] = None
+        self.winner_ids:  list[int] = []       # ✅ NEW — multiple winners
 
         self.lobby_task: Optional[asyncio.Task] = None
         self.phase_task: Optional[asyncio.Task] = None
@@ -181,8 +184,7 @@ class MafiaGame:
         4 players:  1 Mafia, 1 Detective, 1 Doctor, 1 Villager
         5 players:  1 Mafia, 1 Detective, 1 Doctor, 2 Villagers
         6 players:  1 Mafia, 1 Detective, 1 Doctor, 1 Witch, 2 Villagers
-        7-8:        1 Mafia, 1 Detective, 1 Doctor, 1 Witch, rest Villagers
-        9-10:       1 Mafia, 1 Detective, 1 Doctor, 1 Witch, 1 Hunter*, rest Villagers
+        7-10:       1 Mafia, 1 Detective, 1 Doctor, 1 Witch, rest Villagers
         11-12:      2 Mafia, 1 Detective, 1 Doctor, 1 Witch, rest Villagers
         """
         uids = [p["user_id"] for p in self.players]
@@ -192,8 +194,13 @@ class MafiaGame:
         self.roles = {}
         idx = 0
 
+        # 11+ players → 2 mafia first
+        if n >= 11 and idx < n:
+            self.roles[uids[idx]] = ROLE_MAFIA; idx += 1
+
         # Always: 1 Mafia
-        self.roles[uids[idx]] = ROLE_MAFIA; idx += 1
+        if idx < n:
+            self.roles[uids[idx]] = ROLE_MAFIA; idx += 1
 
         # Always: 1 Detective
         if idx < n:
@@ -207,10 +214,6 @@ class MafiaGame:
         if n >= 6 and idx < n:
             self.roles[uids[idx]] = ROLE_WITCH; idx += 1
 
-        # 11+ players: add second mafia
-        if n >= 11 and idx < n:
-            self.roles[uids[idx]] = ROLE_MAFIA; idx += 1
-
         # Rest → Villagers
         while idx < n:
             self.roles[uids[idx]] = ROLE_VILLAGER
@@ -218,6 +221,7 @@ class MafiaGame:
 
         self.alive = list(uids)
         self.dead = []
+        self.winner_ids = []
 
     # ── Night actions ─────────────────────────────────────────────────────
     def submit_night_kill(self, target_uid: int) -> tuple[bool, str]:
@@ -360,6 +364,34 @@ class MafiaGame:
         self.night_kill_done = False
         self.night_check_done = False
         self.night_save_done = False
+
+    # ── ✅ NEW: Winner resolution helper ──────────────────────────────────
+    def resolve_winners(self) -> list[int]:
+        """Return winner user IDs based on winner_side. Sets self.winner_ids."""
+        if self.winner_side == "mafia":
+            mafia_uid = self.get_mafia()
+            self.winner_ids = [mafia_uid] if mafia_uid else []
+        elif self.winner_side == "villagers":
+            # Alive non-mafia
+            alive_winners = [p["user_id"] for p in self.alive_players()
+                             if self.roles.get(p["user_id"]) != ROLE_MAFIA]
+            # Fallback: any non-mafia player (even dead)
+            if not alive_winners:
+                alive_winners = [p["user_id"] for p in self.players
+                                 if self.roles.get(p["user_id"]) != ROLE_MAFIA]
+            self.winner_ids = alive_winners
+        else:
+            self.winner_ids = []
+        return self.winner_ids
+
+    def calculate_pool(self) -> tuple[int, int, int]:
+        """Returns (gross, tax, net)."""
+        if not self.is_paid or self.entry_fee <= 0:
+            return 0, 0, 0
+        gross = self.entry_fee * len(self.players)
+        tax = int(gross * GAME_FEE_PERCENT)
+        net = gross - tax
+        return gross, tax, net
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -537,6 +569,7 @@ async def persist_game(game: MafiaGame):
             {"_id": int(game.chat_id)},
             {"$set": {
                 "chat_id": int(game.chat_id),
+                "chat_name": game.chat_name,
                 "host_id": int(game.host_id),
                 "entry_fee": int(game.entry_fee),
                 "is_paid": bool(game.is_paid),
@@ -547,6 +580,7 @@ async def persist_game(game: MafiaGame):
                 "state": game.state,
                 "day_no": int(game.day_no),
                 "winner_side": game.winner_side,
+                "winner_ids": list(game.winner_ids),
                 "payout_done": bool(game.payout_done),
                 "refund_done": bool(game.refund_done),
                 "updated_at": _now(),
@@ -568,10 +602,13 @@ async def remove_persisted_game(chat_id: int):
 
 
 async def recover_active_games() -> int:
+    """On boot: mark in-flight games as CANCELLED and refund paid entries."""
     col = _games_col()
     if col is None:
         return 0
+
     from core.database import add_coins
+
     count = 0
     async for doc in col.find({"state": {"$in": [STATE_LOBBY, STATE_NIGHT, STATE_DAY, STATE_VOTING]}}):
         try:
