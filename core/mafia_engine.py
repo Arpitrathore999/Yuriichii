@@ -85,6 +85,7 @@ class MafiaGame:
         self.is_paid      = bool(is_paid)
 
         self.players:   list[dict] = []
+        self.game_messages: list[int] = []   # ✅ NEW — for auto-cleanup
         self.roles:     dict[int, str] = {}
         self.alive:     list[int] = []
         self.dead:      list[int] = []
