@@ -1,8 +1,9 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  core/pixelbattle_engine.py — 🎨 PIXEL BATTLE Engine
-#  Territory capture game: claim empty cells adjacent to your own.
-#  Paid + Free. 2-6 players. 10x10 grid.
+#  core/pixelbattle_engine.py — 🎨 PIXEL BATTLE Engine v3
+#  ✅ Auto-eliminate stuck players
+#  ✅ 4 skips = kick
+#  ✅ Easy/Medium/Hard modes (grid size varies)
 # --------------------------------------------------------------------------------
 
 from __future__ import annotations
@@ -19,16 +20,26 @@ from database.mongo import db
 #  CONSTANTS
 # ══════════════════════════════════════════════════════════════════════════════
 EMPTY = "⬜"
-
-# Player colors (max 6 players)
 PLAYER_COLORS = ["🟦", "🟥", "🟩", "🟨", "🟪", "🟧"]
 
-GRID_SIZE = 10            # 10x10 = 100 cells
+# ✅ NEW: Modes with grid sizes
+MODE_EASY   = "easy"      # 5 rows x 10 cols = 50 cells
+MODE_MEDIUM = "medium"    # 10 rows x 10 cols = 100 cells
+MODE_HARD   = "hard"      # 10 rows x 15 cols = 150 cells
+
+MODE_CONFIG = {
+    MODE_EASY:   {"label": "🟢 EASY",   "rows": 5,  "cols": 10, "icon": "🟢"},
+    MODE_MEDIUM: {"label": "🟡 MEDIUM", "rows": 10, "cols": 10, "icon": "🟡"},
+    MODE_HARD:   {"label": "🔴 HARD",   "rows": 10, "cols": 15, "icon": "🔴"},
+}
+DEFAULT_MODE = MODE_MEDIUM
+
 MIN_PLAYERS = 2
 MAX_PLAYERS = 6
 
 LOBBY_SECONDS = 60
 TURN_SECONDS  = 20
+MAX_SKIPS_PER_PLAYER = 4
 
 ENTRY_MIN = 100
 ENTRY_MAX = 500_000
@@ -55,7 +66,8 @@ def _now():
 # ══════════════════════════════════════════════════════════════════════════════
 class PixelGame:
     def __init__(self, chat_id: int, host_id: int, host_name: str,
-                 host_mention: str, entry_fee: int = 0, is_paid: bool = True):
+                 host_mention: str, entry_fee: int = 0, is_paid: bool = True,
+                 mode: str = DEFAULT_MODE):
         self.chat_id      = int(chat_id)
         self.chat_name    = ""
         self.host_id      = int(host_id)
@@ -63,19 +75,20 @@ class PixelGame:
         self.host_mention = host_mention
         self.entry_fee    = int(entry_fee)
         self.is_paid      = bool(is_paid)
+        self.mode         = mode if mode in MODE_CONFIG else DEFAULT_MODE
+        self.cfg          = MODE_CONFIG[self.mode]
 
-        self.players: list[dict] = []   # {user_id, name, mention, color, cell_count, paid}
-        self.grid: list[list[str]] = []  # 10x10 grid of cell contents
+        self.players: list[dict] = []
+        self.eliminated_players: list[dict] = []
+        self.grid: list[list[str]] = []
 
         self.state       = STATE_LOBBY
         self.turn_index  = 0
         self.turn_count  = 0
-        self.pass_count  = 0             # Consecutive passes (for stalemate detection)
 
         self.winner_id: Optional[int] = None
         self.winner_ids: list[int] = []
 
-        # Track message IDs for cleanup
         self.game_messages: list[int] = []
         self.lobby_message_id: Optional[int] = None
         self.board_message_id: Optional[int] = None
@@ -92,6 +105,18 @@ class PixelGame:
         self.created_at  = _now()
         self.finished_at: Optional[datetime] = None
 
+    # ── Grid size helpers ─────────────────────────────────────────────────
+    @property
+    def rows(self) -> int:
+        return self.cfg["rows"]
+
+    @property
+    def cols(self) -> int:
+        return self.cfg["cols"]
+
+    def total_cells(self) -> int:
+        return self.rows * self.cols
+
     # ── Player helpers ────────────────────────────────────────────────────
     def has_player(self, uid) -> bool:
         return any(p["user_id"] == int(uid) for p in self.players)
@@ -105,14 +130,15 @@ class PixelGame:
     def add_player(self, uid, name, mention) -> bool:
         if self.has_player(uid) or len(self.players) >= MAX_PLAYERS:
             return False
-        color_idx = len(self.players)
+        color_idx = len(self.players) + len(self.eliminated_players)
         self.players.append({
             "user_id": int(uid),
             "name": name,
             "mention": mention,
-            "color": PLAYER_COLORS[color_idx],
+            "color": PLAYER_COLORS[color_idx % len(PLAYER_COLORS)],
             "cell_count": 0,
             "paid": False,
+            "skips": 0,
         })
         return True
 
@@ -121,10 +147,10 @@ class PixelGame:
 
     # ── Grid helpers ──────────────────────────────────────────────────────
     def init_grid(self):
-        self.grid = [[EMPTY for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+        self.grid = [[EMPTY for _ in range(self.cols)] for _ in range(self.rows)]
 
     def is_empty(self, r: int, c: int) -> bool:
-        return 0 <= r < GRID_SIZE and 0 <= c < GRID_SIZE and self.grid[r][c] == EMPTY
+        return 0 <= r < self.rows and 0 <= c < self.cols and self.grid[r][c] == EMPTY
 
     def get_player_cells(self, uid: int) -> list[tuple[int, int]]:
         p = self.get_player(uid)
@@ -132,30 +158,23 @@ class PixelGame:
             return []
         color = p["color"]
         cells = []
-        for r in range(GRID_SIZE):
-            for c in range(GRID_SIZE):
+        for r in range(self.rows):
+            for c in range(self.cols):
                 if self.grid[r][c] == color:
                     cells.append((r, c))
         return cells
 
     def get_valid_moves(self, uid: int) -> list[tuple[int, int]]:
-        """Return valid (row, col) cells for player.
-
-        First move: any empty cell.
-        After that: only cells adjacent to player's own cells.
-        """
         p = self.get_player(uid)
         if not p:
             return []
 
         own_cells = self.get_player_cells(uid)
 
-        # First move → any empty cell
         if not own_cells:
-            return [(r, c) for r in range(GRID_SIZE) for c in range(GRID_SIZE)
+            return [(r, c) for r in range(self.rows) for c in range(self.cols)
                     if self.grid[r][c] == EMPTY]
 
-        # Adjacent empty cells
         valid = set()
         for (r, c) in own_cells:
             for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
@@ -165,14 +184,14 @@ class PixelGame:
         return sorted(valid)
 
     def claim_cell(self, uid: int, r: int, c: int) -> tuple[bool, str]:
-        """Claim a cell for player."""
         p = self.get_player(uid)
         if not p:
             return False, "not_player"
+        if not (0 <= r < self.rows and 0 <= c < self.cols):
+            return False, "out_of_bounds"
         if self.grid[r][c] != EMPTY:
             return False, "cell_taken"
 
-        # Validate adjacency (except first move)
         own_cells = self.get_player_cells(uid)
         if own_cells:
             adjacent = False
@@ -203,28 +222,47 @@ class PixelGame:
         return sum(p["cell_count"] for p in self.players)
 
     def is_grid_full(self) -> bool:
-        return self.total_cells_claimed() >= (GRID_SIZE * GRID_SIZE)
-
-    def get_scores(self) -> dict[int, int]:
-        return {p["user_id"]: p["cell_count"] for p in self.players}
+        return self.total_cells_claimed() >= self.total_cells()
 
     def determine_winner(self) -> Optional[int]:
-        """Return winner uid (most cells). Ties broken randomly."""
         if not self.players:
             return None
         max_cells = max(p["cell_count"] for p in self.players)
         top = [p["user_id"] for p in self.players if p["cell_count"] == max_cells]
         return random.choice(top) if top else None
 
+    def eliminate_player(self, uid: int, reason: str = "") -> Optional[dict]:
+        p = self.get_player(uid)
+        if not p:
+            return None
+        p["elimination_reason"] = reason
+        self.players.remove(p)
+        self.eliminated_players.append(p)
+        if self.players:
+            self.turn_index = self.turn_index % len(self.players)
+        else:
+            self.turn_index = 0
+        return p
+
+    def increment_skip(self, uid: int) -> int:
+        p = self.get_player(uid)
+        if not p:
+            return 0
+        p["skips"] = p.get("skips", 0) + 1
+        return p["skips"]
+
     def check_game_over(self) -> bool:
-        """Game over if grid full OR all players stuck (no valid moves)."""
+        """Game over if only 1 player left OR grid full OR no one can move."""
+        if len(self.players) <= 1:
+            return True
         if self.is_grid_full():
             return True
-        # Check if any player has valid moves
+        any_moves = False
         for p in self.players:
             if self.get_valid_moves(p["user_id"]):
-                return False
-        return True
+                any_moves = True
+                break
+        return not any_moves
 
     def cancel_timers(self):
         try:
@@ -243,7 +281,8 @@ class PixelGame:
     def calculate_pool(self) -> tuple[int, int, int]:
         if not self.is_paid or self.entry_fee <= 0:
             return 0, 0, 0
-        gross = self.entry_fee * len(self.players)
+        total = len(self.players) + len(self.eliminated_players)
+        gross = self.entry_fee * total
         tax = int(gross * GAME_FEE_PERCENT)
         net = gross - tax
         return gross, tax, net
@@ -268,8 +307,8 @@ def get_user_game(uid: int) -> Optional[PixelGame]:
 
 
 def create_game(chat_id, host_id, host_name, host_mention,
-                entry_fee=0, is_paid=True) -> PixelGame:
-    g = PixelGame(chat_id, host_id, host_name, host_mention, entry_fee, is_paid)
+                entry_fee=0, is_paid=True, mode=DEFAULT_MODE) -> PixelGame:
+    g = PixelGame(chat_id, host_id, host_name, host_mention, entry_fee, is_paid, mode)
     ACTIVE_GAMES[int(chat_id)] = g
     USER_ACTIVE[int(host_id)] = int(chat_id)
     return g
@@ -279,7 +318,7 @@ def remove_game(chat_id):
     g = ACTIVE_GAMES.pop(int(chat_id), None)
     if not g:
         return
-    for p in g.players:
+    for p in g.players + g.eliminated_players:
         if USER_ACTIVE.get(p["user_id"]) == int(chat_id):
             USER_ACTIVE.pop(p["user_id"], None)
 
@@ -305,19 +344,11 @@ async def ensure_stats(user_id: int, name: str = ""):
             "$set": {"name": name, "updated_at": _now()},
             "$setOnInsert": {
                 "_id": int(user_id),
-                "games_played": 0,
-                "wins": 0,
-                "losses": 0,
-                "total_cells": 0,
-                "best_cells": 0,
-                "coins_wagered": 0,
-                "gross_won": 0,
-                "tax_paid": 0,
-                "net_coins": 0,
-                "win_streak": 0,
-                "best_streak": 0,
-                "last_played": None,
-                "created_at": _now(),
+                "games_played": 0, "wins": 0, "losses": 0,
+                "total_cells": 0, "best_cells": 0,
+                "coins_wagered": 0, "gross_won": 0, "tax_paid": 0, "net_coins": 0,
+                "win_streak": 0, "best_streak": 0,
+                "last_played": None, "created_at": _now(),
             },
         },
         upsert=True,
@@ -332,11 +363,7 @@ async def record_result(user_id: int, name: str, *, won: bool,
         return
     await ensure_stats(user_id, name)
 
-    inc = {
-        "games_played": 1,
-        "coins_wagered": int(wagered),
-        "total_cells": int(cells),
-    }
+    inc = {"games_played": 1, "coins_wagered": int(wagered), "total_cells": int(cells)}
     if won:
         inc["wins"] = 1
         inc["gross_won"] = int(gross_won)
@@ -351,13 +378,10 @@ async def record_result(user_id: int, name: str, *, won: bool,
         "$set": {"name": name, "updated_at": _now(), "last_played": _now()},
     }
 
-    # best_cells
     doc = await col.find_one({"_id": int(user_id)}, {"best_cells": 1, "win_streak": 1, "best_streak": 1})
-    current_best = int((doc or {}).get("best_cells", 0))
-    if int(cells) > current_best:
+    if int(cells) > int((doc or {}).get("best_cells", 0)):
         update["$set"]["best_cells"] = int(cells)
 
-    # streak
     if won:
         cur = int((doc or {}).get("win_streak", 0)) + 1
         best = max(cur, int((doc or {}).get("best_streak", 0)))
@@ -398,7 +422,9 @@ async def persist_game(game: PixelGame):
                 "host_id": int(game.host_id),
                 "entry_fee": int(game.entry_fee),
                 "is_paid": bool(game.is_paid),
+                "mode": game.mode,
                 "players": game.players,
+                "eliminated_players": game.eliminated_players,
                 "grid": game.grid,
                 "state": game.state,
                 "turn_index": int(game.turn_index),
@@ -436,7 +462,7 @@ async def recover_active_games() -> int:
             entry = int(doc.get("entry_fee", 0))
             is_paid = bool(doc.get("is_paid", True))
             if is_paid and entry > 0:
-                for p in doc.get("players", []):
+                for p in doc.get("players", []) + doc.get("eliminated_players", []):
                     if p.get("paid"):
                         try:
                             await add_coins(int(p["user_id"]), entry)
