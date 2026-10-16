@@ -333,7 +333,7 @@ def _lobby_kb(game: MafiaGame) -> InlineKeyboardMarkup:
     help_link = f"https://t.me/{BOT_USERNAME}?start=mafia_help"
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(join_label, url=dm_link)],
-        [InlineKeyboardButton("🎭 Go to Bot", url=help_link)],
+        [InlineKeyboardButton("How to Play", url=help_link)],
     ])
 
 
@@ -933,7 +933,7 @@ async def _start_night(game: MafiaGame):
         _render_night_intro(game),
         kb=InlineKeyboardMarkup([[
             InlineKeyboardButton("🎭 Go to Bot",
-                                 url=f"https://t.me/{BOT_USERNAME}?start=mafia_help")
+                                 url=f"https://t.me/{BOT_USERNAME}")
         ]]),
     )
 
@@ -1065,7 +1065,7 @@ async def _resolve_night(game: MafiaGame):
         _render_day_announce(game, killed_uid, was_saved),
         kb=InlineKeyboardMarkup([[
             InlineKeyboardButton("🎭 Go to Bot",
-                                 url=f"https://t.me/{BOT_USERNAME}?start=mafia_help")
+                                 url=f"https://t.me/{BOT_USERNAME}")
         ]]),
     )
 
