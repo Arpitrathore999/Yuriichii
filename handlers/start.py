@@ -1,7 +1,7 @@
 # --------------------------------------------------------------------------------
 #  Elara AI Bot © 2026
 #  handlers/start.py — Rich HTML + Tables + 3 Prefixes + Inline Image
-#  ✅ UPDATED: All 9 games added to menu
+#  ✅ UPDATED: All 9 games, Removed trailing emojis from Welcome Keyboard
 # --------------------------------------------------------------------------------
 
 PREFIXES = ["/", "!", "."]
@@ -709,23 +709,23 @@ def _rich_game_shadow() -> str:
 def _welcome_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(
-            "➕ ᴀᴅᴅ ᴍᴇ ᴛᴏ ɢʀᴏᴜᴘ ➕",
+            "➕ ᴀᴅᴅ ᴍᴇ ᴛᴏ ɢʀᴏᴜᴘ",  # 🚨 Piche wala ➕ hata diya
             url=_safe_startgroup_url(),
             style=enums.ButtonStyle.PRIMARY,
         )],
         [
-            InlineKeyboardButton("🍬 ꜱᴜᴘᴘᴏʀᴛ 🍬", url=_safe_url(SUPPORT_URL),
+            InlineKeyboardButton("🍬 ꜱᴜᴘᴘᴏʀᴛ", url=_safe_url(SUPPORT_URL), # 🚨 Piche wala 🍬 hata diya
                                  style=enums.ButtonStyle.SUCCESS),
-            InlineKeyboardButton("🍹 ᴜᴘᴅᴀᴛᴇꜱ 🍹", url=_safe_url(UPDATES_URL),
+            InlineKeyboardButton("🍹 ᴜᴘᴅᴀᴛᴇꜱ", url=_safe_url(UPDATES_URL), # 🚨 Piche wala 🍹 hata diya
                                  style=enums.ButtonStyle.SUCCESS),
         ],
-        [InlineKeyboardButton("🏩 ʜᴇʟᴘ & ᴄᴏᴍᴍᴀɴᴅꜱ 🏩",
+        [InlineKeyboardButton("🏩 ʜᴇʟᴘ & ᴄᴏᴍᴍᴀɴᴅꜱ",  # 🚨 Piche wala 🏩 hata diya
                               callback_data="elara:help",
                               style=enums.ButtonStyle.PRIMARY)],
         [
-            InlineKeyboardButton("🫧 ᴏᴡɴᴇʀ 🫧", url=_owner_link(),
+            InlineKeyboardButton("🫧 ᴏᴡɴᴇʀ", url=_owner_link(), # 🚨 Piche wala 🫧 hata diya
                                  style=enums.ButtonStyle.DANGER),
-            InlineKeyboardButton("📖 ᴀʙᴏᴜᴛ 📖", callback_data="elara:about",
+            InlineKeyboardButton("📖 ᴀʙᴏᴜᴛ", callback_data="elara:about", # 🚨 Piche wala 📖 hata diya
                                  style=enums.ButtonStyle.DANGER),
         ],
     ])
