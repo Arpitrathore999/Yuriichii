@@ -3,7 +3,7 @@
 #  handlers/pixelbattle.py — 🎨 PIXEL BATTLE v3
 #  ✅ Auto-eliminate stuck players
 #  ✅ 4 skips = kick
-#  ✅ Deep link join (fix /start interception)
+#  ✅ Deep link join (FIXED: return instead of StopPropagation)
 #  ✅ Easy / Medium / Hard modes
 # --------------------------------------------------------------------------------
 
@@ -324,6 +324,8 @@ def _render_help_full() -> str:
         "• <code>/pixel free</code> — Free Medium\n"
         "• <code>/pixel &lt;amount&gt;</code> — Paid Medium\n"
         "• <code>/pixel free easy</code> — Free Easy\n"
+        "• <code>/pixel free hard</code> — Free Hard\n"
+        "• <code>/pixel 500 easy</code> — Paid Easy\n"
         "• <code>/pixel 500 hard</code> — Paid Hard\n"
         "• <code>/joinpixel</code> · <code>/pixelinfo</code> · <code>/pixelcancel</code>\n\n"
         "📊 <b>Stats</b>\n"
@@ -386,7 +388,6 @@ def _render_board(game: PixelGame) -> str:
         skip_txt = f" ⏭️{skips}/{MAX_SKIPS_PER_PLAYER}" if skips > 0 else ""
         score_lines.append(f"{p['color']} {_esc(p['name'])}: <code>{p['cell_count']}</code>{skip_txt}")
 
-    # Eliminated section
     elim_txt = ""
     if game.eliminated_players:
         elim_lines = []
@@ -426,7 +427,7 @@ def _valid_moves_kb(game: PixelGame) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup([])
 
     random.shuffle(valid)
-    shown = valid[:16]  # 4x4 buttons
+    shown = valid[:16]
 
     rows = []
     row = []
@@ -452,22 +453,21 @@ def _valid_moves_kb(game: PixelGame) -> InlineKeyboardMarkup:
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  ✅ DEEP LINK — registered at group=-10 so it runs FIRST
+#  🚨 FIXED: return instead of StopPropagation to not block normal /start
 # ══════════════════════════════════════════════════════════════════════════════
 @app.on_message(filters.command("start", prefixes=PREFIXES) & filters.private, group=-10)
 async def pixel_deeplink(_, message: Message):
     if not message.command or len(message.command) < 2:
-        raise StopPropagation  # let other handlers process normal /start
+        return  # 🚨 FIX: StopPropagation ko return kiya
 
     payload = message.command[1].strip()
 
-    # ── Help deep link ─────────────────────────────────────────────────────
     if payload == "pixel_help":
         await _safe_reply(message, _render_help_full(), parse_mode=ParseMode.HTML)
         raise StopPropagation
 
-    # ── Join deep link ─────────────────────────────────────────────────────
     if not payload.startswith("pixel_join_"):
-        raise StopPropagation  # let other handlers process
+        return  # 🚨 FIX: StopPropagation ko return kiya
 
     try:
         chat_id = int(payload[len("pixel_join_"):])
@@ -549,7 +549,7 @@ async def pixel_deeplink(_, message: Message):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  /pixelhelp /phelp
+#  COMMANDS
 # ══════════════════════════════════════════════════════════════════════════════
 @app.on_message(filters.command(["pixelhelp", "phelp"], prefixes=PREFIXES))
 async def pixel_help_cmd(_, message: Message):
@@ -560,9 +560,6 @@ async def pixel_help_cmd(_, message: Message):
     await _safe_reply(message, _render_help_full(), parse_mode=ParseMode.HTML)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  /pixel [amount|free] [mode]
-# ══════════════════════════════════════════════════════════════════════════════
 @app.on_message(filters.command(["pixel"], prefixes=PREFIXES) & filters.group)
 async def pixel_cmd(_, message: Message):
     if not _is_group(message) or not message.from_user:
@@ -598,7 +595,6 @@ async def pixel_cmd(_, message: Message):
                 parse_mode=ParseMode.HTML,
             )
 
-    # ✅ Parse mode (2nd arg)
     if len(args) >= 2:
         m = args[1].lower().strip()
         if m in ("easy", "e"):
@@ -836,7 +832,6 @@ async def _start_turn(game: PixelGame):
 
     valid = game.get_valid_moves(current["user_id"])
     if not valid:
-        # ✅ Player stuck → eliminate
         eliminated = game.eliminate_player(current["user_id"], reason="🚫 No valid moves (blocked)")
         name = eliminated["name"] if eliminated else str(current["user_id"])
         color = eliminated["color"] if eliminated else "⬜"
@@ -848,11 +843,9 @@ async def _start_turn(game: PixelGame):
             parse_mode=ParseMode.HTML,
         )
 
-        # Check if only 1 left
         if len(game.players) <= 1:
             return await _finish_game(game)
 
-        # Reset turn_index safely and continue
         if game.players:
             game.turn_index = game.turn_index % len(game.players)
         await persist_game(game)
@@ -890,10 +883,8 @@ async def _turn_timer(game: PixelGame, expected_uid: int):
         if not current or current["user_id"] != expected_uid:
             return
 
-        # ✅ Increment skip counter
         skips = game.increment_skip(expected_uid)
 
-        # Check kick threshold
         if skips >= MAX_SKIPS_PER_PLAYER:
             eliminated = game.eliminate_player(expected_uid,
                                                 reason=f"⏭️ {MAX_SKIPS_PER_PLAYER} skips")
@@ -918,7 +909,6 @@ async def _turn_timer(game: PixelGame, expected_uid: int):
             await asyncio.sleep(1)
             return await _start_turn(game)
 
-        # Otherwise: auto-pick random valid move
         valid = game.get_valid_moves(expected_uid)
         if valid:
             r, c = random.choice(valid)
@@ -1023,14 +1013,12 @@ async def _finish_game(game: PixelGame):
         rank = medals.get(i, f"{i+1}.")
         ranking_lines.append(f"{rank} {p['color']} {p['mention']} — <code>{p['cell_count']}</code> cells")
 
-    # Eliminated section
     elim_lines = []
     for p in game.eliminated_players:
         reason = p.get("elimination_reason", "eliminated")
         elim_lines.append(f"• {p['color']} {_esc(p['name'])} — <i>{_esc(reason)}</i>")
     elim_txt = "\n\n💀 <b>Eliminated:</b>\n" + "\n".join(elim_lines) if elim_lines else ""
 
-    # Final scoreboard (KEEP)
     scoreboard_msg = await _safe_send(
         game.chat_id,
         "🎨 <b>PIXEL BATTLE — FINAL BOARD</b>\n\n"
@@ -1041,17 +1029,14 @@ async def _finish_game(game: PixelGame):
     )
     scoreboard_id = getattr(scoreboard_msg, "id", None)
 
-    # Payout
     share = 0
     if game.is_paid and game.net_prize > 0:
         share = await _payout_paid_game(game)
     else:
         await _award_xp_only(game)
 
-    # Winner card (KEEP)
     winner_msg_id = await _send_winner_card(game, share)
 
-    # Stats
     for p in game.players + game.eliminated_players:
         won = (p["user_id"] == winner_id)
         try:
