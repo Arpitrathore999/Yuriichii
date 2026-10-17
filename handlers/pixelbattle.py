@@ -266,7 +266,7 @@ def _render_help() -> str:
         "• <code>/pixel free</code> — Medium free game\n"
         "• <code>/pixel 500</code> — Medium paid game\n"
         "• <code>/pixel free easy</code> — Easy (5×10)\n"
-        "• <code>/pixel free hard</code> — Hard (10×15)\n"
+        "• <code>/pixel free hard</code> — Hard (10×10)\n"
         "• <code>/joinpixel</code> — Join the lobby\n\n"
         "📖 Full rules & commands: <code>/pixelhelp</code>\n"
     )
@@ -287,8 +287,8 @@ def _render_help_full() -> str:
 
         "<b>2️⃣ MODES</b>\n"
         "🟢 <b>Easy</b> — 5×10 grid (50 cells)\n"
-        "🟡 <b>Medium</b> — 10×10 grid (100 cells)\n"
-        "🔴 <b>Hard</b> — 10×15 grid (150 cells)\n"
+        "🟡 <b>Medium</b> — 7×10 grid (70 cells)\n"
+        "🔴 <b>Hard</b> — 10×10 grid (100 cells)\n"
         "• Add mode after amount: <code>/pixel 500 hard</code>\n\n"
 
         "<b>3️⃣ TURNS</b>\n"
