@@ -3,6 +3,7 @@
 #  handlers/shadow_syndicate.py — 🎭 Shadow Syndicate Handlers
 #  Commands, callbacks, cinematic scenes
 #  ✅ NEW: /shadowhelp with full detailed guide
+#  ✅ FIXED: Deep link return instead of StopPropagation
 # --------------------------------------------------------------------------------
 
 from __future__ import annotations
@@ -206,7 +207,6 @@ async def _credit_user(uid: int, amount: int) -> bool:
 #  RENDERERS
 # ══════════════════════════════════════════════════════════════════════════════
 def _render_help() -> str:
-    """Full detailed help for /shadowhelp"""
     return (
         "🎭 <b>ꜱʜᴀᴅᴏᴡ ꜱʏɴᴅɪᴄᴀᴛᴇ</b> 🎭\n"
         "<i>ᴛʜᴇ ᴍᴏᴅᴇʀɴ ʀᴀᴊᴀ-ᴍᴀɴᴛʀɪ-ᴄʜᴏʀ-ꜱɪᴘᴀʜɪ</i>\n\n"
@@ -434,11 +434,12 @@ def _render_reveal(game: ShadowGame) -> str:
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  DEEP LINK HANDLER
+#  🚨 FIXED: return instead of StopPropagation to not block normal /start
 # ══════════════════════════════════════════════════════════════════════════════
 @app.on_message(filters.command("start", prefixes=PREFIXES) & filters.private, group=-15)
 async def shadow_deeplink(_, message: Message):
     if not message.command or len(message.command) < 2:
-        raise StopPropagation
+        return  # 🚨 FIX: StopPropagation ko return kiya
 
     payload = message.command[1].strip()
 
@@ -447,7 +448,7 @@ async def shadow_deeplink(_, message: Message):
         raise StopPropagation
 
     if not payload.startswith("shadow_join_"):
-        raise StopPropagation
+        return  # 🚨 FIX: StopPropagation ko return kiya
 
     try:
         chat_id = int(payload[len("shadow_join_"):])
