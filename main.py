@@ -1,4 +1,5 @@
 import asyncio
+import traceback
 
 from pyrogram import idle
 
@@ -7,98 +8,152 @@ from core.loader import load_handlers
 from core.logger import log_startup, sync_existing_groups
 
 
-AUTO_REVIVE_INTERVAL = 600  # 10 min
-
+AUTO_REVIVE_INTERVAL = 600
 
 async def auto_revive_loop():
     from core.economy import run_auto_revive_sweep
-
     await asyncio.sleep(60)
-
     while True:
         try:
             result = await run_auto_revive_sweep()
             if result["revived"] or result["topped_up"]:
-                print(
-                    f"[AUTO-REVIVE] revived={result['revived']} "
-                    f"topped_up={result['topped_up']} "
-                    f"scanned={result['scanned']}",
-                    flush=True,
-                )
+                print(f"[AUTO-REVIVE] revived={result['revived']} topped_up={result['topped_up']} scanned={result['scanned']}", flush=True)
         except Exception as e:
             print(f"[AUTO-REVIVE] sweep crashed: {type(e).__name__}: {e}", flush=True)
-
         await asyncio.sleep(AUTO_REVIVE_INTERVAL)
 
 
 async def _load_wordseek_dictionary():
-    """One-time: load WordSeek dictionary (auto-downloads 370k words on first run)."""
     try:
         from core.wordseek_engine import ensure_dictionary_loaded, dict_stats
         await ensure_dictionary_loaded()
         stats = dict_stats()
-        print(
-            f"[WordSeek] dict ready — "
-            f"4-letter: {stats[4]['valid']} valid / {stats[4]['answers']} answers, "
-            f"5-letter: {stats[5]['valid']} valid / {stats[5]['answers']} answers, "
-            f"6-letter: {stats[6]['valid']} valid / {stats[6]['answers']} answers",
-            flush=True,
-        )
+        print(f"[WordSeek] dict ready...", flush=True)
     except Exception as e:
         print(f"[WordSeek] dict load failed: {type(e).__name__}: {e}", flush=True)
 
 
 async def _recover_wordseek_games():
-    """Restart recovery — restore any active WordSeek games from DB."""
     try:
         from core.wordseek_engine import recover_active_games
         count = await recover_active_games()
-        if count:
-            print(f"[WordSeek RECOVERY] restored {count} active games", flush=True)
+        if count: print(f"[WordSeek RECOVERY] restored {count} active games", flush=True)
     except Exception as e:
         print(f"[WordSeek RECOVERY] {type(e).__name__}: {e}", flush=True)
 
 
 async def _recover_ttt_games():
-    """Optional — recover interrupted TTT games (refunds if any)."""
     try:
         from core.ttt_engine import refund_interrupted_games
         count = await refund_interrupted_games()
-        if count:
-            print(f"[TTT RECOVERY] refunded {count} interrupted games", flush=True)
+        if count: print(f"[TTT RECOVERY] refunded {count} interrupted games", flush=True)
     except Exception as e:
         print(f"[TTT RECOVERY] {type(e).__name__}: {e}", flush=True)
+
+
+async def _recover_rps_games():
+    try:
+        from core.rps_engine import recover_active_games
+        count = await recover_active_games()
+        if count: print(f"[RPS RECOVERY] refunded {count} interrupted games", flush=True)
+    except Exception as e:
+        print(f"[RPS RECOVERY] {type(e).__name__}: {e}", flush=True)
+
+
+async def _recover_wordchain_games():
+    try:
+        from core.wordchain_engine import recover_active_games
+        count = await recover_active_games()
+        if count: print(f"[WordChain RECOVERY] cancelled {count} active games", flush=True)
+    except Exception as e:
+        print(f"[WordChain RECOVERY] {type(e).__name__}: {e}", flush=True)
+
+
+async def _recover_mafia_games():
+    try:
+        from core.mafia_engine import recover_active_games
+        count = await recover_active_games()
+        if count: print(f"[Mafia RECOVERY] refunded {count} games", flush=True)
+    except Exception as e:
+        print(f"[Mafia RECOVERY] {type(e).__name__}: {e}", flush=True)
+
+
+async def _recover_pixelbattle_games():
+    try:
+        from core.pixelbattle_engine import recover_active_games
+        count = await recover_active_games()
+        if count: print(f"[PixelBattle RECOVERY] refunded {count} games", flush=True)
+    except Exception as e:
+        print(f"[PixelBattle RECOVERY] {type(e).__name__}: {e}", flush=True)
+
+
+async def _recover_shadow_games():
+    try:
+        from core.shadow_engine import recover_active_games
+        count = await recover_active_games()
+        if count: print(f"[Shadow RECOVERY] cancelled {count} games", flush=True)
+    except Exception as e:
+        print(f"[Shadow RECOVERY] {type(e).__name__}: {e}", flush=True)
+
+
+async def _recover_hack_games():
+    try:
+        from core.hack_engine import recover_active_games
+        count = await recover_active_games()
+        if count: print(f"[Hack RECOVERY] refunded {count} games", flush=True)
+    except Exception as e:
+        print(f"[Hack RECOVERY] {type(e).__name__}: {e}", flush=True)
+
+
+async def _recover_card_games():
+    try:
+        from core.card_engine import recover_active_games
+        count = await recover_active_games()
+        if count: print(f"[Card RECOVERY] refunded {count} games", flush=True)
+    except Exception as e:
+        print(f"[Card RECOVERY] {type(e).__name__}: {e}", flush=True)
 
 
 async def main_async():
     load_handlers()
     print("Elara Bot starting...", flush=True)
-
-    # ✅ Start background auto-revive task
     asyncio.create_task(auto_revive_loop())
-
     await app.start()
     print("Elara Bot started.", flush=True)
 
-    # ✅ Load WordSeek dictionary (one-time; auto-downloads 370k words on first run)
     await _load_wordseek_dictionary()
-
-    # ✅ Startup logs + group sync
     await log_startup()
     await sync_existing_groups()
 
-    # ✅ Recover active games from DB (safe restart)
+    print("[RECOVERY] Scanning for interrupted games...", flush=True)
     await _recover_wordseek_games()
     await _recover_ttt_games()
+    await _recover_rps_games()
+    await _recover_wordchain_games()
+    await _recover_mafia_games()
+    await _recover_pixelbattle_games()
+    await _recover_shadow_games()
+    await _recover_hack_games()
+    await _recover_card_games()
+    print("[RECOVERY] Done.", flush=True)
 
-    await idle()
-
-    await app.stop()
-    print("Elara Bot stopped.", flush=True)
+    try:
+        await idle()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        await app.stop()
+        print("Elara Bot stopped.", flush=True)
 
 
 def main():
-    asyncio.run(main_async())
+    try:
+        asyncio.run(main_async())
+    except KeyboardInterrupt:
+        print("Shutdown requested.", flush=True)
+    except Exception as e:
+        print(f"CRASH: {type(e).__name__}: {e}", flush=True)
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
