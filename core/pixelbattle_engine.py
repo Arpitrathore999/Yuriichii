@@ -24,13 +24,13 @@ PLAYER_COLORS = ["🟦", "🟥", "🟩", "🟨", "🟪", "🟧"]
 
 # ✅ NEW: Modes with grid sizes
 MODE_EASY   = "easy"      # 5 rows x 10 cols = 50 cells
-MODE_MEDIUM = "medium"    # 10 rows x 10 cols = 100 cells
-MODE_HARD   = "hard"      # 10 rows x 15 cols = 150 cells
+MODE_MEDIUM = "medium"    # 7 rows x 10 cols = 100 cells
+MODE_HARD   = "hard"      # 10 rows x 10 cols = 150 cells
 
 MODE_CONFIG = {
     MODE_EASY:   {"label": "🟢 EASY",   "rows": 5,  "cols": 10, "icon": "🟢"},
-    MODE_MEDIUM: {"label": "🟡 MEDIUM", "rows": 10, "cols": 10, "icon": "🟡"},
-    MODE_HARD:   {"label": "🔴 HARD",   "rows": 10, "cols": 15, "icon": "🔴"},
+    MODE_MEDIUM: {"label": "🟡 MEDIUM", "rows": 7,  "cols": 10, "icon": "🟡"},
+    MODE_HARD:   {"label": "🔴 HARD",   "rows": 10, "cols": 10, "icon": "🔴"},
 }
 DEFAULT_MODE = MODE_MEDIUM
 
