@@ -1,6 +1,7 @@
 # --------------------------------------------------------------------------------
 #  Elara AI Bot © 2026
 #  handlers/start.py — Rich HTML + Tables + 3 Prefixes + Inline Image
+#  ✅ UPDATED: All 9 games added to menu
 # --------------------------------------------------------------------------------
 
 PREFIXES = ["/", "!", "."]
@@ -109,7 +110,7 @@ def _rich_welcome(user) -> str:
 <table>
 <tr><th>ꜰᴇᴀᴛᴜʀᴇ</th><th>ᴅᴇᴛᴀɪʟꜱ</th></tr>
 <tr><td>🤖 <b>AI ᴄʜᴀᴛ</b></td><td>ɴᴀᴛᴜʀᴀʟ ᴀɪ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴꜱ</td></tr>
-<tr><td>🎮 <b>ɢᴀᴍᴇꜱ</b></td><td>5 ꜰᴜɴ ɢʀᴏᴜᴘ ɢᴀᴍᴇꜱ</td></tr>
+<tr><td>🎮 <b>ɢᴀᴍᴇꜱ</b></td><td>9 ꜰᴜɴ ɢʀᴏᴜᴘ ɢᴀᴍᴇꜱ</td></tr>
 <tr><td>💕 <b>ꜱᴏᴄɪᴀʟ</b></td><td>ʜᴜɢ, ᴋɪꜱꜱ, ᴀɴᴅ ᴍᴀɴʏ ᴍᴏʀᴇ</td></tr>
 <tr><td>💰 <b>ᴇᴄᴏɴᴏᴍʏ</b></td><td>ʀᴏʙ, ᴋɪʟʟ, ᴛᴏᴘ ʀᴀɴᴋ</td></tr>
 <tr><td>🤫 <b>ᴡʜɪꜱᴘᴇʀ</b></td><td>ᴘʀɪᴠᴀᴛᴇ ᴏɴᴇ-ᴛɪᴍᴇ ᴍᴇꜱꜱᴀɢᴇꜱ</td></tr>
@@ -154,7 +155,7 @@ def _rich_help() -> str:
 <table>
 <tr><th>ᴄᴀᴛᴇɢᴏʀʏ</th><th>ᴅᴇꜱᴄʀɪᴘᴛɪᴏɴ</th></tr>
 <tr><td>🤖 <b>AI & WHISPER</b></td><td>ᴄʜᴀᴛ, ᴡʜɪꜱᴘᴇʀ</td></tr>
-<tr><td>🎮 <b>ɢᴀᴍᴇꜱ</b></td><td>5 ꜰᴜɴ ɢʀᴏᴜᴘ ɢᴀᴍᴇꜱ</td></tr>
+<tr><td>🎮 <b>ɢᴀᴍᴇꜱ</b></td><td>9 ꜰᴜɴ ɢʀᴏᴜᴘ ɢᴀᴍᴇꜱ</td></tr>
 <tr><td>💕 <b>ꜱᴏᴄɪᴀʟ</b></td><td>ꜰᴜɴ ɪɴᴛᴇʀᴀᴄᴛɪᴏɴꜱ</td></tr>
 <tr><td>💰 <b>ᴇᴄᴏɴᴏᴍʏ</b></td><td>ᴇᴅᴏʟʟᴇʀꜱ, ʀᴏʙ, ᴋɪʟʟ, ᴛᴏᴘ</td></tr>
 <tr><td>🛡️ <b>ᴍᴀɴᴀɢᴇᴍᴇɴᴛ</b></td><td>ɢʀᴏᴜᴘ ᴀᴅᴍɪɴ ᴛᴏᴏʟꜱ</td></tr>
@@ -491,7 +492,7 @@ def _rich_about() -> str:
 <tr><th>ꜰᴇᴀᴛᴜʀᴇ</th><th>ᴅᴇᴛᴀɪʟꜱ</th></tr>
 <tr><td>💬 ᴄʜᴀᴛ</td><td>ɴᴀᴛᴜʀᴀʟ ᴀɪ ᴄᴏɴᴠᴇʀꜱᴀᴛɪᴏɴ</td></tr>
 <tr><td>🧠 ᴍᴇᴍᴏʀʏ</td><td>ʀᴇᴄᴇɴᴛ ᴄʜᴀᴛ ᴄᴏɴᴛᴇxᴛ</td></tr>
-<tr><td>🎮 ɢᴀᴍᴇꜱ</td><td>5 ꜰᴜɴ ɢʀᴏᴜᴘ ɢᴀᴍᴇꜱ</td></tr>
+<tr><td>🎮 ɢᴀᴍᴇꜱ</td><td>9 ꜰᴜɴ ɢʀᴏᴜᴘ ɢᴀᴍᴇꜱ</td></tr>
 <tr><td>💰 ᴇᴄᴏɴᴏᴍʏ</td><td>ᴇᴅᴏʟʟᴇʀꜱ ɢᴀᴍᴇ</td></tr>
 <tr><td>🤫 ᴡʜɪꜱᴘᴇʀ</td><td>ᴘʀɪᴠᴀᴛᴇ ᴍᴇꜱꜱᴀɢᴇꜱ</td></tr>
 </table>
@@ -502,7 +503,7 @@ def _rich_about() -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  🎮 GAMES — ACTUAL ELARA GAMES
+#  🎮 GAMES — ALL 9 ELARA GAMES
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _rich_games() -> str:
@@ -520,6 +521,10 @@ def _rich_games() -> str:
 <tr><td>🎮 <b>ᴛɪᴄ ᴛᴀᴄ ᴛᴏᴇ</b></td><td>ᴄʟᴀꜱꜱɪᴄ xᴏ ɢᴀᴍᴇ</td></tr>
 <tr><td>🛸 <b>ʜᴀᴄᴋ</b></td><td>ᴄʀᴀᴄᴋ ᴛʜᴇ ꜱᴇᴄʀᴇᴛ ᴄᴏᴅᴇ</td></tr>
 <tr><td>🃏 <b>ᴄᴀʀᴅ ɢᴀᴍᴇ</b></td><td>ʜɪɢʜᴇꜱᴛ ᴄᴀʀᴅ ᴡɪɴꜱ</td></tr>
+<tr><td>🪨📄✂️ <b>ʀᴘꜱ ᴀʀᴇɴᴀ</b></td><td>ᴍᴜʟᴛɪ-ᴘʟᴀʏᴇʀ ʀᴏᴄᴋ ᴘᴀᴘᴇʀ ꜱᴄɪꜱꜱᴏʀꜱ</td></tr>
+<tr><td>🎭 <b>ᴍᴀꜰɪᴀ</b></td><td>ꜱᴏᴄɪᴀʟ ᴅᴇᴅᴜᴄᴛɪᴏɴ ɢᴀᴍᴇ</td></tr>
+<tr><td>🎨 <b>ᴘɪxᴇʟ ʙᴀᴛᴛʟᴇ</b></td><td>ᴛᴇʀʀɪᴛᴏʀʏ ᴄᴀᴘᴛᴜʀᴇ ɢᴀᴍᴇ</td></tr>
+<tr><td>🎭 <b>ꜱʜᴀᴅᴏᴡ ꜱʏɴᴅɪᴄᴀᴛᴇ</b></td><td>ʀᴀᴊᴀ-ᴍᴀɴᴛʀɪ-ᴄʜᴏʀ-ꜱɪᴘᴀʜɪ</td></tr>
 </table>
 </details>
 
@@ -596,7 +601,7 @@ def _rich_game_ttt() -> str:
 <tr><td>⚔️ ᴊᴏɪɴ ɢᴀᴍᴇ</td><td>ᴛᴀᴘ ʙᴜᴛᴛᴏɴ ᴛᴏ ᴊᴏɪɴ</td></tr>
 <tr><td>ᴛᴀᴘ ʙᴏᴀʀᴅ</td><td>ᴍᴀᴋᴇ ʏᴏᴜʀ ᴍᴏᴠᴇ</td></tr>
 <tr><td><code>/leaders</code></td><td>ᴄᴏᴍʙɪɴᴇᴅ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ</td></tr>""",
-        f"💡 ᴇɴᴛʀʏ: 100 - 500,000 • 2 ᴍɪɴ ʟᴏʙʙʏ • 60ꜱ ᴛᴜʀɴ"
+        "💡 ᴇɴᴛʀʏ: 100 - 500,000 • 2 ᴍɪɴ ʟᴏʙʙʏ • 60ꜱ ᴛᴜʀɴ"
     )
 
 
@@ -629,6 +634,71 @@ def _rich_game_card() -> str:
 <tr><td><code>/flip d</code></td><td>ꜰʟɪᴘ ᴄᴀʀᴅ ᴅ</td></tr>
 <tr><td><code>/leaders</code></td><td>ᴄᴏᴍʙɪɴᴇᴅ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ</td></tr>""",
         "💰 ᴇɴᴛʀʏ: 100 - 500,000 • 4 ᴄᴀʀᴅꜱ ᴘᴇʀ ᴘʟᴀʏᴇʀ • 4 ʀᴏᴜɴᴅꜱ • ᴛɪᴍᴇᴏᴜᴛ = ᴀᴜᴛᴏ-ꜰʟɪᴘ"
+    )
+
+
+def _rich_game_rps() -> str:
+    return _game_page(
+        "🪨📄✂️ ʀᴘꜱ ᴀʀᴇɴᴀ",
+        "ᴍᴜʟᴛɪ-ᴘʟᴀʏᴇʀ ʀᴏᴄᴋ ᴘᴀᴘᴇʀ ꜱᴄɪꜱꜱᴏʀꜱ ᴛᴏᴜʀɴᴀᴍᴇɴᴛ. ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td><code>/rps</code></td><td>ʀᴘꜱ ʜᴇʟᴘ ᴅᴇᴋʜᴏ</td></tr>
+<tr><td><code>/rps 100</code></td><td>ꜱᴛᴀʀᴛ ᴀʀᴇɴᴀ ᴡɪᴛʜ 100ᴄ</td></tr>
+<tr><td><code>/joinrps</code></td><td>ᴀᴄᴛɪᴠᴇ ᴀʀᴇɴᴀ ᴊᴏɪɴ ᴋᴀʀᴏ</td></tr>
+<tr><td><code>/rpsinfo</code></td><td>ᴀᴀʀᴇɴᴀ ꜱᴛᴀᴛᴜꜱ</td></tr>
+<tr><td><code>/rpscancel</code></td><td>ᴄᴀɴᴄᴇʟ (ʜᴏꜱᴛ)</td></tr>
+<tr><td><code>/rpsstats</code></td><td>ʏᴏᴜʀ ʀᴘꜱ ꜱᴛᴀᴛꜱ</td></tr>
+<tr><td><code>/rpstop</code></td><td>ʀᴘꜱ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ</td></tr>
+<tr><td><code>/rpshelp</code></td><td>ꜰᴜʟʟ ʀᴜʟᴇꜱ</td></tr>""",
+        "🏆 ᴡɪɴɴᴇʀ ᴛᴀᴋᴇꜱ ɴᴇᴛ ᴘᴏᴏʟ (10% ᴛᴀx) • 2-6 ᴘʟᴀʏᴇʀꜱ"
+    )
+
+
+def _rich_game_mafia() -> str:
+    return _game_page(
+        "🎭 ᴍᴀꜰɪᴀ",
+        "ꜱᴏᴄɪᴀʟ ᴅᴇᴅᴜᴄᴛɪᴏɴ ɢᴀᴍᴇ. ᴍᴀꜰɪᴀ ᴋᴏ ᴘᴀᴋᴀᴅᴏ! ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td><code>/mafia free</code></td><td>ꜰʀᴇᴇ ɢᴀᴍᴇ ꜱᴛᴀʀᴛ</td></tr>
+<tr><td><code>/mafia 500</code></td><td>ᴘᴀɪᴅ ɢᴀᴍᴇ (500ᴄ)</td></tr>
+<tr><td><code>/joinmafia</code></td><td>ɢᴀᴍᴇ ᴊᴏɪɴ ᴋᴀʀᴏ</td></tr>
+<tr><td><code>/mafiainfo</code></td><td>ᴀᴀʀᴇɴᴀ ꜱᴛᴀᴛᴜꜱ</td></tr>
+<tr><td><code>/mafiacancel</code></td><td>ᴄᴀɴᴄᴇʟ (ʜᴏꜱᴛ)</td></tr>
+<tr><td><code>/mafiastats</code></td><td>ʏᴏᴜʀ ᴍᴀꜰɪᴀ ꜱᴛᴀᴛꜱ</td></tr>
+<tr><td><code>/mafiatop</code></td><td>ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ</td></tr>
+<tr><td><code>/mafiahelp</code></td><td>ꜰᴜʟʟ ʜᴇʟᴘ</td></tr>""",
+        "🔪 1 ᴍᴀꜰɪᴀ • 🕵️ 1 ᴅᴇᴛᴇᴄᴛɪᴠᴇ • 👨‍⚕️ 1 ᴅᴏᴄᴛᴏʀ • 👥 ʀᴇꜱᴛ ᴠɪʟʟᴀɢᴇʀꜱ\n👥 4-12 ᴘʟᴀʏᴇʀꜱ"
+    )
+
+
+def _rich_game_pixel() -> str:
+    return _game_page(
+        "🎨 ᴘɪxᴇʟ ʙᴀᴛᴛʟᴇ",
+        "ᴛᴇʀʀɪᴛᴏʀʏ ᴄᴀᴘᴛᴜʀᴇ ɢᴀᴍᴇ. ᴍᴏꜱᴛ ᴄᴇʟʟꜱ ᴡɪɴꜱ! ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td><code>/pixel free</code></td><td>ꜰʀᴇᴇ ɢᴀᴍᴇ (ᴍᴇᴅɪᴜᴍ)</td></tr>
+<tr><td><code>/pixel 500</code></td><td>ᴘᴀɪᴅ ɢᴀᴍᴇ (ᴍᴇᴅɪᴜᴍ)</td></tr>
+<tr><td><code>/pixel free easy</code></td><td>ꜰʀᴇᴇ ᴇᴀꜱʏ (5x10)</td></tr>
+<tr><td><code>/pixel 500 hard</code></td><td>ᴘᴀɪᴅ ʜᴀʀᴅ (10x10)</td></tr>
+<tr><td><code>/joinpixel</code></td><td>ɢᴀᴍᴇ ᴊᴏɪɴ ᴋᴀʀᴏ</td></tr>
+<tr><td><code>/pixelinfo</code></td><td>ɢᴀᴍᴇ ꜱᴛᴀᴛᴜꜱ</td></tr>
+<tr><td><code>/pixelcancel</code></td><td>ᴄᴀɴᴄᴇʟ (ʜᴏꜱᴛ)</td></tr>
+<tr><td><code>/pixelstats</code></td><td>ʏᴏᴜʀ ꜱᴛᴀᴛꜱ</td></tr>
+<tr><td><code>/pixeltop</code></td><td>ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ</td></tr>
+<tr><td><code>/pixelhelp</code></td><td>ꜰᴜʟʟ ʜᴇʟᴘ</td></tr>""",
+        "🟢 ᴇᴀꜱʏ (5x10) • 🟡 ᴍᴇᴅɪᴜᴍ (7x10) • 🔴 ʜᴀʀᴅ (10x10)\n👥 2-6 ᴘʟᴀʏᴇʀꜱ"
+    )
+
+
+def _rich_game_shadow() -> str:
+    return _game_page(
+        "🎭 ꜱʜᴀᴅᴏᴡ ꜱʏɴᴅɪᴄᴀᴛᴇ",
+        "ᴛʜᴇ ᴍᴏᴅᴇʀɴ ʀᴀᴊᴀ-ᴍᴀɴᴛʀɪ-ᴄʜᴏʀ-ꜱɪᴘᴀʜɪ. ᴘʀᴇꜰɪxᴇꜱ: <code>.</code> <code>/</code> <code>!</code>",
+        """<tr><td><code>/syndicate</code></td><td>ɴᴇᴡ ʟᴏʙʙʏ ᴄʀᴇᴀᴛᴇ ᴋᴀʀᴏ</td></tr>
+<tr><td><code>/joinsyndicate</code></td><td>ɢᴀᴍᴇ ᴊᴏɪɴ ᴋᴀʀᴏ</td></tr>
+<tr><td><code>/leavesyndicate</code></td><td>ʟᴏʙʙʏ ꜱᴇ ɴɪᴋᴀʟᴏ</td></tr>
+<tr><td><code>/syndicateinfo</code></td><td>ꜰᴜʟʟ ʀᴜʟᴇꜱ</td></tr>
+<tr><td><code>/syndicatestats</code></td><td>ʏᴏᴜʀ ꜱᴛᴀᴛꜱ</td></tr>
+<tr><td><code>/syndicatetop</code></td><td>ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ</td></tr>
+<tr><td><code>/shadowhelp</code></td><td>ꜰᴜʟʟ ʜᴇʟᴘ</td></tr>""",
+        "👑 ᴍᴏɴᴀʀᴄʜ • 🧠 ꜱᴛʀᴀᴛᴇɢɪꜱᴛ • 🛡️ ꜱᴇɴᴛɪɴᴇʟ • 🃏 ᴘʜᴀɴᴛᴏᴍ\n👥 4 ᴘʟᴀʏᴇʀꜱ ᴇxᴀᴄᴛʟʏ"
     )
 
 
@@ -675,7 +745,7 @@ _HELP_KB = InlineKeyboardMarkup([
                              style=enums.ButtonStyle.PRIMARY),
     ],
     [
-        InlineKeyboardButton("🎮 ɢᴀᴍᴇꜱ", callback_data="elara:games",
+        InlineKeyboardButton("🎮 ɢᴀᴍᴇꜱ (9)", callback_data="elara:games",
                              style=enums.ButtonStyle.PRIMARY),
     ],
     [InlineKeyboardButton("⌯ ʜᴏᴍᴇ ⌯", callback_data="elara:home",
@@ -740,7 +810,7 @@ def _mg_subpage_kb() -> InlineKeyboardMarkup:
     ])
 
 
-# 🎮 GAMES KEYBOARD — Actual Elara games
+# 🎮 GAMES KEYBOARD — All 9 games
 _GAMES_KB = InlineKeyboardMarkup([
     [
         InlineKeyboardButton("🎯 ᴡᴏʀᴅꜱᴇᴇᴋ", callback_data="elara:game_wordseek",
@@ -757,6 +827,18 @@ _GAMES_KB = InlineKeyboardMarkup([
     [
         InlineKeyboardButton("🃏 ᴄᴀʀᴅ ɢᴀᴍᴇ", callback_data="elara:game_card",
                              style=enums.ButtonStyle.SUCCESS),
+        InlineKeyboardButton("🪨📄✂️ ʀᴘꜱ ᴀʀᴇɴᴀ", callback_data="elara:game_rps",
+                             style=enums.ButtonStyle.PRIMARY),
+    ],
+    [
+        InlineKeyboardButton("🎭 ᴍᴀꜰɪᴀ", callback_data="elara:game_mafia",
+                             style=enums.ButtonStyle.DANGER),
+        InlineKeyboardButton("🎨 ᴘɪxᴇʟ ʙᴀᴛᴛʟᴇ", callback_data="elara:game_pixel",
+                             style=enums.ButtonStyle.SUCCESS),
+    ],
+    [
+        InlineKeyboardButton("🎭 ꜱʜᴀᴅᴏᴡ ꜱʏɴᴅɪᴄᴀᴛᴇ", callback_data="elara:game_shadow",
+                             style=enums.ButtonStyle.DANGER),
     ],
     [
         InlineKeyboardButton("⬅️ ʙᴀᴄᴋ", callback_data="elara:help",
@@ -917,6 +999,7 @@ async def games_handler(_, message: Message):
 @bot.on_callback_query(filters.regex(
     r"^elara:(home|help|about|social|ai|economy|management|games|"
     r"game_wordseek|game_wordchain|game_ttt|game_hack|game_card|"
+    r"game_rps|game_mafia|game_pixel|game_shadow|"
     r"mg_admin|mg_bans|mg_filters|mg_greetings|mg_locks|mg_pins|"
     r"mg_purges|mg_reports|mg_warnings|mg_tag|close)$"
 ))
@@ -980,6 +1063,10 @@ async def cb(_, q: CallbackQuery):
         "game_ttt":       _rich_game_ttt,
         "game_hack":      _rich_game_hack,
         "game_card":      _rich_game_card,
+        "game_rps":       _rich_game_rps,
+        "game_mafia":     _rich_game_mafia,
+        "game_pixel":     _rich_game_pixel,
+        "game_shadow":    _rich_game_shadow,
     }
 
     if d in game_pages:
