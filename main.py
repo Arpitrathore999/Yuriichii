@@ -119,12 +119,6 @@ async def main_async():
     print("Elara Bot starting...", flush=True)
     asyncio.create_task(auto_revive_loop())
     await app.start()
-    uno_runner = None
-    try:
-        from core.uno_server import start_server
-        uno_runner = await start_server()
-    except Exception as e:
-        print(f"[UNO] Web server failed: {type(e).__name__}: {e}", flush=True)
     print("Elara Bot started.", flush=True)
 
     await _load_wordseek_dictionary()
@@ -148,8 +142,6 @@ async def main_async():
     except KeyboardInterrupt:
         pass
     finally:
-        if "uno_runner" in locals() and uno_runner:
-            await uno_runner.cleanup()
         await app.stop()
         print("Elara Bot stopped.", flush=True)
 
