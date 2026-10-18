@@ -7,7 +7,7 @@ from pyrogram import filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from core.bot import app
 
-UNO_WEBAPP_URL = os.getenv("UNO_WEBAPP_URL", "").strip()
+UNO_WEBAPP_URL = os.getenv("UNO_WEBAPP_URL", "").strip() or (os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip() and "https://" + os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip())
 
 @app.on_message(filters.command(["uno", "playuno"]))
 async def uno_command(_, message):
@@ -26,7 +26,7 @@ async def uno_command(_, message):
         photo="https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/UNO_Logo.svg/512px-UNO_Logo.svg.png",
         caption=(
             "🃏 **UNO**\n\n"
-            "Play UNO with friends! Create a lobby, invite players, or practice against AI.\n\n"
+            "Play UNO with friends! Create a room and invite friends to play online.\n\n"
             "🎴 Match the colour or number\n"
             "🔄 Skip · Reverse · Draw Two\n"
             "🌈 Wild · Wild Draw Four"
