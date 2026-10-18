@@ -95,6 +95,7 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     # shadowSyndicate
     "syndicate", "joinsyndicate", "leavesyndicate", "syndicateinfo",
     "syndicatestats", "syndicatetop", "shadowhelp", "syndicatehelp",
+    "uno",
 ]
 
 
