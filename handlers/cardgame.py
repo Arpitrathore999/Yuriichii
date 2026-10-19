@@ -73,6 +73,19 @@ def _panel_kb_check_cards():
     ])
 
 
+def _build_plays_text(game: CardGame) -> str:
+    plays = []
+    for p in game.players:
+        idx = game.round_plays.get(p["user_id"])
+        if idx is not None:
+            plays.append(f"• {p['mention']} ➡️ {p['hand'][idx]}")
+    for p in game.kicked:
+        idx = game.round_plays.get(p["user_id"])
+        if idx is not None:
+            plays.append(f"• {p['mention']} ➡️ {p['hand'][idx]} (auto)")
+    return "\n".join(plays)
+
+
 # ─── Balance helpers ──────────────────────────────────────────────────────────
 async def _get_balance(user_id: int) -> int:
     doc = await get_user(int(user_id))
@@ -200,8 +213,13 @@ async def card_create(_, message: Message):
 
     game = create_game(message.chat.id, entry_fee, max_players, message.from_user.id)
 
+    # Reverted to old starting message
     m = await message.reply(
-        f"⏳ <b>30 sec left! Use /bet &lt;amount&gt; gems/coins</b>",
+        "🃏 <b>ᴄᴀʀᴅ ɢᴀᴍᴇ ꜱᴛᴀʀᴛᴇᴅ.</b>\n\n"
+        f"💰 <b>ᴇɴᴛʀʏ ꜰᴇᴇ:</b> <code>{entry_fee}</code>\n"
+        f"👥 <b>ᴘʟᴀʏᴇʀꜱ:</b> ᴍᴀx <code>{max_players}</code> ᴘʟᴀʏᴇʀꜱ\n"
+        f"👉 ᴜꜱᴇ <code>/bet {entry_fee}</code>\n"
+        "⏳ <b>ɢᴀᴍᴇ ꜱᴛᴀʀᴛꜱ ɪɴ 2 ᴍɪɴᴜᴛᴇꜱ.</b>",
         parse_mode=ParseMode.HTML,
     )
     await _track(game, m)
@@ -405,22 +423,40 @@ async def _start_round(game: CardGame):
         game.first_turn_index = (game.first_turn_index - 1) % n
 
     game.turn_index = game.first_turn_index
+    
+    init_header = f"✅ <b>Round {game.round} started.</b>\n\n🎯 <b>Round {game.round}</b>"
 
+    await _next_player_prompt(game, message=None, header_text="", initial_header=init_header)
+
+
+async def _next_player_prompt(game: CardGame, message: Message = None, header_text: str = "", initial_header: str = ""):
     current = game.current_player()
     if not current:
         return await _finish_game(game)
 
-    # Exact match for Round Start Message
-    msg = await app.send_message(
-        game.chat_id,
-        f"✅ <b>Round {game.round} started.</b>\n\n"
-        f"🎯 <b>Round {game.round}</b>\n\n"
-        f"👉 {current['mention']} it's your turn.\n"
-        f"🃏 Use /flip a/b/c/d",
-        parse_mode=ParseMode.HTML,
-    )
-    await _track(game, msg)
-
+    available = [i for i, used in enumerate(current.get("used", [])) if not used]
+    
+    plays_text = _build_plays_text(game)
+    
+    board_text = ""
+    if initial_header:
+        board_text += f"{initial_header}\n\n"
+    if header_text:
+        board_text += f"{header_text}\n\n"
+    if plays_text:
+        board_text += f"{plays_text}\n\n"
+        
+    # Agar sirf 1 card bacha hai toh bina a/b/c/d ke prompt bhejo
+    cmd_hint = "🃏 Use /flip a/b/c/d" if len(available) > 1 else "🃏 Use /flip"
+    board_text += f"👉 {current['mention']} it's your turn.\n{cmd_hint}"
+    
+    if message:
+        m = await message.reply(board_text, parse_mode=ParseMode.HTML)
+    else:
+        m = await app.send_message(game.chat_id, board_text, parse_mode=ParseMode.HTML)
+        
+    await _track(game, m)
+    
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
     game.turn_task = asyncio.create_task(_turn_timeout(game, current["user_id"], game.round))
@@ -455,13 +491,21 @@ async def card_flip(_, message: Message):
             return
         return await message.reply("❌ ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀ ᴘᴀʀᴛɪᴄɪᴘᴀɴᴛ ɪɴ ᴛʜɪꜱ ɢᴀᴍᴇ.", parse_mode=ParseMode.HTML)
 
-    args = list(message.command or [])[1:]
-    if not args:
-        return await message.reply("⚠️ ᴜꜱᴇ <code>/flip a</code>, <code>/flip b</code>, <code>/flip c</code> ᴏʀ <code>/flip d</code>.", parse_mode=ParseMode.HTML)
+    player = game.get_player(user_id)
+    available_cards = [i for i, used in enumerate(player.get("used", [])) if not used] if player else []
 
-    card_label = args[0].lower().strip()
-    if card_label not in CARD_LABELS:
-        return await message.reply("⚠️ ᴜꜱᴇ <code>/flip a</code>, <code>/flip b</code>, <code>/flip c</code> ᴏʀ <code>/flip d</code>.", parse_mode=ParseMode.HTML)
+    args = list(message.command or [])[1:]
+    
+    if not args:
+        # Agar user ne sirf /flip likha hai aur uske paas sirf 1 card bacha hai
+        if len(available_cards) == 1:
+            card_label = CARD_LABELS[available_cards[0]]
+        else:
+            return await message.reply("⚠️ ᴜꜱᴇ <code>/flip a</code>, <code>/flip b</code>, <code>/flip c</code> ᴏʀ <code>/flip d</code>.", parse_mode=ParseMode.HTML)
+    else:
+        card_label = args[0].lower().strip()
+        if card_label not in CARD_LABELS:
+            return await message.reply("⚠️ ᴜꜱᴇ <code>/flip a</code>, <code>/flip b</code>, <code>/flip c</code> ᴏʀ <code>/flip d</code>.", parse_mode=ParseMode.HTML)
 
     current = game.current_player()
     if not current or current["user_id"] != user_id:
@@ -486,25 +530,6 @@ async def card_flip(_, message: Message):
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
 
-    # Build exact match round status
-    plays = []
-    for p in game.players:
-        idx = game.round_plays.get(p["user_id"])
-        if idx is not None:
-            plays.append(f"• {p['mention']} ➡️ {p['hand'][idx]}")
-            
-    for p in game.kicked:
-        idx = game.round_plays.get(p["user_id"])
-        if idx is not None:
-            plays.append(f"• {p['mention']} ➡️ {p['hand'][idx]} (auto)")
-
-    plays_text = "\n".join(plays)
-
-    board_text = (
-        f"🎯 <b>Round {game.round}</b>\n\n"
-        f"{plays_text}"
-    )
-
     if message.chat.type == ChatType.PRIVATE:
         try:
             await message.reply(f"✅ ᴄᴀʀᴅ <b>{card_label}</b> ᴘʟᴀʏᴇᴅ ᴘʀɪᴠᴀᴛᴇʟʏ.", parse_mode=ParseMode.HTML)
@@ -512,22 +537,14 @@ async def card_flip(_, message: Message):
             pass
 
     if game.all_played_this_round():
-        # Reply with the final board
+        plays_text = _build_plays_text(game)
+        board_text = f"🎯 <b>Round {game.round}</b>\n\n{plays_text}"
         m = await message.reply(board_text, parse_mode=ParseMode.HTML)
         await _track(game, m)
         await _finish_round(game)
     else:
         game.next_turn()
-        next_player = game.current_player()
-        board_text += (
-            f"\n\n👉 {next_player['mention']} it's your turn.\n"
-            f"🃏 Use /flip a/b/c/d"
-        )
-        
-        m = await message.reply(board_text, parse_mode=ParseMode.HTML)
-        await _track(game, m)
-        
-        game.turn_task = asyncio.create_task(_turn_timeout(game, next_player["user_id"], game.round))
+        await _next_player_prompt(game, message=message, header_text="")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -539,6 +556,7 @@ async def _finish_round(game: CardGame):
 
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
+    game.turn_task = None
 
     played = []
     for p in game.players:
@@ -563,7 +581,6 @@ async def _finish_round(game: CardGame):
 
     winner_mentions = ", ".join(w["mention"] for w in winners)
 
-    # Exact match for round winner
     m = await app.send_message(
         game.chat_id,
         f"🏆 <b>Round {game.round} winner(S):</b>\n"
@@ -574,7 +591,6 @@ async def _finish_round(game: CardGame):
     )
     await _track(game, m)
 
-    # Send updated private cards
     for p in game.players:
         await _send_private_cards(game, p["user_id"], game.round)
     for p in game.kicked:
@@ -608,39 +624,17 @@ async def _turn_timeout(game: CardGame, user_id: int, round_no: int):
         player["misses"] = player.get("misses", 0) + 1
         miss_count = player["misses"]
 
-        ok, reason, idx, value = game.auto_flip_random(user_id)
-        if not ok:
-            game.next_turn()
-            return await _start_turn(game)
-
-        flipped_label = CARD_LABELS[idx]
-        
-        plays = []
-        for p in game.players:
-            idx_p = game.round_plays.get(p["user_id"])
-            if idx_p is not None:
-                plays.append(f"• {p['mention']} ➡️ {p['hand'][idx_p]}")
-        for p in game.kicked:
-            idx_p = game.round_plays.get(p["user_id"])
-            if idx_p is not None:
-                plays.append(f"• {p['mention']} ➡️ {p['hand'][idx_p]} (auto)")
-        
-        plays_text = "\n".join(plays)
-        
-        timeout_header = f"⏰ <b>Timeout — Auto-Flip!</b>\n" if miss_count == 1 else f"👢 <b>Kicked — 2 Misses!</b>\n"
-        
-        board_text = (
-            f"{timeout_header}\n"
-            f"🎯 <b>Round {game.round}</b>\n\n"
-            f"{plays_text}"
-        )
-
         if miss_count == 1:
-            m = await app.send_message(game.chat_id, board_text, parse_mode=ParseMode.HTML)
-            await _track(game, m)
+            game.auto_flip_random(user_id)
+            header = f"⏰ <b>Timeout — Auto-Flip!</b>"
             if game.all_played_this_round():
+                plays_text = _build_plays_text(game)
+                board_text = f"⏰ <b>Timeout — Auto-Flip!</b>\n\n🎯 <b>Round {game.round}</b>\n\n{plays_text}"
+                m = await app.send_message(game.chat_id, board_text, parse_mode=ParseMode.HTML)
+                await _track(game, m)
                 return await _finish_round(game)
             game.next_turn()
+            await _next_player_prompt(game, message=None, header_text=header)
         else:
             kicked_p = game.kick_player(user_id)
             for _ in range(4):
@@ -648,45 +642,17 @@ async def _turn_timeout(game: CardGame, user_id: int, round_no: int):
                 if not ok2:
                     break
             
-            plays = []
-            for p in game.players:
-                idx_p = game.round_plays.get(p["user_id"])
-                if idx_p is not None:
-                    plays.append(f"• {p['mention']} ➡️ {p['hand'][idx_p]}")
-            for p in game.kicked:
-                idx_p = game.round_plays.get(p["user_id"])
-                if idx_p is not None:
-                    plays.append(f"• {p['mention']} ➡️ {p['hand'][idx_p]} (auto)")
-            plays_text = "\n".join(plays)
-            
-            board_text = (
-                f"{timeout_header}\n"
-                f"🎯 <b>Round {game.round}</b>\n\n"
-                f"{plays_text}"
-            )
-            
-            m = await app.send_message(game.chat_id, board_text, parse_mode=ParseMode.HTML)
-            await _track(game, m)
-
+            header = f"👢 <b>Kicked — 2 Misses!</b>"
             if len(game.players) == 0:
                 return await _finish_game(game)
             if game.all_played_this_round():
+                plays_text = _build_plays_text(game)
+                board_text = f"👢 <b>Kicked — 2 Misses!</b>\n\n🎯 <b>Round {game.round}</b>\n\n{plays_text}"
+                m = await app.send_message(game.chat_id, board_text, parse_mode=ParseMode.HTML)
+                await _track(game, m)
                 return await _finish_round(game)
             game.next_turn()
-
-        next_player = game.current_player()
-        if not next_player:
-            return await _finish_game(game)
-
-        msg2 = await app.send_message(
-            game.chat_id,
-            f"👉 {next_player['mention']} it's your turn.\n"
-            f"🃏 Use /flip a/b/c/d",
-            parse_mode=ParseMode.HTML,
-        )
-        await _track(game, msg2)
-
-        game.turn_task = asyncio.create_task(_turn_timeout(game, next_player["user_id"], game.round))
+            await _next_player_prompt(game, message=None, header_text=header)
 
     except asyncio.CancelledError:
         pass
@@ -704,6 +670,7 @@ async def _finish_game(game: CardGame):
 
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
+    game.turn_task = None
 
     all_participants = game.players + game.kicked
 
@@ -764,31 +731,29 @@ async def _finish_game(game: CardGame):
         for p in all_participants
     )
 
-    # Winner PFP
-    winner_photo_path = None
-    winner_photo_url = None
-
+    # Winner PFP Fix
+    photo_path = None
     try:
-        async for ph in app.get_chat_photos(winner["user_id"], limit=1):
-            winner_photo_path = await app.download_media(
-                ph.file_id,
-                file_name="/tmp/elara_winner.jpg",
+        user_obj = await app.get_users(winner["user_id"])
+        if user_obj.photo:
+            photo_path = await app.download_media(
+                user_obj.photo.big_file_id,
+                file_name=f"/tmp/elara_winner_{winner['user_id']}.jpg"
             )
-            break
     except Exception as e:
-        print(f"[CARDGAME photo] FAIL: {type(e).__name__}: {e}", flush=True)
+        print(f"[CARDGAME photo1] {e}")
 
-    if not winner_photo_path:
-        default_img = (getattr(config, "CARD_WINNER_IMAGE", "") or "").strip()
-        if default_img:
-            winner_photo_url = default_img
+    if not photo_path:
+        try:
+            async for ph in app.get_chat_photos(winner["user_id"], limit=1):
+                photo_path = await app.download_media(
+                    ph.file_id,
+                    file_name=f"/tmp/elara_winner_{winner['user_id']}.jpg"
+                )
+                break
+        except Exception as e:
+            print(f"[CARDGAME photo2] {e}")
 
-    if not winner_photo_path and not winner_photo_url:
-        start_img = (getattr(config, "START_IMAGE_URL", "") or "").strip()
-        if start_img:
-            winner_photo_url = start_img
-
-    # Cleanup old messages BEFORE sending final
     await _delete_all_game_messages(game)
 
     kicked_note = "\n⚡ <b>ᴋɪᴄᴋᴇᴅ ᴡɪɴɴᴇʀ!</b> <i>70/30 ꜱᴘʟɪᴛ</i>" if game.winner_kicked else ""
@@ -804,29 +769,40 @@ async def _finish_game(game: CardGame):
     )
 
     final_msg = None
-    if winner_photo_path and os.path.exists(winner_photo_path):
+    if photo_path and os.path.exists(photo_path):
         try:
             final_msg = await app.send_photo(
                 game.chat_id,
-                photo=winner_photo_path,
+                photo=photo_path,
                 caption=group_text,
                 parse_mode=ParseMode.HTML,
             )
         except Exception as e:
             print(f"[CARDGAME local-photo] FAIL: {type(e).__name__}: {e}", flush=True)
             final_msg = None
+        finally:
+            if os.path.exists(photo_path):
+                try:
+                    os.remove(photo_path)
+                except Exception:
+                    pass
 
-    if final_msg is None and winner_photo_url:
-        try:
-            final_msg = await app.send_photo(
-                game.chat_id,
-                photo=winner_photo_url,
-                caption=group_text,
-                parse_mode=ParseMode.HTML,
-            )
-        except Exception as e:
-            print(f"[CARDGAME url-photo] FAIL: {type(e).__name__}: {e}", flush=True)
-            final_msg = None
+    if final_msg is None:
+        default_img = (getattr(config, "CARD_WINNER_IMAGE", "") or "").strip()
+        if not default_img:
+            default_img = (getattr(config, "START_IMAGE_URL", "") or "").strip()
+        
+        if default_img:
+            try:
+                final_msg = await app.send_photo(
+                    game.chat_id,
+                    photo=default_img,
+                    caption=group_text,
+                    parse_mode=ParseMode.HTML,
+                )
+            except Exception as e:
+                print(f"[CARDGAME url-photo] FAIL: {type(e).__name__}: {e}", flush=True)
+                final_msg = None
 
     if final_msg is None:
         try:
@@ -839,12 +815,6 @@ async def _finish_game(game: CardGame):
             await app.pin_chat_message(game.chat_id, final_msg.id, disable_notification=True)
     except Exception as e:
         print(f"[CARDGAME pin-final] FAIL: {type(e).__name__}: {e}", flush=True)
-
-    if winner_photo_path and os.path.exists(winner_photo_path):
-        try:
-            os.remove(winner_photo_path)
-        except Exception:
-            pass
 
     # DM all participants
     for p in all_participants:
