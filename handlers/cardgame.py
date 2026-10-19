@@ -1,6 +1,6 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  handlers/cardgame.py — 🎮 ELARA CARD GAME 🎮
+#  handlers/cardgame.py — 🎮 ELARA CARD GAME (Exact Screenshot Match)
 # --------------------------------------------------------------------------------
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ def _panel_kb_check_cards():
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
-                "📩 ᴄʜᴇᴄᴋ ʏᴏᴜʀ ᴄᴀʀᴅꜱ",
+                "📩 Check your cards",
                 url="https://t.me/ItzElaraBot",
             ),
         ],
@@ -117,7 +117,6 @@ async def _credit_elara(amount: int) -> bool:
             },
             upsert=True,
         )
-        print(f"[CARDGAME tax] +{amount} coins → Elara", flush=True)
         return True
     except Exception as e:
         print(f"[CARDGAME tax] FAIL: {type(e).__name__}: {e}", flush=True)
@@ -160,7 +159,7 @@ async def _delete_all_game_messages(game: CardGame):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  /card
+#  /card — Create Game
 # ══════════════════════════════════════════════════════════════════════════════
 @app.on_message(filters.command("card", prefixes=PREFIXES) & filters.group)
 async def card_create(_, message: Message):
@@ -202,11 +201,7 @@ async def card_create(_, message: Message):
     game = create_game(message.chat.id, entry_fee, max_players, message.from_user.id)
 
     m = await message.reply(
-        "🃏 <b>ᴄᴀʀᴅ ɢᴀᴍᴇ ꜱᴛᴀʀᴛᴇᴅ.</b>\n\n"
-        f"💰 <b>ᴇɴᴛʀʏ ꜰᴇᴇ:</b> <code>{entry_fee}</code>\n"
-        f"👥 <b>ᴘʟᴀʏᴇʀꜱ:</b> ᴍᴀx <code>{max_players}</code> ᴘʟᴀʏᴇʀꜱ\n"
-        f"👉 ᴜꜱᴇ <code>/bet {entry_fee}</code>\n"
-        f"⏳ <b>ɢᴀᴍᴇ ꜱᴛᴀʀᴛꜱ ɪɴ 2 ᴍɪɴᴜᴛᴇꜱ.</b>",
+        f"⏳ <b>30 sec left! Use /bet &lt;amount&gt; gems/coins</b>",
         parse_mode=ParseMode.HTML,
     )
     await _track(game, m)
@@ -220,7 +215,7 @@ async def _lobby_timeout(game: CardGame):
         if game.state != "lobby":
             return
         if len(game.players) < 2:
-            await _cancel_lobby(game, reason="ɴᴏᴛ ᴇɴᴏᴜɢʜ ᴘʟᴀʏᴇʀꜱ ᴊᴏɪɴᴇᴅ")
+            await _cancel_lobby(game, reason="Not enough players joined.")
             return
         await _start_game(game)
     except asyncio.CancelledError:
@@ -259,7 +254,7 @@ async def _cancel_lobby(game: CardGame, reason: str):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  /bet
+#  /bet — Join Game
 # ══════════════════════════════════════════════════════════════════════════════
 @app.on_message(filters.command("bet", prefixes=PREFIXES) & filters.group)
 async def card_bet(_, message: Message):
@@ -311,14 +306,13 @@ async def card_bet(_, message: Message):
     await ensure_stats(message.from_user.id, _name(message.from_user))
 
     m = await message.reply(
-        f"🦋 <b>{_mention(message.from_user)} ᴊᴏɪɴᴇᴅ.</b>\n"
-        f"👥 ᴘʟᴀʏᴇʀꜱ: <code>{len(game.players)}/{game.max_players}</code>",
+        f"🦋 <b>{_mention(message.from_user)} joined.</b>",
         parse_mode=ParseMode.HTML,
     )
     await _track(game, m)
 
     if game.is_full():
-        m2 = await message.reply("👥 <b>ɢᴀᴍᴇ ɪꜱ ꜰᴜʟʟ! ꜱᴛᴀʀᴛɪɴɢ ɴᴏᴡ...</b>", parse_mode=ParseMode.HTML)
+        m2 = await message.reply("👥 <b>Game is full! Starting now...</b>", parse_mode=ParseMode.HTML)
         await _track(game, m2)
         if game.lobby_task and not game.lobby_task.done():
             game.lobby_task.cancel()
@@ -332,7 +326,7 @@ async def _start_game(game: CardGame):
     if game.state != "lobby":
         return
     if len(game.players) < 2:
-        return await _cancel_lobby(game, reason="ɴᴏᴛ ᴇɴᴏᴜɢʜ ᴘʟᴀʏᴇʀꜱ")
+        return await _cancel_lobby(game, reason="Not enough players")
 
     game.state = "running"
     game.start_time = datetime.now(timezone.utc)
@@ -343,30 +337,24 @@ async def _start_game(game: CardGame):
         p["hand"] = hand
         p["used"] = [False, False, False, False]
 
-    players_line = "\n".join(f"👤 {p['mention']}" for p in game.players)
-    total_pot = game.entry_fee * len(game.players)
-
+    players_line = " ".join(f"{p['mention']}" for p in game.players)
+    
+    # Game started message
     try:
         start_msg = await app.send_message(
             game.chat_id,
-            "👻 <b>ɢᴀᴍᴇ ꜱᴛᴀʀᴛᴇᴅ!</b>\n\n"
-            f"💰 ᴘʟᴀʏᴇʀ'ꜱ ʙᴇᴛ ᴀᴍᴏᴜɴᴛ: <code>{game.entry_fee}</code>\n"
-            f"👥 ᴛᴏᴛᴀʟ ᴘʟᴀʏᴇʀꜱ: <code>{len(game.players)}</code>\n"
-            f"💵 ᴛᴏᴛᴀʟ ᴘᴏᴛ: <code>{total_pot}</code>\n\n"
-            f"👉 {players_line}\n\n"
-            "<i>ᴛᴀᴘ ʙᴇʟᴏᴡ ᴛᴏ ᴄʜᴇᴄᴋ ʏᴏᴜʀ ᴘʀɪᴠᴀᴛᴇ ᴄᴀʀᴅꜱ.</i>",
+            "🃏 <b>Game started!</b>\n\n"
+            f"💰 <b>Player's bet amount:</b> {game.entry_fee}\n"
+            f"👥 <b>Total players:</b> {len(game.players)}\n"
+            f"👉 {players_line}",
             parse_mode=ParseMode.HTML,
             reply_markup=_panel_kb_check_cards(),
         )
         game.pinned_msg_id = start_msg.id
         try:
-            await app.pin_chat_message(
-                game.chat_id,
-                start_msg.id,
-                disable_notification=True,
-            )
-        except Exception as e:
-            print(f"[CARDGAME pin] {type(e).__name__}: {e}", flush=True)
+            await app.pin_chat_message(game.chat_id, start_msg.id, disable_notification=True)
+        except Exception:
+            pass
     except Exception as e:
         print(f"[CARDGAME start-msg] {type(e).__name__}: {e}", flush=True)
 
@@ -392,8 +380,7 @@ async def _send_private_cards(game: CardGame, user_id: int, round_no: int):
         "🃏 <b>ʏᴏᴜʀ ʀᴇᴍᴀɪɴɪɴɢ ᴄᴀʀᴅꜱ:</b>\n"
         + "\n".join(lines)
         + "\n\n💡 <i>ɴᴏᴛᴇ: ᴄᴀʀᴅ ꜱᴜᴍ ɪꜱ ꜱᴀᴍᴇ ꜰᴏʀ ᴇᴠᴇʀʏᴏɴᴇ.</i>\n\n"
-        "👉 ᴜꜱᴇ <code>/flip a</code> / <code>b</code> / <code>c</code> / <code>d</code>\n"
-        "<i>ʏᴏᴜ ᴄᴀɴ ᴜꜱᴇ ᴛʜɪꜱ ɪɴ ᴛʜᴇ ɢʀᴏᴜᴘ ᴏʀ ʜᴇʀᴇ ɪɴ ᴅᴍ.</i>"
+        "👉 ᴜꜱᴇ <code>/flip a</code> / <code>b</code> / <code>c</code> / <code>d</code>"
     )
     try:
         await app.send_message(user_id, text, parse_mode=ParseMode.HTML)
@@ -402,7 +389,45 @@ async def _send_private_cards(game: CardGame, user_id: int, round_no: int):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  /flip
+#  Round Flow
+# ══════════════════════════════════════════════════════════════════════════════
+async def _start_round(game: CardGame):
+    game.round += 1
+    game.reset_round_plays()
+
+    n = len(game.players)
+    if n == 0:
+        return await _finish_game(game)
+
+    if game.round == 1:
+        game.first_turn_index = random.randint(0, n - 1)
+    else:
+        game.first_turn_index = (game.first_turn_index - 1) % n
+
+    game.turn_index = game.first_turn_index
+
+    current = game.current_player()
+    if not current:
+        return await _finish_game(game)
+
+    # Exact match for Round Start Message
+    msg = await app.send_message(
+        game.chat_id,
+        f"✅ <b>Round {game.round} started.</b>\n\n"
+        f"🎯 <b>Round {game.round}</b>\n\n"
+        f"👉 {current['mention']} it's your turn.\n"
+        f"🃏 Use /flip a/b/c/d",
+        parse_mode=ParseMode.HTML,
+    )
+    await _track(game, msg)
+
+    if game.turn_task and not game.turn_task.done():
+        game.turn_task.cancel()
+    game.turn_task = asyncio.create_task(_turn_timeout(game, current["user_id"], game.round))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  /flip — Play Card
 # ══════════════════════════════════════════════════════════════════════════════
 @app.on_message(filters.command("flip", prefixes=PREFIXES))
 async def card_flip(_, message: Message):
@@ -461,99 +486,110 @@ async def card_flip(_, message: Message):
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
 
+    # Build exact match round status
+    plays = []
+    for p in game.players:
+        idx = game.round_plays.get(p["user_id"])
+        if idx is not None:
+            plays.append(f"• {p['mention']} ➡️ {p['hand'][idx]}")
+            
+    for p in game.kicked:
+        idx = game.round_plays.get(p["user_id"])
+        if idx is not None:
+            plays.append(f"• {p['mention']} ➡️ {p['hand'][idx]} (auto)")
+
+    plays_text = "\n".join(plays)
+
+    board_text = (
+        f"🎯 <b>Round {game.round}</b>\n\n"
+        f"{plays_text}"
+    )
+
     if message.chat.type == ChatType.PRIVATE:
         try:
             await message.reply(f"✅ ᴄᴀʀᴅ <b>{card_label}</b> ᴘʟᴀʏᴇᴅ ᴘʀɪᴠᴀᴛᴇʟʏ.", parse_mode=ParseMode.HTML)
         except Exception:
             pass
-        try:
-            gm = await app.send_message(
-                game.chat_id,
-                f"🃏 {current['mention']} ꜰʟɪᴘᴘᴇᴅ ᴀ ᴄᴀʀᴅ.",
-                parse_mode=ParseMode.HTML,
-            )
-            await _track(game, gm)
-        except Exception:
-            pass
-    else:
-        m = await message.reply(
-            f"🃏 {current['mention']} ꜰʟɪᴘᴘᴇᴅ ᴄᴀʀᴅ <b>{card_label}</b>.",
-            parse_mode=ParseMode.HTML,
-        )
-        await _track(game, m)
 
     if game.all_played_this_round():
+        # Reply with the final board
+        m = await message.reply(board_text, parse_mode=ParseMode.HTML)
+        await _track(game, m)
         await _finish_round(game)
     else:
         game.next_turn()
-        await _start_turn(game)
+        next_player = game.current_player()
+        board_text += (
+            f"\n\n👉 {next_player['mention']} it's your turn.\n"
+            f"🃏 Use /flip a/b/c/d"
+        )
+        
+        m = await message.reply(board_text, parse_mode=ParseMode.HTML)
+        await _track(game, m)
+        
+        game.turn_task = asyncio.create_task(_turn_timeout(game, next_player["user_id"], game.round))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  Round / Turn
+#  Finish Round
 # ══════════════════════════════════════════════════════════════════════════════
-async def _start_round(game: CardGame):
-    game.round += 1
-    game.reset_round_plays()
-
-    n = len(game.players)
-    if n == 0:
-        return await _finish_game(game)
-
-    if game.round == 1:
-        game.first_turn_index = random.randint(0, n - 1)
-    else:
-        game.first_turn_index = (game.first_turn_index - 1) % n
-
-    game.turn_index = game.first_turn_index
-
-    # Notify kicked players about their upcoming auto-flip
-    if game.kicked:
-        for kp in game.kicked:
-            if not all(kp["used"]):
-                try:
-                    await app.send_message(
-                        kp["user_id"],
-                        f"🤖 <b>ʀᴏᴜɴᴅ {game.round} — ᴀᴜᴛᴏ ꜰʟɪᴘ</b>\n\n"
-                        f"<i>ʏᴏᴜ ᴀʀᴇ ᴋɪᴄᴋᴇᴅ. ᴛʜɪꜱ ʀᴏᴜɴᴅ ᴏɴᴇ ᴏꜰ ʏᴏᴜʀ ʀᴇᴍᴀɪɴɪɴɢ ᴄᴀʀᴅꜱ ᴡɪʟʟ ᴀᴜᴛᴏ-ꜰʟɪᴘ.</i>",
-                        parse_mode=ParseMode.HTML,
-                    )
-                except Exception:
-                    pass
-
-    await _start_turn(game, new_round=True)
-
-
-async def _start_turn(game: CardGame, new_round: bool = False):
-    current = game.current_player()
-    if not current:
-        # No active players left → check for kicked auto-flips → finish
-        return await _handle_kicked_autoflips_and_advance(game)
-
-    if new_round:
-        m = await app.send_message(
-            game.chat_id,
-            f"✅ <b>ʀᴏᴜɴᴅ {game.round} ꜱᴛᴀʀᴛᴇᴅ.</b>\n\n"
-            f"👉 {current['mention']} ɪᴛ'ꜱ ʏᴏᴜʀ ᴛᴜʀɴ.\n\n"
-            f"⏳ ʏᴏᴜ ʜᴀᴠᴇ <code>{TURN_SECONDS}</code> ꜱᴇᴄᴏɴᴅꜱ.\n"
-            "🃏 ᴜꜱᴇ <code>/flip a/b/c/d</code>",
-            parse_mode=ParseMode.HTML,
-        )
-    else:
-        m = await app.send_message(
-            game.chat_id,
-            f"👉 {current['mention']} ɪᴛ'ꜱ ʏᴏᴜʀ ᴛᴜʀɴ.\n"
-            f"⏳ <code>{TURN_SECONDS}</code>ꜱ ᴛᴏ ꜰʟɪᴘ.\n"
-            "🃏 ᴜꜱᴇ <code>/flip a/b/c/d</code>",
-            parse_mode=ParseMode.HTML,
-        )
-    await _track(game, m)
+async def _finish_round(game: CardGame):
+    if game.state != "running":
+        return
 
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
-    game.turn_task = asyncio.create_task(_turn_timeout(game, current["user_id"], game.round))
+
+    played = []
+    for p in game.players:
+        idx = game.round_plays.get(p["user_id"])
+        if idx is not None:
+            played.append((p, CARD_LABELS[idx], p["hand"][idx]))
+            
+    for p in game.kicked:
+        idx = game.round_plays.get(p["user_id"])
+        if idx is not None:
+            played.append((p, CARD_LABELS[idx], p["hand"][idx]))
+
+    if not played:
+        return await _finish_game(game)
+
+    highest = max(v for _, _, v in played)
+    total = sum(v for _, _, v in played)
+    winners = [p for p, _, v in played if v == highest]
+
+    for w in winners:
+        game.total_points[w["user_id"]] = game.total_points.get(w["user_id"], 0) + total
+
+    winner_mentions = ", ".join(w["mention"] for w in winners)
+
+    # Exact match for round winner
+    m = await app.send_message(
+        game.chat_id,
+        f"🏆 <b>Round {game.round} winner(S):</b>\n"
+        f"{winner_mentions}\n"
+        f"🎯 <b>Highest card:</b> {highest}\n"
+        f"💰 <b>Points gained:</b> {total}",
+        parse_mode=ParseMode.HTML,
+    )
+    await _track(game, m)
+
+    # Send updated private cards
+    for p in game.players:
+        await _send_private_cards(game, p["user_id"], game.round)
+    for p in game.kicked:
+        await _send_private_cards(game, p["user_id"], game.round)
+
+    if game.round >= TOTAL_ROUNDS:
+        await _finish_game(game)
+    else:
+        await asyncio.sleep(1)
+        await _start_round(game)
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  Turn Timeout
+# ══════════════════════════════════════════════════════════════════════════════
 async def _turn_timeout(game: CardGame, user_id: int, round_no: int):
     try:
         await asyncio.sleep(TURN_SECONDS)
@@ -572,76 +608,85 @@ async def _turn_timeout(game: CardGame, user_id: int, round_no: int):
         player["misses"] = player.get("misses", 0) + 1
         miss_count = player["misses"]
 
-        # Auto-flip 1 random card for this miss (both 1st and 2nd)
         ok, reason, idx, value = game.auto_flip_random(user_id)
         if not ok:
-            # No cards available — skip turn
             game.next_turn()
             return await _start_turn(game)
 
         flipped_label = CARD_LABELS[idx]
+        
+        plays = []
+        for p in game.players:
+            idx_p = game.round_plays.get(p["user_id"])
+            if idx_p is not None:
+                plays.append(f"• {p['mention']} ➡️ {p['hand'][idx_p]}")
+        for p in game.kicked:
+            idx_p = game.round_plays.get(p["user_id"])
+            if idx_p is not None:
+                plays.append(f"• {p['mention']} ➡️ {p['hand'][idx_p]} (auto)")
+        
+        plays_text = "\n".join(plays)
+        
+        timeout_header = f"⏰ <b>Timeout — Auto-Flip!</b>\n" if miss_count == 1 else f"👢 <b>Kicked — 2 Misses!</b>\n"
+        
+        board_text = (
+            f"{timeout_header}\n"
+            f"🎯 <b>Round {game.round}</b>\n\n"
+            f"{plays_text}"
+        )
 
         if miss_count == 1:
-            # ⚠️ 1st miss: auto-flip + warning
-            m = await app.send_message(
-                game.chat_id,
-                f"⚠️ <b>ᴛɪᴍᴇᴏᴜᴛ — ᴀᴜᴛᴏ-ꜰʟɪᴘ!</b>\n\n"
-                f"{player['mention']} ᴛɪᴍᴇᴅ ᴏᴜᴛ.\n"
-                f"🎲 ᴄᴀʀᴅ <b>{flipped_label}</b> ᴀᴜᴛᴏ-ꜰʟɪᴘᴘᴇᴅ.\n"
-                f"<i>ᴇᴋ ᴀᴜʀ ᴍɪꜱꜱ = ꜱᴇᴇᴅʜᴀ ᴋɪᴄᴋ 👢</i>",
-                parse_mode=ParseMode.HTML,
-            )
+            m = await app.send_message(game.chat_id, board_text, parse_mode=ParseMode.HTML)
             await _track(game, m)
-
             if game.all_played_this_round():
                 return await _finish_round(game)
             game.next_turn()
-            await _start_turn(game)
-            return
-
-        # ── 2nd miss: auto-flip + KICK ──
-        kicked_p = game.kick_player(user_id)
-
-        # Instantly auto-flip ALL remaining cards for the kicked player
-        for _ in range(4):
-            ok2, _, idx2, val2 = game.auto_flip_random(user_id)
-            if not ok2:
-                break
-
-        # DM the kicked player
-        try:
-            await app.send_message(
-                user_id,
-                "👢 <b>ʏᴏᴜ ᴡᴇʀᴇ ᴋɪᴄᴋᴇᴅ!</b>\n\n"
-                f"<i>2 ᴛɪᴍᴇᴏᴜᴛꜱ. ʏᴏᴜʀ ʀᴇᴍᴀɪɴɪɴɢ ᴄᴀʀᴅꜱ ʜᴀᴠᴇ ʙᴇᴇɴ ᴀᴜᴛᴏ-ꜰʟɪᴘᴘᴇᴅ.</i>\n"
-                f"<i>ʏᴏᴜʀ ᴇɴᴛʀʏ ꜰᴇᴇ ꜱᴛᴀʏꜱ ɪɴ ᴛʜᴇ ᴘᴏᴛ.</i>",
-                parse_mode=ParseMode.HTML,
+        else:
+            kicked_p = game.kick_player(user_id)
+            for _ in range(4):
+                ok2, _, idx2, val2 = game.auto_flip_random(user_id)
+                if not ok2:
+                    break
+            
+            plays = []
+            for p in game.players:
+                idx_p = game.round_plays.get(p["user_id"])
+                if idx_p is not None:
+                    plays.append(f"• {p['mention']} ➡️ {p['hand'][idx_p]}")
+            for p in game.kicked:
+                idx_p = game.round_plays.get(p["user_id"])
+                if idx_p is not None:
+                    plays.append(f"• {p['mention']} ➡️ {p['hand'][idx_p]} (auto)")
+            plays_text = "\n".join(plays)
+            
+            board_text = (
+                f"{timeout_header}\n"
+                f"🎯 <b>Round {game.round}</b>\n\n"
+                f"{plays_text}"
             )
-        except Exception:
-            pass
+            
+            m = await app.send_message(game.chat_id, board_text, parse_mode=ParseMode.HTML)
+            await _track(game, m)
 
-        remaining_active = len(game.players)
-        m = await app.send_message(
-            game.chat_id,
-            f"👢 <b>ᴋɪᴄᴋᴇᴅ!</b>\n\n"
-            f"{kicked_p['mention']} ʜᴀꜱ ʙᴇᴇɴ ᴋɪᴄᴋᴇᴅ — <b>2 ᴛɪᴍᴇᴏᴜᴛꜱ</b>.\n"
-            f"🎲 ᴀʟʟ ʀᴇᴍᴀɪɴɪɴɢ ᴄᴀʀᴅꜱ ᴀᴜᴛᴏ-ꜰʟɪᴘᴘᴇᴅ.\n"
-            f"💰 ᴇɴᴛʀʏ ꜰᴇᴇ ꜱᴛᴀʏꜱ ɪɴ ᴛʜᴇ ᴘᴏᴛ.\n"
-            f"👥 <b>ʀᴇᴍᴀɪɴɪɴɢ ᴀᴄᴛɪᴠᴇ:</b> <code>{remaining_active}</code>",
-            parse_mode=ParseMode.HTML,
-        )
-        await _track(game, m)
+            if len(game.players) == 0:
+                return await _finish_game(game)
+            if game.all_played_this_round():
+                return await _finish_round(game)
+            game.next_turn()
 
-        # Game ends immediately if no active players left
-        if remaining_active == 0:
+        next_player = game.current_player()
+        if not next_player:
             return await _finish_game(game)
 
-        # If round complete (all active played), advance
-        if game.all_played_this_round():
-            return await _finish_round(game)
+        msg2 = await app.send_message(
+            game.chat_id,
+            f"👉 {next_player['mention']} it's your turn.\n"
+            f"🃏 Use /flip a/b/c/d",
+            parse_mode=ParseMode.HTML,
+        )
+        await _track(game, msg2)
 
-        game.next_turn()
-        await _start_turn(game)
+        game.turn_task = asyncio.create_task(_turn_timeout(game, next_player["user_id"], game.round))
 
     except asyncio.CancelledError:
         pass
@@ -649,79 +694,8 @@ async def _turn_timeout(game: CardGame, user_id: int, round_no: int):
         print(f"[CARDGAME turn] {type(e).__name__}: {e}", flush=True)
 
 
-async def _handle_kicked_autoflips_and_advance(game: CardGame):
-    """Fallback: no active players. Auto-flip kicked, then finish game."""
-    for kp in game.kicked:
-        for _ in range(4):
-            ok, _, _, _ = game.auto_flip_random(kp["user_id"])
-            if not ok:
-                break
-    return await _finish_game(game)
-
-
-async def _finish_round(game: CardGame):
-    if game.state != "running":
-        return
-
-    if game.turn_task and not game.turn_task.done():
-        game.turn_task.cancel()
-
-    played = []
-    # Active players who played
-    for p in game.players:
-        idx = game.round_plays.get(p["user_id"])
-        if idx is None:
-            continue
-        played.append((p, CARD_LABELS[idx], p["hand"][idx]))
-    # Kicked players who auto-flipped this round (shouldn't be here yet, but safe)
-    for p in game.kicked:
-        idx = game.round_plays.get(p["user_id"])
-        if idx is None:
-            continue
-        played.append((p, CARD_LABELS[idx], p["hand"][idx]))
-
-    if not played:
-        return await _finish_game(game)
-
-    highest = max(v for _, _, v in played)
-    total = sum(v for _, _, v in played)
-    winners = [p for p, _, v in played if v == highest]
-
-    for w in winners:
-        game.total_points[w["user_id"]] = game.total_points.get(w["user_id"], 0) + total
-
-    lines = "\n".join(
-        f"• {p['mention']} ➜ <code>{v}</code>" +
-        (" <i>(auto)</i>" if game.is_kicked(p["user_id"]) else "")
-        for p, _, v in played
-    )
-    winner_mentions = ", ".join(w["mention"] for w in winners)
-
-    m = await app.send_message(
-        game.chat_id,
-        f"🎯 <b>ʀᴏᴜɴᴅ {game.round}</b>\n\n"
-        f"{lines}\n\n"
-        f"🏆 <b>ʀᴏᴜɴᴅ {game.round} ᴡɪɴɴᴇʀ(ꜱ):</b> {winner_mentions}\n"
-        f"🃏 <b>ʜɪɢʜᴇꜱᴛ ᴄᴀʀᴅ:</b> <code>{highest}</code>\n"
-        f"💰 <b>ᴘᴏɪɴᴛꜱ ɢᴀɪɴᴇᴅ:</b> <code>{total}</code> ᴇᴀᴄʜ",
-        parse_mode=ParseMode.HTML,
-    )
-    await _track(game, m)
-
-    # Send updated private cards
-    for p in game.players:
-        await _send_private_cards(game, p["user_id"], game.round)
-    for p in game.kicked:
-        await _send_private_cards(game, p["user_id"], game.round)
-
-    if game.round >= TOTAL_ROUNDS:
-        await _finish_game(game)
-    else:
-        await _start_round(game)
-
-
 # ══════════════════════════════════════════════════════════════════════════════
-#  Game Finish
+#  Finish Game
 # ══════════════════════════════════════════════════════════════════════════════
 async def _finish_game(game: CardGame):
     if game.state != "running":
@@ -731,7 +705,6 @@ async def _finish_game(game: CardGame):
     if game.turn_task and not game.turn_task.done():
         game.turn_task.cancel()
 
-    # Collect all participants (active + kicked)
     all_participants = game.players + game.kicked
 
     if not all_participants:
@@ -755,13 +728,11 @@ async def _finish_game(game: CardGame):
     prize = total_pot - fee
 
     if not game.payout_done:
-        # ✅ Winner → prize
         try:
             await _credit(winner["user_id"], prize)
         except Exception as e:
             print(f"[CARDGAME payout] {type(e).__name__}: {e}", flush=True)
 
-        # ✅ Tax → Elara
         await _credit_elara(fee)
 
         try:
@@ -793,7 +764,7 @@ async def _finish_game(game: CardGame):
         for p in all_participants
     )
 
-    # ── Winner photo ──
+    # Winner PFP
     winner_photo_path = None
     winner_photo_url = None
 
@@ -817,6 +788,7 @@ async def _finish_game(game: CardGame):
         if start_img:
             winner_photo_url = start_img
 
+    # Cleanup old messages BEFORE sending final
     await _delete_all_game_messages(game)
 
     kicked_note = "\n⚡ <b>ᴋɪᴄᴋᴇᴅ ᴡɪɴɴᴇʀ!</b> <i>70/30 ꜱᴘʟɪᴛ</i>" if game.winner_kicked else ""
@@ -897,7 +869,7 @@ async def _finish_game(game: CardGame):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  /leaders — combined (Card + Hack)
+#  /leaders
 # ══════════════════════════════════════════════════════════════════════════════
 @app.on_message(filters.command(["leaders", "leaderboard"], prefixes=PREFIXES))
 async def leaders_cmd(_, message: Message):
