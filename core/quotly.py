@@ -14,11 +14,12 @@ import aiohttp
 from core.bot import app
 
 
-# ── API endpoints (fallback chain) ────────────────────────────────────────────
-# Public LyoSU quote API. It returns {"image": "<base64>", "type": "quote"}.
-# Public instances are best-effort and their uptime is not guaranteed.
+# ── Public LyoSU quote API endpoints ──────────────────────────────────────────
+# The deployed API documents /quote/generate.png for a direct PNG response.
+# Keep the JSON endpoint as a fallback for instances that return base64 JSON.
 QUOTE_APIS = [
-    "https://quote.yuri.ly/quote/generate",
+    ("https://quote.yuri.ly/quote/generate.png", "png"),
+    ("https://quote.yuri.ly/quote/generate", "json"),
 ]
 
 
@@ -155,7 +156,7 @@ async def generate_quote_png(
     width: int = 512,
     height: int = 768,
 ) -> Optional[bytes]:
-    """Call a public LyoSU-compatible quote API and return PNG bytes."""
+    """Call public LyoSU quote API and return PNG bytes or None."""
     payload = {
         "type": "quote",
         "format": "png",
@@ -166,39 +167,36 @@ async def generate_quote_png(
         "messages": messages,
     }
     timeout = aiohttp.ClientTimeout(total=45, connect=10)
-    headers = {"User-Agent": "ElaraQuoteBot/1.0", "Accept": "application/json"}
+    headers = {"User-Agent": "ElaraQuoteBot/1.0", "Accept": "image/png, application/json"}
 
     try:
         async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
-            for url in QUOTE_APIS:
+            for url, mode in QUOTE_APIS:
                 try:
                     async with session.post(url, json=payload) as resp:
+                        content_type = (resp.headers.get("Content-Type") or "").lower()
                         if resp.status != 200:
                             body = (await resp.text())[:300]
                             print(f"[QUOTE API] {url} HTTP {resp.status}: {body}", flush=True)
                             continue
 
-                        # Some compatible APIs return JSON/base64; .png endpoints may return image bytes.
-                        content_type = (resp.headers.get("Content-Type") or "").lower()
-                        if content_type.startswith("image/"):
-                            raw = await resp.read()
-                            if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+                        raw = await resp.read()
+                        if content_type.startswith("image/") or raw.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+                            if raw.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
                                 return raw
                             print(f"[QUOTE API] {url} returned non-PNG image ({content_type})", flush=True)
                             continue
 
                         try:
-                            data = await resp.json(content_type=None)
+                            data = __import__("json").loads(raw.decode("utf-8"))
                         except Exception as e:
-                            body = (await resp.text())[:300]
-                            print(f"[QUOTE API] {url} invalid JSON: {e}; body={body}", flush=True)
+                            print(f"[QUOTE API] {url} invalid response: {type(e).__name__}: {e}; content-type={content_type}", flush=True)
                             continue
 
-                        if data.get("error"):
-                            print(f"[QUOTE API] {url} API error: {data.get('error')}", flush=True)
+                        if data.get("error") or data.get("ok") is False:
+                            print(f"[QUOTE API] {url} API error: {data.get('error') or data.get('message')}", flush=True)
                             continue
 
-                        # LyoSU public API uses `image`; older forks sometimes wrap it in `result`.
                         img = data.get("image")
                         if not img and isinstance(data.get("result"), dict):
                             img = data["result"].get("image")
@@ -209,11 +207,11 @@ async def generate_quote_png(
                         if img.startswith("data:"):
                             img = img.split(",", 1)[1]
                         try:
-                            decoded = base64.b64decode(img, validate=True)
+                            decoded = base64.b64decode(img)
                         except Exception as e:
                             print(f"[QUOTE API] {url} invalid base64 image: {e}", flush=True)
                             continue
-                        if decoded.startswith(b"\x89PNG\r\n\x1a\n"):
+                        if decoded.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
                             return decoded
                         print(f"[QUOTE API] {url} image payload was not PNG", flush=True)
                 except Exception as e:
