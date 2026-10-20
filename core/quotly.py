@@ -14,12 +14,11 @@ import aiohttp
 from core.bot import app
 
 
-# ── Public LyoSU quote API endpoints ──────────────────────────────────────────
-# The deployed API documents /quote/generate.png for a direct PNG response.
-# Keep the JSON endpoint as a fallback for instances that return base64 JSON.
+# Public endpoints: LyoSU deployment plus a Vercel-hosted compatible fork.
 QUOTE_APIS = [
-    ("https://quote.yuri.ly/quote/generate.png", "png"),
-    ("https://quote.yuri.ly/quote/generate", "json"),
+    ("https://quote.yuri.ly/quote/generate.png", "png", "plain"),
+    ("https://quote.yuri.ly/quote/generate", "json", "plain"),
+    ("https://quote-generator-green-three.vercel.app/", "json", "wrapped"),
 ]
 
 
@@ -171,9 +170,10 @@ async def generate_quote_png(
 
     try:
         async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
-            for url, mode in QUOTE_APIS:
+            for url, mode, request_style in QUOTE_APIS:
                 try:
-                    async with session.post(url, json=payload) as resp:
+                    request_payload = {"json": payload} if request_style == "wrapped" else payload
+                    async with session.post(url, json=request_payload) as resp:
                         content_type = (resp.headers.get("Content-Type") or "").lower()
                         if resp.status != 200:
                             body = (await resp.text())[:300]
@@ -198,6 +198,8 @@ async def generate_quote_png(
                             continue
 
                         img = data.get("image")
+                        if not img and isinstance(data.get("data"), dict):
+                            img = data["data"].get("image")
                         if not img and isinstance(data.get("result"), dict):
                             img = data["result"].get("image")
                         if not isinstance(img, str) or not img:
