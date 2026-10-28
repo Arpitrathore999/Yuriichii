@@ -1,6 +1,6 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  management/greetings.py — Welcome / Goodbye (Fixed: Crash & ReplyParams)
+#  management/greetings.py — Welcome / Goodbye (Join Requests + Auto-Approve Toggle)
 # --------------------------------------------------------------------------------
 
 import asyncio
@@ -9,7 +9,8 @@ from datetime import datetime, timezone
 
 from pyrogram import filters
 from pyrogram.enums import ChatMemberStatus, ChatType, ParseMode
-from pyrogram.types import ReplyParameters
+from pyrogram.types import ReplyParameters, ChatJoinRequest
+from pyrogram.errors import ChatAdminRequired, UserNotParticipant
 
 from core.bot import app
 from database.mongo import db
@@ -22,18 +23,24 @@ DEFAULT_GOODBYE = "👋 <b>{mention} has left {chat}.</b>"
 
 CAPTION_LIMIT = 900
 
+
+# ─── DB helpers ───────────────────────────────────────────────────────────────
 def _col():
     return db[COLLECTION] if db is not None else None
+
 
 def _name(user):
     name = (getattr(user, "first_name", None) or getattr(user, "username", None) or str(user.id)).strip()
     return html.escape(name)
 
+
 def _mention(user):
     return f'<a href="tg://user?id={int(user.id)}">{_name(user)}</a>'
 
+
 def _is_group(message):
     return bool(message.chat and message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP))
+
 
 async def _is_admin(message):
     if not _is_group(message) or not message.from_user:
@@ -44,17 +51,20 @@ async def _is_admin(message):
     except Exception:
         return False
 
+
 async def _permission(message):
     if not await _is_admin(message):
         await message.reply("❌ <b>You don't have permission to use this command.</b>")
         return False
     return True
 
+
 async def _get(chat_id):
     c = _col()
     default = {
         "chat_id": int(chat_id), "welcome": True, "goodbye": True,
-        "cleanwelcome": False, "welcome_text": DEFAULT_WELCOME,
+        "cleanwelcome": False, "autoapprove": False,  # ✅ NEW: Autoapprove default OFF
+        "welcome_text": DEFAULT_WELCOME,
         "goodbye_text": DEFAULT_GOODBYE, "old_welcome_ids": [],
         "welcome_media": None, "goodbye_media": None,
     }
@@ -64,7 +74,11 @@ async def _get(chat_id):
     if not doc:
         await c.update_one({"chat_id": int(chat_id)}, {"$setOnInsert": default}, upsert=True)
         return default
+    # Purani documents mai autoapprove field na ho toh default False bhejo
+    if "autoapprove" not in doc:
+        doc["autoapprove"] = False
     return doc
+
 
 async def _update(chat_id, **values):
     c = _col()
@@ -72,6 +86,8 @@ async def _update(chat_id, **values):
         return
     await c.update_one({"chat_id": int(chat_id)}, {"$set": values}, upsert=True)
 
+
+# ─── Text / media helpers ─────────────────────────────────────────────────────
 def _fill(text, user, chat):
     values = {
         "{name}": _name(user),
@@ -85,6 +101,7 @@ def _fill(text, user, chat):
         text = text.replace(key, value)
     return text.replace("\r\n", "\n")
 
+
 def _extract_media(replied):
     if not replied: return None, None
     if replied.photo: return "photo", replied.photo.file_id
@@ -94,19 +111,18 @@ def _extract_media(replied):
     if replied.sticker: return "sticker", replied.sticker.file_id
     return None, None
 
+
 async def _send_with_media(chat_id, reply_to_id, text, media):
     try:
-        reply_params = ReplyParameters(message_id=reply_to_id)
+        reply_params = ReplyParameters(message_id=reply_to_id) if reply_to_id else None
     except Exception:
         reply_params = None
 
-    # 🚨 FIXED: Safe send fallback wrapper with kwargs to prevent TypeError crash
     async def _safe_send(func, **kwargs):
         try:
             return await func(**kwargs)
         except Exception as e:
             err = str(e).lower()
-            # Agar admin ne galat HTML dala hai (jaise <3) toh plain text mai bhej do
             if "can't parse entities" in err or "bad request" in err:
                 kwargs.pop("parse_mode", None)
                 import re
@@ -166,10 +182,12 @@ async def _send_with_media(chat_id, reply_to_id, text, media):
         print(f"[send-with-media outer] {type(e).__name__}: {e}", flush=True)
         return None
 
+
+# ─── Settings commands ────────────────────────────────────────────────────────
 @app.on_message(
     filters.group & filters.incoming & filters.command(
         ["welcome", "goodbye", "setwelcome", "resetwelcome",
-         "setgoodbye", "resetgoodbye", "cleanwelcome"], PREFIXES,
+         "setgoodbye", "resetgoodbye", "cleanwelcome", "autoapprove"], PREFIXES,
     )
 )
 async def greetings_settings(_, message):
@@ -180,11 +198,14 @@ async def greetings_settings(_, message):
     parts = full.split(maxsplit=1)
     args = parts[1].strip() if len(parts) > 1 else ""
 
-    if command in ("welcome", "goodbye", "cleanwelcome"):
+    if command in ("welcome", "goodbye", "cleanwelcome", "autoapprove"):
         if not args:
             doc = await _get(message.chat.id)
             state = "ON" if doc.get(command) else "OFF"
-            return await message.reply(f"✦ <b>{command.title()}:</b> {state}")
+            
+            # Formatting ke liye label
+            label = "Auto-Approve Join Requests" if command == "autoapprove" else command.title()
+            return await message.reply(f"✦ <b>{label}:</b> {state}")
 
         value = args.lower().strip()
         if value not in ("yes", "no", "on", "off"):
@@ -192,7 +213,9 @@ async def greetings_settings(_, message):
 
         enabled = value in ("yes", "on")
         await _update(message.chat.id, **{command: enabled})
-        return await message.reply(f"✓ <b>{command.title()} messages {'enabled' if enabled else 'disabled'}.</b>")
+        
+        label = "Auto-Approve" if command == "autoapprove" else command.title()
+        return await message.reply(f"✓ <b>{label} {'enabled' if enabled else 'disabled'}.</b>")
 
     if command == "setwelcome":
         mtype, fid = _extract_media(message.reply_to_message)
@@ -225,21 +248,22 @@ async def greetings_settings(_, message):
         return await message.reply("✓ <b>Goodbye message reset.</b>")
 
 
+# ─── Welcome Handler (Normal Join) ────────────────────────────────────────────
 @app.on_message(filters.group & filters.new_chat_members, group=-5)
 async def welcome_members(_, message):
-    # ✅ LOGGING: Railway logs mai dikhega ki join event aaya ya nahi
-    print(f"[GREETINGS] Join event in chat {message.chat.id}", flush=True)
-    
     doc = await _get(message.chat.id)
-    print(f"[GREETINGS] Welcome enabled: {doc.get('welcome')}", flush=True)
-    
     if not doc.get("welcome", True):
         return
 
     if doc.get("cleanwelcome"):
         await _clean_old(message.chat.id)
 
-    new_users = [u for u in message.new_chat_members if not getattr(u, "is_bot", False)]
+    new_users = []
+    if message.new_chat_members:
+        for u in message.new_chat_members:
+            if u and not getattr(u, "is_bot", False) and getattr(u, "id", None):
+                new_users.append(u)
+    
     if not new_users:
         return
 
@@ -258,6 +282,45 @@ async def welcome_members(_, message):
             asyncio.create_task(_expire_welcome(message.chat.id, sent.id))
 
 
+# ─── ✅ NEW: Welcome Handler (Join Request / Approval System) ─────────────────
+@app.on_chat_join_request(filters.group)
+async def welcome_join_request(_, request: ChatJoinRequest):
+    """Handle groups with 'Approve Members' (Join Request) enabled."""
+    try:
+        doc = await _get(request.chat.id)
+        autoapprove = doc.get("autoapprove", False)
+        user = request.from_user
+
+        if not user or getattr(user, "is_bot", False):
+            return
+
+        # 1. Auto-Approve logic
+        if autoapprove:
+            try:
+                await app.approve_chat_join_request(request.chat.id, user.id)
+                print(f"[GREETINGS] Auto-approved {user.id} in {request.chat.id}", flush=True)
+                # Note: Jab bot approve karega, toh Telegram 'new_chat_members' event bhejega
+                # aur upar wala welcome_members function welcome message bhej dega.
+            except Exception as e:
+                print(f"[GREETINGS] Auto-approve failed: {type(e).__name__}: {e}", flush=True)
+        else:
+            # 2. Manual Approval (Autoapprove OFF) -> Send DM to user
+            try:
+                await app.send_message(
+                    user.id,
+                    f"⏳ <b>Your join request for {html.escape(request.chat.title)} has been sent.</b>\n\n"
+                    f"Please wait for an admin to approve it.",
+                    parse_mode=ParseMode.HTML
+                )
+            except Exception:
+                # User ne bot start nahi kiya hoga ya privacy block hai
+                pass
+
+    except Exception as e:
+        print(f"[GREETINGS JOIN REQUEST ERROR] {type(e).__name__}: {e}", flush=True)
+
+
+# ─── Goodbye Handler ──────────────────────────────────────────────────────────
 @app.on_message(filters.group & filters.left_chat_member, group=-5)
 async def goodbye_member(_, message):
     doc = await _get(message.chat.id)
@@ -273,6 +336,7 @@ async def goodbye_member(_, message):
     await _send_with_media(message.chat.id, message.id, text, media)
 
 
+# ─── Cleanup ──────────────────────────────────────────────────────────────────
 async def _clean_old(chat_id, exclude=None):
     c = _col()
     if c is None: return
