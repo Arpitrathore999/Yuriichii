@@ -7,7 +7,7 @@ import asyncio
 
 from pyrogram import filters
 from pyrogram.enums import ChatMemberStatus, ChatType
-from pyrogram.errors import RPCError
+from pyrogram.errors import RPCError, ChatWriteForbidden
 
 from core.bot import app
 from database.mongo import db
@@ -62,15 +62,24 @@ async def _bot_can_delete(message):
         return False
 
 
+async def _safe_reply(message, text, **kwargs):
+    try:
+        await message.reply(text, **kwargs)
+    except ChatWriteForbidden:
+        pass
+    except Exception:
+        pass
+
+
 async def _guard(message):
     if not await _is_group(message):
-        await message.reply("❌ <b>This command can only be used in groups.</b>")
+        await _safe_reply(message, "❌ <b>This command can only be used in groups.</b>")
         return False
     if not await _has_delete_right(message):
-        await message.reply("❌ <b>You don't have permission to use this command.</b>")
+        await _safe_reply(message, "❌ <b>You don't have permission to use this command.</b>")
         return False
     if not await _bot_can_delete(message):
-        await message.reply("❌ <b>I need delete-message admin permission to purge messages.</b>")
+        await _safe_reply(message, "❌ <b>I need delete-message admin permission to purge messages.</b>")
         return False
     return True
 
@@ -80,7 +89,6 @@ async def _delete_ids(chat_id, ids):
     if not ids:
         return 0
     deleted = 0
-    # Telegram/Pyrogram handles message deletion in batches; keep chunks small.
     for i in range(0, len(ids), 100):
         chunk = ids[i:i + 100]
         try:
@@ -90,7 +98,6 @@ async def _delete_ids(chat_id, ids):
             else:
                 deleted += len(chunk)
         except Exception:
-            # Try one-by-one for partial failures (old/undeletable messages).
             for mid in chunk:
                 try:
                     await app.delete_messages(chat_id, mid)
@@ -101,25 +108,28 @@ async def _delete_ids(chat_id, ids):
 
 
 async def _messages_between(chat_id, start_id, end_id=None, limit=MAX_PURGE):
-    """Return message IDs newer than start_id and, if supplied, not newer than end_id."""
+    """Bots cannot use get_chat_history. We generate IDs mathematically."""
     if start_id is None:
         return []
-    upper = int(end_id) if end_id is not None else None
+    
+    start_id = int(start_id)
     ids = []
-    async for msg in app.get_chat_history(chat_id, limit=limit):
-        if not msg or not msg.id:
-            continue
-        mid = int(msg.id)
-        if mid <= int(start_id):
-            break
-        if upper is not None and mid > upper:
-            continue
-        ids.append(mid)
-        if upper is not None and mid <= int(start_id):
-            break
-        if len(ids) >= limit:
-            break
-    return sorted(set(ids))
+
+    if end_id is not None:
+        end_id = int(end_id)
+        if start_id > end_id:
+            start_id, end_id = end_id, start_id
+            
+        for mid in range(start_id, end_id + 1):
+            ids.append(mid)
+            if len(ids) >= limit:
+                break
+    else:
+        # Start from start_id and go up to limit
+        for mid in range(start_id, start_id + limit + 1):
+            ids.append(mid)
+            
+    return ids
 
 
 async def _get_marker(chat_id):
@@ -148,32 +158,12 @@ async def _clear_marker(chat_id):
         await col.delete_one({"chat_id": int(chat_id)})
 
 
-async def _confirmation(message, count, silent=False):
-    if silent:
-        try:
-            await message.delete()
-        except Exception:
-            pass
-        return
-    try:
-        await message.delete()
-    except Exception:
-        pass
-    if count:
-        sent = await message.reply(f"🗑️ <b>Pᴜʀɢᴇᴅ {count} ᴍᴇssᴀɢᴇs.</b>")
-        await asyncio.sleep(2)
-        try:
-            await sent.delete()
-        except Exception:
-            pass
-
-
 async def _purge(_, message):
     if not await _guard(message):
         return
     reply = message.reply_to_message
     if not reply:
-        return await message.reply("❌ <b>Reply to the first message you want to purge from.</b>")
+        return await _safe_reply(message, "❌ <b>Reply to the first message you want to purge from.</b>")
 
     args = message.command or []
     count_arg = None
@@ -181,26 +171,24 @@ async def _purge(_, message):
         try:
             count_arg = int(args[1])
         except ValueError:
-            return await message.reply("❌ <b>Usage:</b> <code>/purge</code> or <code>/purge 50</code>")
+            return await _safe_reply(message, "❌ <b>Usage:</b> <code>/purge</code> or <code>/purge 50</code>")
         if count_arg <= 0 or count_arg > MAX_PURGE:
-            return await message.reply(f"❌ <b>Choose a number between 1 and {MAX_PURGE}.</b>")
+            return await _safe_reply(message, f"❌ <b>Choose a number between 1 and {MAX_PURGE}.</b>")
 
     if count_arg is not None:
-        # X messages after the replied-to message.
         ids = await _messages_between(message.chat.id, reply.id, limit=count_arg)
         ids = ids[:count_arg]
     else:
-        # Everything after the replied-to message up to the current command.
         ids = await _messages_between(message.chat.id, reply.id, end_id=message.id, limit=MAX_PURGE)
 
-    # Include the command itself in the deletion, but never delete the marker message.
     if message.id not in ids:
         ids.append(message.id)
+    
     deleted = await _delete_ids(message.chat.id, ids)
 
     try:
         if deleted:
-            sent = await message.reply(f"🗑️ <b>Pᴜʀɢᴇᴅ {max(deleted - 1, 0)} ᴍᴇssᴀɢᴇs.</b>")
+            sent = await app.send_message(message.chat.id, f"🗑️ <b>Pᴜʀɢᴇᴅ {max(deleted - 1, 0)} ᴍᴇssᴀɢᴇs.</b>")
             await asyncio.sleep(2)
             await sent.delete()
     except Exception:
@@ -212,15 +200,15 @@ async def _spurge(_, message):
         return
     reply = message.reply_to_message
     if not reply:
-        return await message.reply("❌ <b>Reply to the first message you want to purge from.</b>")
+        return await _safe_reply(message, "❌ <b>Reply to the first message you want to purge from.</b>")
     args = message.command or []
     if len(args) >= 2:
         try:
             count = int(args[1])
         except ValueError:
-            return await message.reply("❌ <b>Usage:</b> <code>/spurge</code> or <code>/spurge 50</code>")
+            return await _safe_reply(message, "❌ <b>Usage:</b> <code>/spurge</code> or <code>/spurge 50</code>")
         if count <= 0 or count > MAX_PURGE:
-            return await message.reply(f"❌ <b>Choose a number between 1 and {MAX_PURGE}.</b>")
+            return await _safe_reply(message, f"❌ <b>Choose a number between 1 and {MAX_PURGE}.</b>")
         ids = (await _messages_between(message.chat.id, reply.id, limit=count))[:count]
     else:
         ids = await _messages_between(message.chat.id, reply.id, end_id=message.id, limit=MAX_PURGE)
@@ -233,7 +221,7 @@ async def _delete_reply(_, message):
     if not await _guard(message):
         return
     if not message.reply_to_message:
-        return await message.reply("❌ <b>Reply to the message you want to delete.</b>")
+        return await _safe_reply(message, "❌ <b>Reply to the message you want to delete.</b>")
     try:
         await message.reply_to_message.delete()
         await message.delete()
@@ -245,7 +233,7 @@ async def _purgefrom(_, message):
     if not await _guard(message):
         return
     if not message.reply_to_message:
-        return await message.reply("❌ <b>Reply to a message to mark the purge starting point.</b>")
+        return await _safe_reply(message, "❌ <b>Reply to a message to mark the purge starting point.</b>")
     if await _set_marker(message.chat.id, message.reply_to_message.id, message.from_user.id):
         try:
             await message.delete()
@@ -258,26 +246,24 @@ async def _purgefrom(_, message):
         except Exception:
             pass
     else:
-        await message.reply("❌ <b>Could not save the purge marker.</b>")
+        await _safe_reply(message, "❌ <b>Could not save the purge marker.</b>")
 
 
 async def _purgeto(_, message):
     if not await _guard(message):
         return
     if not message.reply_to_message:
-        return await message.reply("❌ <b>Reply to the message to mark the purge ending point.</b>")
+        return await _safe_reply(message, "❌ <b>Reply to the message to mark the purge ending point.</b>")
     start_id = await _get_marker(message.chat.id)
     if not start_id:
-        return await message.reply("❌ <b>No purge start is marked.</b> Use <code>/purgefrom</code> first.")
+        return await _safe_reply(message, "❌ <b>No purge start is marked.</b> Use <code>/purgefrom</code> first.")
     end_id = message.reply_to_message.id
     if end_id < start_id:
         start_id, end_id = end_id, start_id
     ids = await _messages_between(message.chat.id, start_id, end_id=end_id, limit=MAX_PURGE)
-    # Include both boundaries, as the user asked for all messages between the two markers.
     ids.extend([start_id, end_id, message.id])
     deleted = await _delete_ids(message.chat.id, sorted(set(ids)))
     await _clear_marker(message.chat.id)
-    # The command itself may already have been deleted; no extra confirmation is required.
     return deleted
 
 
