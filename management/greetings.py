@@ -1,15 +1,15 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  management/greetings.py — Welcome / Goodbye (Media + Line Break Fixed)
+#  management/greetings.py — Welcome / Goodbye (Fixed: ReplyParams, Multi-User, HTML)
 # --------------------------------------------------------------------------------
 
 import asyncio
-import re
+import html
 from datetime import datetime, timezone
 
 from pyrogram import filters
 from pyrogram.enums import ChatMemberStatus, ChatType, ParseMode
-from pyrogram.errors import RPCError
+from pyrogram.types import ReplyParameters
 
 from core.bot import app
 from database.mongo import db
@@ -20,7 +20,6 @@ COLLECTION = "greetings"
 DEFAULT_WELCOME = "👋 <b>Welcome {mention} to {chat}!</b>"
 DEFAULT_GOODBYE = "👋 <b>{mention} has left {chat}.</b>"
 
-# Caption limit (Telegram) — 1024. We use 900 to be safe.
 CAPTION_LIMIT = 900
 
 
@@ -30,7 +29,9 @@ def _col():
 
 
 def _name(user):
-    return (getattr(user, "first_name", None) or getattr(user, "username", None) or str(user.id)).strip()
+    # 🚨 FIX: HTML escape username to prevent "<" or ">" breaking the message
+    name = (getattr(user, "first_name", None) or getattr(user, "username", None) or str(user.id)).strip()
+    return html.escape(name)
 
 
 def _mention(user):
@@ -84,48 +85,54 @@ async def _update(chat_id, **values):
 
 # ─── Text / media helpers ─────────────────────────────────────────────────────
 def _fill(text, user, chat):
-    """Replace placeholders. Preserve real line breaks for HTML captions."""
     values = {
         "{name}": _name(user),
         "{mention}": _mention(user),
         "{id}": str(user.id),
         "{username}": f"@{user.username}" if user.username else "",
-        "{chat}": getattr(chat, "title", "Group") or "Group",
+        "{chat}": html.escape(getattr(chat, "title", "Group") or "Group"),
         "{chat_id}": str(chat.id),
     }
     for key, value in values.items():
         text = text.replace(key, value)
-
-    # Normalize CRLF
-    text = text.replace("\r\n", "\n")
-    return text
+    return text.replace("\r\n", "\n")
 
 
 def _extract_media(replied):
-    """Return (media_type, file_id) or (None, None)."""
     if not replied:
         return None, None
-    if replied.photo:
-        return "photo", replied.photo.file_id
-    if replied.video:
-        return "video", replied.video.file_id
-    if replied.animation:
-        return "gif", replied.animation.file_id
-    if replied.document:
-        return "document", replied.document.file_id
-    if replied.sticker:
-        return "sticker", replied.sticker.file_id
+    if replied.photo: return "photo", replied.photo.file_id
+    if replied.video: return "video", replied.video.file_id
+    if replied.animation: return "gif", replied.animation.file_id
+    if replied.document: return "document", replied.document.file_id
+    if replied.sticker: return "sticker", replied.sticker.file_id
     return None, None
 
 
 async def _send_with_media(chat_id, reply_to_id, text, media):
-    """Send media+text. Long text → media alag, text alag."""
+    """Send media+text. Handles HTML parse errors and uses ReplyParameters."""
+    reply_params = ReplyParameters(message_id=reply_to_id)
+    
+    # 🚨 FIX: Helper to fallback to plain text if HTML is broken by admin
+    async def _try_send(func, *args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except Exception as e:
+            if "can't parse entities" in str(e).lower() or "bad request" in str(e).lower():
+                kwargs.pop("parse_mode", None)
+                # Strip basic HTML for fallback
+                import re
+                fallback_text = re.sub(r'<[^>]+>', '', text)
+                kwargs['caption' if 'caption' in kwargs else 'text'] = fallback_text
+                return await func(*args, **kwargs)
+            print(f"[greetings send] {type(e).__name__}: {e}", flush=True)
+            return None
+
     try:
         if not media:
-            return await app.send_message(
-                chat_id, text,
-                parse_mode=ParseMode.HTML,
-                reply_to_message_id=reply_to_id,
+            return await _try_send(
+                app.send_message,
+                chat_id, text, parse_mode=ParseMode.HTML, reply_parameters=reply_params
             )
 
         mtype = media.get("type")
@@ -134,35 +141,33 @@ async def _send_with_media(chat_id, reply_to_id, text, media):
 
         if mtype == "photo":
             if long_text:
-                await app.send_photo(chat_id, photo=fid, reply_to_message_id=reply_to_id)
-                return await app.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
-            return await app.send_photo(chat_id, photo=fid, caption=text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
+                await _try_send(app.send_photo, chat_id, photo=fid, reply_parameters=reply_params)
+                return await _try_send(app.send_message, chat_id, text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
+            return await _try_send(app.send_photo, chat_id, photo=fid, caption=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
 
         if mtype == "video":
             if long_text:
-                await app.send_video(chat_id, video=fid, reply_to_message_id=reply_to_id)
-                return await app.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
-            return await app.send_video(chat_id, video=fid, caption=text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
+                await _try_send(app.send_video, chat_id, video=fid, reply_parameters=reply_params)
+                return await _try_send(app.send_message, chat_id, text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
+            return await _try_send(app.send_video, chat_id, video=fid, caption=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
 
         if mtype == "gif":
             if long_text:
-                await app.send_animation(chat_id, animation=fid, reply_to_message_id=reply_to_id)
-                return await app.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
-            return await app.send_animation(chat_id, animation=fid, caption=text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
+                await _try_send(app.send_animation, chat_id, animation=fid, reply_parameters=reply_params)
+                return await _try_send(app.send_message, chat_id, text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
+            return await _try_send(app.send_animation, chat_id, animation=fid, caption=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
 
         if mtype == "document":
             if long_text:
-                await app.send_document(chat_id, document=fid, reply_to_message_id=reply_to_id)
-                return await app.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
-            return await app.send_document(chat_id, document=fid, caption=text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
+                await _try_send(app.send_document, chat_id, document=fid, reply_parameters=reply_params)
+                return await _try_send(app.send_message, chat_id, text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
+            return await _try_send(app.send_document, chat_id, document=fid, caption=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
 
         if mtype == "sticker":
-            await app.send_sticker(chat_id, sticker=fid, reply_to_message_id=reply_to_id)
-            return await app.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
+            await _try_send(app.send_sticker, chat_id, sticker=fid, reply_parameters=reply_params)
+            return await _try_send(app.send_message, chat_id, text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
 
-        # Unknown media type — text only
-        return await app.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_id)
-
+        return await _try_send(app.send_message, chat_id, text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
     except Exception as e:
         print(f"[send-with-media] {type(e).__name__}: {e}", flush=True)
         return None
@@ -183,13 +188,10 @@ async def greetings_settings(_, message):
         return
 
     command = (message.command[0] or "").lower()
-
-    # Full raw text with newlines preserved (message.text keeps them)
     full = message.text or message.caption or ""
     parts = full.split(maxsplit=1)
     args = parts[1].strip() if len(parts) > 1 else ""
 
-    # ── Toggle commands ──
     if command in ("welcome", "goodbye", "cleanwelcome"):
         if not args:
             doc = await _get(message.chat.id)
@@ -202,56 +204,34 @@ async def greetings_settings(_, message):
 
         enabled = value in ("yes", "on")
         await _update(message.chat.id, **{command: enabled})
-        return await message.reply(
-            f"✓ <b>{command.title()} messages {'enabled' if enabled else 'disabled'}.</b>"
-        )
+        return await message.reply(f"✓ <b>{command.title()} messages {'enabled' if enabled else 'disabled'}.</b>")
 
-    # ── Setwelcome ──
     if command == "setwelcome":
         mtype, fid = _extract_media(message.reply_to_message)
         if mtype:
             caption = args if args else (message.reply_to_message.caption or DEFAULT_WELCOME)
-            await _update(
-                message.chat.id,
-                welcome_text=caption,
-                welcome_media={"type": mtype, "file_id": fid},
-            )
+            await _update(message.chat.id, welcome_text=caption, welcome_media={"type": mtype, "file_id": fid})
             return await message.reply(f"✓ <b>Welcome media set</b> ({mtype}).")
         if not args:
-            return await message.reply(
-                "❌ <b>Uꜱᴀɢᴇ:</b>\n"
-                "• <code>.setwelcome &lt;text&gt;</code>\n"
-                "• ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴘʜᴏᴛᴏ/ᴠɪᴅᴇᴏ/ɢɪꜰ ᴡɪᴛʜ <code>.setwelcome</code>"
-            )
+            return await message.reply("❌ <b>Uꜱᴀɢᴇ:</b>\n• <code>.setwelcome &lt;text&gt;</code>\n• ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴘʜᴏᴛᴏ/ᴠɪᴅᴇᴏ/ɢɪꜰ ᴡɪᴛʜ <code>.setwelcome</code>")
         await _update(message.chat.id, welcome_text=args, welcome_media=None)
         return await message.reply("✓ <b>Welcome message updated.</b>")
 
-    # ── Resetwelcome ──
     if command == "resetwelcome":
         await _update(message.chat.id, welcome_text=DEFAULT_WELCOME, welcome_media=None)
         return await message.reply("✓ <b>Welcome message reset.</b>")
 
-    # ── Setgoodbye ──
     if command == "setgoodbye":
         mtype, fid = _extract_media(message.reply_to_message)
         if mtype:
             caption = args if args else (message.reply_to_message.caption or DEFAULT_GOODBYE)
-            await _update(
-                message.chat.id,
-                goodbye_text=caption,
-                goodbye_media={"type": mtype, "file_id": fid},
-            )
+            await _update(message.chat.id, goodbye_text=caption, goodbye_media={"type": mtype, "file_id": fid})
             return await message.reply(f"✓ <b>Goodbye media set</b> ({mtype}).")
         if not args:
-            return await message.reply(
-                "❌ <b>Uꜱᴀɢᴇ:</b>\n"
-                "• <code>.setgoodbye &lt;text&gt;</code>\n"
-                "• ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴘʜᴏᴛᴏ/ᴠɪᴅᴇᴏ/ɢɪꜰ ᴡɪᴛʜ <code>.setgoodbye</code>"
-            )
+            return await message.reply("❌ <b>Uꜱᴀɢᴇ:</b>\n• <code>.setgoodbye &lt;text&gt;</code>\n• ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴘʜᴏᴛᴏ/ᴠɪᴅᴇᴏ/ɢɪꜰ ᴡɪᴛʜ <code>.setgoodbye</code>")
         await _update(message.chat.id, goodbye_text=args, goodbye_media=None)
         return await message.reply("✓ <b>Goodbye message updated.</b>")
 
-    # ── Resetgoodbye ──
     if command == "resetgoodbye":
         await _update(message.chat.id, goodbye_text=DEFAULT_GOODBYE, goodbye_media=None)
         return await message.reply("✓ <b>Goodbye message reset.</b>")
@@ -267,18 +247,25 @@ async def welcome_members(_, message):
     if doc.get("cleanwelcome"):
         await _clean_old(message.chat.id)
 
-    for user in message.new_chat_members:
-        if getattr(user, "is_bot", False):
-            continue
+    # 🚨 FIX: Combine multiple users joining at once to prevent spam/auto-delete bug
+    new_users = [u for u in message.new_chat_members if not getattr(u, "is_bot", False)]
+    if not new_users:
+        return
 
-        text = _fill(doc.get("welcome_text") or DEFAULT_WELCOME, user, message.chat)
-        media = doc.get("welcome_media")
+    mentions = " , ".join(_mention(u) for u in new_users)
+    # Use the first user for {name} placeholder, but add others to the text
+    text = _fill(doc.get("welcome_text") or DEFAULT_WELCOME, new_users[0], message.chat)
+    
+    if len(new_users) > 1:
+        text = f"👋 Welcome {mentions} to <b>{html.escape(message.chat.title)}</b>!\n\n" + text
 
-        sent = await _send_with_media(message.chat.id, message.id, text, media)
-        if sent:
-            await _remember_welcome(message.chat.id, sent.id)
-            if doc.get("cleanwelcome"):
-                asyncio.create_task(_expire_welcome(message.chat.id, sent.id))
+    media = doc.get("welcome_media")
+    sent = await _send_with_media(message.chat.id, message.id, text, media)
+    
+    if sent:
+        await _remember_welcome(message.chat.id, sent.id)
+        if doc.get("cleanwelcome"):
+            asyncio.create_task(_expire_welcome(message.chat.id, sent.id))
 
 
 # ─── Goodbye handler ──────────────────────────────────────────────────────────
@@ -328,7 +315,7 @@ async def _remember_welcome(chat_id, message_id):
 
 
 async def _expire_welcome(chat_id, message_id):
-    await asyncio.sleep(300)
+    await asyncio.sleep(300) # 5 minutes
     try:
         doc = await _get(chat_id)
         if not doc.get("cleanwelcome"):
