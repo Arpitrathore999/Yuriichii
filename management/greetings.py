@@ -1,6 +1,6 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  management/greetings.py — Welcome / Goodbye (Fixed: ReplyParams, Multi-User, HTML)
+#  management/greetings.py — Welcome / Goodbye (Fixed: Crash & ReplyParams)
 # --------------------------------------------------------------------------------
 
 import asyncio
@@ -22,25 +22,18 @@ DEFAULT_GOODBYE = "👋 <b>{mention} has left {chat}.</b>"
 
 CAPTION_LIMIT = 900
 
-
-# ─── DB helpers ───────────────────────────────────────────────────────────────
 def _col():
     return db[COLLECTION] if db is not None else None
 
-
 def _name(user):
-    # 🚨 FIX: HTML escape username to prevent "<" or ">" breaking the message
     name = (getattr(user, "first_name", None) or getattr(user, "username", None) or str(user.id)).strip()
     return html.escape(name)
-
 
 def _mention(user):
     return f'<a href="tg://user?id={int(user.id)}">{_name(user)}</a>'
 
-
 def _is_group(message):
     return bool(message.chat and message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP))
-
 
 async def _is_admin(message):
     if not _is_group(message) or not message.from_user:
@@ -51,13 +44,11 @@ async def _is_admin(message):
     except Exception:
         return False
 
-
 async def _permission(message):
     if not await _is_admin(message):
         await message.reply("❌ <b>You don't have permission to use this command.</b>")
         return False
     return True
-
 
 async def _get(chat_id):
     c = _col()
@@ -75,15 +66,12 @@ async def _get(chat_id):
         return default
     return doc
 
-
 async def _update(chat_id, **values):
     c = _col()
     if c is None:
         return
     await c.update_one({"chat_id": int(chat_id)}, {"$set": values}, upsert=True)
 
-
-# ─── Text / media helpers ─────────────────────────────────────────────────────
 def _fill(text, user, chat):
     values = {
         "{name}": _name(user),
@@ -97,10 +85,8 @@ def _fill(text, user, chat):
         text = text.replace(key, value)
     return text.replace("\r\n", "\n")
 
-
 def _extract_media(replied):
-    if not replied:
-        return None, None
+    if not replied: return None, None
     if replied.photo: return "photo", replied.photo.file_id
     if replied.video: return "video", replied.video.file_id
     if replied.animation: return "gif", replied.animation.file_id
@@ -108,31 +94,39 @@ def _extract_media(replied):
     if replied.sticker: return "sticker", replied.sticker.file_id
     return None, None
 
-
 async def _send_with_media(chat_id, reply_to_id, text, media):
-    """Send media+text. Handles HTML parse errors and uses ReplyParameters."""
-    reply_params = ReplyParameters(message_id=reply_to_id)
-    
-    # 🚨 FIX: Helper to fallback to plain text if HTML is broken by admin
-    async def _try_send(func, *args, **kwargs):
+    try:
+        reply_params = ReplyParameters(message_id=reply_to_id)
+    except Exception:
+        reply_params = None
+
+    # 🚨 FIXED: Safe send fallback wrapper with kwargs to prevent TypeError crash
+    async def _safe_send(func, **kwargs):
         try:
-            return await func(*args, **kwargs)
+            return await func(**kwargs)
         except Exception as e:
-            if "can't parse entities" in str(e).lower() or "bad request" in str(e).lower():
+            err = str(e).lower()
+            # Agar admin ne galat HTML dala hai (jaise <3) toh plain text mai bhej do
+            if "can't parse entities" in err or "bad request" in err:
                 kwargs.pop("parse_mode", None)
-                # Strip basic HTML for fallback
                 import re
-                fallback_text = re.sub(r'<[^>]+>', '', text)
-                kwargs['caption' if 'caption' in kwargs else 'text'] = fallback_text
-                return await func(*args, **kwargs)
-            print(f"[greetings send] {type(e).__name__}: {e}", flush=True)
+                if "caption" in kwargs:
+                    kwargs["caption"] = re.sub(r'<[^>]+>', '', kwargs["caption"])
+                elif "text" in kwargs:
+                    kwargs["text"] = re.sub(r'<[^>]+>', '', kwargs["text"])
+                try:
+                    return await func(**kwargs)
+                except Exception as e2:
+                    print(f"[greetings fallback err] {type(e2).__name__}: {e2}", flush=True)
+                    return None
+            print(f"[greetings send err] {type(e).__name__}: {e}", flush=True)
             return None
 
     try:
         if not media:
-            return await _try_send(
+            return await _safe_send(
                 app.send_message,
-                chat_id, text, parse_mode=ParseMode.HTML, reply_parameters=reply_params
+                chat_id=chat_id, text=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params
             )
 
         mtype = media.get("type")
@@ -141,51 +135,45 @@ async def _send_with_media(chat_id, reply_to_id, text, media):
 
         if mtype == "photo":
             if long_text:
-                await _try_send(app.send_photo, chat_id, photo=fid, reply_parameters=reply_params)
-                return await _try_send(app.send_message, chat_id, text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
-            return await _try_send(app.send_photo, chat_id, photo=fid, caption=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
+                await _safe_send(app.send_photo, chat_id=chat_id, photo=fid, reply_parameters=reply_params)
+                return await _safe_send(app.send_message, chat_id=chat_id, text=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
+            return await _safe_send(app.send_photo, chat_id=chat_id, photo=fid, caption=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
 
         if mtype == "video":
             if long_text:
-                await _try_send(app.send_video, chat_id, video=fid, reply_parameters=reply_params)
-                return await _try_send(app.send_message, chat_id, text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
-            return await _try_send(app.send_video, chat_id, video=fid, caption=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
+                await _safe_send(app.send_video, chat_id=chat_id, video=fid, reply_parameters=reply_params)
+                return await _safe_send(app.send_message, chat_id=chat_id, text=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
+            return await _safe_send(app.send_video, chat_id=chat_id, video=fid, caption=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
 
         if mtype == "gif":
             if long_text:
-                await _try_send(app.send_animation, chat_id, animation=fid, reply_parameters=reply_params)
-                return await _try_send(app.send_message, chat_id, text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
-            return await _try_send(app.send_animation, chat_id, animation=fid, caption=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
+                await _safe_send(app.send_animation, chat_id=chat_id, animation=fid, reply_parameters=reply_params)
+                return await _safe_send(app.send_message, chat_id=chat_id, text=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
+            return await _safe_send(app.send_animation, chat_id=chat_id, animation=fid, caption=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
 
         if mtype == "document":
             if long_text:
-                await _try_send(app.send_document, chat_id, document=fid, reply_parameters=reply_params)
-                return await _try_send(app.send_message, chat_id, text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
-            return await _try_send(app.send_document, chat_id, document=fid, caption=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
+                await _safe_send(app.send_document, chat_id=chat_id, document=fid, reply_parameters=reply_params)
+                return await _safe_send(app.send_message, chat_id=chat_id, text=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
+            return await _safe_send(app.send_document, chat_id=chat_id, document=fid, caption=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
 
         if mtype == "sticker":
-            await _try_send(app.send_sticker, chat_id, sticker=fid, reply_parameters=reply_params)
-            return await _try_send(app.send_message, chat_id, text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
+            await _safe_send(app.send_sticker, chat_id=chat_id, sticker=fid, reply_parameters=reply_params)
+            return await _safe_send(app.send_message, chat_id=chat_id, text=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
 
-        return await _try_send(app.send_message, chat_id, text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
+        return await _safe_send(app.send_message, chat_id=chat_id, text=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
     except Exception as e:
-        print(f"[send-with-media] {type(e).__name__}: {e}", flush=True)
+        print(f"[send-with-media outer] {type(e).__name__}: {e}", flush=True)
         return None
 
-
-# ─── Settings commands ────────────────────────────────────────────────────────
 @app.on_message(
-    filters.group
-    & filters.incoming
-    & filters.command(
+    filters.group & filters.incoming & filters.command(
         ["welcome", "goodbye", "setwelcome", "resetwelcome",
-         "setgoodbye", "resetgoodbye", "cleanwelcome"],
-        PREFIXES,
+         "setgoodbye", "resetgoodbye", "cleanwelcome"], PREFIXES,
     )
 )
 async def greetings_settings(_, message):
-    if not await _permission(message):
-        return
+    if not await _permission(message): return
 
     command = (message.command[0] or "").lower()
     full = message.text or message.caption or ""
@@ -237,23 +225,25 @@ async def greetings_settings(_, message):
         return await message.reply("✓ <b>Goodbye message reset.</b>")
 
 
-# ─── Welcome handler ──────────────────────────────────────────────────────────
 @app.on_message(filters.group & filters.new_chat_members, group=-5)
 async def welcome_members(_, message):
+    # ✅ LOGGING: Railway logs mai dikhega ki join event aaya ya nahi
+    print(f"[GREETINGS] Join event in chat {message.chat.id}", flush=True)
+    
     doc = await _get(message.chat.id)
+    print(f"[GREETINGS] Welcome enabled: {doc.get('welcome')}", flush=True)
+    
     if not doc.get("welcome", True):
         return
 
     if doc.get("cleanwelcome"):
         await _clean_old(message.chat.id)
 
-    # 🚨 FIX: Combine multiple users joining at once to prevent spam/auto-delete bug
     new_users = [u for u in message.new_chat_members if not getattr(u, "is_bot", False)]
     if not new_users:
         return
 
     mentions = " , ".join(_mention(u) for u in new_users)
-    # Use the first user for {name} placeholder, but add others to the text
     text = _fill(doc.get("welcome_text") or DEFAULT_WELCOME, new_users[0], message.chat)
     
     if len(new_users) > 1:
@@ -268,7 +258,6 @@ async def welcome_members(_, message):
             asyncio.create_task(_expire_welcome(message.chat.id, sent.id))
 
 
-# ─── Goodbye handler ──────────────────────────────────────────────────────────
 @app.on_message(filters.group & filters.left_chat_member, group=-5)
 async def goodbye_member(_, message):
     doc = await _get(message.chat.id)
@@ -284,11 +273,9 @@ async def goodbye_member(_, message):
     await _send_with_media(message.chat.id, message.id, text, media)
 
 
-# ─── Cleanup ──────────────────────────────────────────────────────────────────
 async def _clean_old(chat_id, exclude=None):
     c = _col()
-    if c is None:
-        return
+    if c is None: return
     doc = await c.find_one({"chat_id": int(chat_id)})
     ids = list(doc.get("old_welcome_ids", [])) if doc else []
     kept = []
@@ -302,24 +289,20 @@ async def _clean_old(chat_id, exclude=None):
             pass
     await c.update_one({"chat_id": int(chat_id)}, {"$set": {"old_welcome_ids": kept}})
 
-
 async def _remember_welcome(chat_id, message_id):
     c = _col()
-    if c is None:
-        return
+    if c is None: return
     await c.update_one(
         {"chat_id": int(chat_id)},
         {"$push": {"old_welcome_ids": {"$each": [int(message_id)], "$slice": -20}}},
         upsert=True,
     )
 
-
 async def _expire_welcome(chat_id, message_id):
-    await asyncio.sleep(300) # 5 minutes
+    await asyncio.sleep(300)
     try:
         doc = await _get(chat_id)
-        if not doc.get("cleanwelcome"):
-            return
+        if not doc.get("cleanwelcome"): return
         await app.delete_messages(chat_id, int(message_id))
         c = _col()
         if c is not None:
