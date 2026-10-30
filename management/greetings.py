@@ -1,7 +1,8 @@
 
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  management/greetings.py — Welcome / Goodbye (Fixed)
+#  management/greetings.py — Welcome / Goodbye System
+#  ChatMemberUpdated Support | Auto-Approve Removed
 # --------------------------------------------------------------------------------
 
 import asyncio
@@ -13,6 +14,7 @@ from pyrogram.enums import ChatMemberStatus, ChatType, ParseMode
 
 from core.bot import app
 from database.mongo import db
+
 
 PREFIXES = ["/", "!", "."]
 COLLECTION = "greetings"
@@ -42,15 +44,36 @@ def _mention(user):
     return f'<a href="tg://user?id={int(user.id)}">{_name(user)}</a>'
 
 
-def _is_group(message):
+def _is_group_chat(chat):
     return bool(
-        message.chat
-        and message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP)
+        chat and chat.type in (
+            ChatType.GROUP,
+            ChatType.SUPERGROUP
+        )
     )
 
 
+def _is_inside_chat(member):
+    if not member:
+        return False
+
+    status = member.status
+
+    if status in (
+        ChatMemberStatus.OWNER,
+        ChatMemberStatus.ADMINISTRATOR,
+        ChatMemberStatus.MEMBER,
+    ):
+        return True
+
+    if status == ChatMemberStatus.RESTRICTED:
+        return bool(getattr(member, "is_member", False))
+
+    return False
+
+
 async def _is_admin(message):
-    if not _is_group(message) or not message.from_user:
+    if not _is_group_chat(message.chat) or not message.from_user:
         return False
 
     try:
@@ -65,7 +88,7 @@ async def _is_admin(message):
         )
 
     except Exception as e:
-        print(f"[GREETINGS] Admin check failed: {e}", flush=True)
+        print(f"[GREETINGS] Admin check error: {e}", flush=True)
         return False
 
 
@@ -140,7 +163,9 @@ def _fill(text, user, chat):
             f"@{html.escape(user.username)}"
             if user.username else ""
         ),
-        "{chat}": html.escape(chat.title or "Group"),
+        "{chat}": html.escape(
+            getattr(chat, "title", None) or "Group"
+        ),
         "{chat_id}": str(chat.id),
     }
 
@@ -177,6 +202,7 @@ def _extract_media(replied):
 # ─── Safe Message Sender ──────────────────────────────────────────────────────
 
 async def _send_with_media(chat_id, reply_to_id, text, media):
+
     print(
         f"[GREETINGS DEBUG] Sending message in {chat_id}",
         flush=True
@@ -200,7 +226,8 @@ async def _send_with_media(chat_id, reply_to_id, text, media):
 
         except Exception as e:
             print(
-                f"[GREETINGS DEBUG] Send failed: {type(e).__name__}: {e}",
+                f"[GREETINGS DEBUG] Send failed: "
+                f"{type(e).__name__}: {e}",
                 flush=True
             )
 
@@ -209,7 +236,11 @@ async def _send_with_media(chat_id, reply_to_id, text, media):
 
                 for key in ("text", "caption"):
                     if key in kwargs and kwargs[key]:
-                        clean = re.sub(r"<[^>]+>", "", kwargs[key])
+                        clean = re.sub(
+                            r"<[^>]+>",
+                            "",
+                            kwargs[key]
+                        )
                         kwargs[key] = html.unescape(clean)
 
                 try:
@@ -224,6 +255,7 @@ async def _send_with_media(chat_id, reply_to_id, text, media):
             return None
 
     try:
+
         if not media:
             return await _safe_send(
                 app.send_message,
@@ -244,8 +276,6 @@ async def _send_with_media(chat_id, reply_to_id, text, media):
                 parse_mode=ParseMode.HTML,
                 **reply_args
             )
-
-        long_text = len(text) > CAPTION_LIMIT
 
         methods = {
             "photo": (app.send_photo, "photo"),
@@ -283,7 +313,7 @@ async def _send_with_media(chat_id, reply_to_id, text, media):
                 **reply_args
             )
 
-        if long_text:
+        if len(text) > CAPTION_LIMIT:
             await _safe_send(func, **media_args)
 
             return await _safe_send(
@@ -301,13 +331,14 @@ async def _send_with_media(chat_id, reply_to_id, text, media):
 
     except Exception as e:
         print(
-            f"[GREETINGS DEBUG] Outer error: {type(e).__name__}: {e}",
+            f"[GREETINGS DEBUG] Outer error: "
+            f"{type(e).__name__}: {e}",
             flush=True
         )
         return None
 
 
-# ─── Welcome Cleanup ──────────────────────────────────────────────────────────
+# ─── Cleanup Helpers ──────────────────────────────────────────────────────────
 
 async def _clean_old(chat_id, exclude=None):
     c = _col()
@@ -316,24 +347,29 @@ async def _clean_old(chat_id, exclude=None):
         return
 
     doc = await c.find_one({"chat_id": int(chat_id)})
-    ids = list(doc.get("old_welcome_ids", [])) if doc else []
 
+    ids = list(doc.get("old_welcome_ids", [])) if doc else []
     kept = []
 
     for mid in ids:
+
         if exclude is not None and int(mid) == int(exclude):
             kept.append(mid)
             continue
 
         try:
-            await app.delete_messages(chat_id, int(mid))
+            await app.delete_messages(
+                chat_id,
+                int(mid)
+            )
 
         except Exception:
             pass
 
     await c.update_one(
         {"chat_id": int(chat_id)},
-        {"$set": {"old_welcome_ids": kept}}
+        {"$set": {"old_welcome_ids": kept}},
+        upsert=True
     )
 
 
@@ -366,7 +402,10 @@ async def _expire_welcome(chat_id, message_id):
         if not doc.get("cleanwelcome"):
             return
 
-        await app.delete_messages(chat_id, int(message_id))
+        await app.delete_messages(
+            chat_id,
+            int(message_id)
+        )
 
         c = _col()
 
@@ -381,7 +420,177 @@ async def _expire_welcome(chat_id, message_id):
             )
 
     except Exception as e:
-        print(f"[GREETINGS] Expiry error: {e}", flush=True)
+        print(
+            f"[GREETINGS] Expiry error: {e}",
+            flush=True
+        )
+
+
+# ─── Welcome Sender ───────────────────────────────────────────────────────────
+
+async def _send_welcome(chat, user):
+
+    doc = await _get(chat.id)
+
+    if not doc.get("welcome", True):
+        print(
+            f"[GREETINGS] Welcome disabled in {chat.id}",
+            flush=True
+        )
+        return
+
+    if doc.get("cleanwelcome"):
+        await _clean_old(chat.id)
+
+    text = _fill(
+        doc.get("welcome_text") or DEFAULT_WELCOME,
+        user,
+        chat
+    )
+
+    sent = await _send_with_media(
+        chat.id,
+        None,
+        text,
+        doc.get("welcome_media")
+    )
+
+    if sent:
+
+        await _remember_welcome(
+            chat.id,
+            sent.id
+        )
+
+        if doc.get("cleanwelcome"):
+            asyncio.create_task(
+                _expire_welcome(
+                    chat.id,
+                    sent.id
+                )
+            )
+
+        print(
+            f"[GREETINGS DEBUG] WELCOME SUCCESS: {user.id}",
+            flush=True
+        )
+
+    else:
+        print(
+            f"[GREETINGS DEBUG] WELCOME SEND FAILED: {user.id}",
+            flush=True
+        )
+
+
+# ─── Welcome Handler (Chat Member Update) ─────────────────────────────────────
+
+@app.on_chat_member_updated()
+async def welcome_members(_, update):
+
+    try:
+
+        chat = update.chat
+        old_member = update.old_chat_member
+        new_member = update.new_chat_member
+
+        user = new_member.user if new_member else None
+
+        print(
+            f"[GREETINGS DEBUG] CHAT MEMBER UPDATE: "
+            f"chat={chat.id}, "
+            f"user={getattr(user, 'id', None)}, "
+            f"old={getattr(old_member, 'status', None)}, "
+            f"new={getattr(new_member, 'status', None)}",
+            flush=True
+        )
+
+        if not _is_group_chat(chat):
+            return
+
+        # Ignore users who were already members.
+        if _is_inside_chat(old_member):
+            return
+
+        # Process only actual membership transitions.
+        if not _is_inside_chat(new_member):
+            return
+
+        if not user:
+            return
+
+        if getattr(user, "is_bot", False):
+            return
+
+        await _send_welcome(chat, user)
+
+    except Exception as e:
+
+        print(
+            f"[GREETINGS DEBUG] CHAT MEMBER ERROR: "
+            f"{type(e).__name__}: {e}",
+            flush=True
+        )
+
+
+# ─── Goodbye Handler (Chat Member Update) ─────────────────────────────────────
+
+@app.on_chat_member_updated()
+async def goodbye_members(_, update):
+
+    try:
+
+        chat = update.chat
+        old_member = update.old_chat_member
+        new_member = update.new_chat_member
+
+        user = new_member.user if new_member else None
+
+        if not _is_group_chat(chat):
+            return
+
+        # Ignore members who are still inside the group.
+        if not _is_inside_chat(old_member):
+            return
+
+        if _is_inside_chat(new_member):
+            return
+
+        if not user:
+            return
+
+        if getattr(user, "is_bot", False):
+            return
+
+        doc = await _get(chat.id)
+
+        if not doc.get("goodbye", True):
+            return
+
+        text = _fill(
+            doc.get("goodbye_text") or DEFAULT_GOODBYE,
+            user,
+            chat
+        )
+
+        await _send_with_media(
+            chat.id,
+            None,
+            text,
+            doc.get("goodbye_media")
+        )
+
+        print(
+            f"[GREETINGS DEBUG] GOODBYE SUCCESS: {user.id}",
+            flush=True
+        )
+
+    except Exception as e:
+
+        print(
+            f"[GREETINGS DEBUG] GOODBYE ERROR: "
+            f"{type(e).__name__}: {e}",
+            flush=True
+        )
 
 
 # ─── Settings Commands ────────────────────────────────────────────────────────
@@ -415,14 +624,19 @@ async def greetings_settings(_, message):
     args = parts[1].strip() if len(parts) > 1 else ""
 
     print(
-        f"[GREETINGS DEBUG] Command '{command}' received "
-        f"in {message.chat.id}. Args: {args}",
+        f"[GREETINGS DEBUG] Command '{command}' "
+        f"received in {message.chat.id}. Args: {args}",
         flush=True
     )
 
-    if command in ("welcome", "goodbye", "cleanwelcome"):
+    if command in (
+        "welcome",
+        "goodbye",
+        "cleanwelcome"
+    ):
 
         if not args:
+
             doc = await _get(message.chat.id)
 
             state = "ON" if doc.get(command) else "OFF"
@@ -456,9 +670,12 @@ async def greetings_settings(_, message):
 
     if command == "setwelcome":
 
-        mtype, fid = _extract_media(message.reply_to_message)
+        mtype, fid = _extract_media(
+            message.reply_to_message
+        )
 
         if mtype:
+
             caption = (
                 args
                 or message.reply_to_message.caption
@@ -512,9 +729,12 @@ async def greetings_settings(_, message):
 
     if command == "setgoodbye":
 
-        mtype, fid = _extract_media(message.reply_to_message)
+        mtype, fid = _extract_media(
+            message.reply_to_message
+        )
 
         if mtype:
+
             caption = (
                 args
                 or message.reply_to_message.caption
@@ -567,128 +787,7 @@ async def greetings_settings(_, message):
         )
 
 
-# ─── Welcome Handler ──────────────────────────────────────────────────────────
-
-@app.on_message(
-    filters.group & filters.new_chat_members,
-    group=-5
+print(
+    "[GREETINGS] Welcome / Goodbye system loaded.",
+    flush=True
 )
-async def welcome_members(_, message):
-
-    print(
-        f"[GREETINGS DEBUG] NEW MEMBER EVENT in {message.chat.id}",
-        flush=True
-    )
-
-    try:
-        doc = await _get(message.chat.id)
-
-        if not doc.get("welcome", True):
-            print("[GREETINGS] Welcome is OFF.", flush=True)
-            return
-
-        new_users = [
-            user for user in (message.new_chat_members or [])
-            if user
-            and not getattr(user, "is_bot", False)
-            and getattr(user, "id", None)
-        ]
-
-        if not new_users:
-            return
-
-        if doc.get("cleanwelcome"):
-            await _clean_old(message.chat.id)
-
-        mentions = " , ".join(
-            _mention(user) for user in new_users
-        )
-
-        text = _fill(
-            doc.get("welcome_text") or DEFAULT_WELCOME,
-            new_users[0],
-            message.chat
-        )
-
-        if len(new_users) > 1:
-            text = (
-                f"👋 Welcome {mentions} to "
-                f"<b>{html.escape(message.chat.title or 'Group')}</b>!\n\n"
-                + text
-            )
-
-        sent = await _send_with_media(
-            message.chat.id,
-            message.id,
-            text,
-            doc.get("welcome_media")
-        )
-
-        if sent:
-            await _remember_welcome(
-                message.chat.id,
-                sent.id
-            )
-
-            if doc.get("cleanwelcome"):
-                asyncio.create_task(
-                    _expire_welcome(
-                        message.chat.id,
-                        sent.id
-                    )
-                )
-
-    except Exception as e:
-        print(
-            f"[GREETINGS DEBUG] Welcome error: "
-            f"{type(e).__name__}: {e}",
-            flush=True
-        )
-
-
-# ─── Goodbye Handler ──────────────────────────────────────────────────────────
-
-@app.on_message(
-    filters.group & filters.left_chat_member,
-    group=-5
-)
-async def goodbye_members(_, message):
-
-    print(
-        f"[GREETINGS DEBUG] MEMBER LEFT EVENT in {message.chat.id}",
-        flush=True
-    )
-
-    try:
-        doc = await _get(message.chat.id)
-
-        if not doc.get("goodbye", True):
-            return
-
-        user = message.left_chat_member
-
-        if not user or getattr(user, "is_bot", False):
-            return
-
-        text = _fill(
-            doc.get("goodbye_text") or DEFAULT_GOODBYE,
-            user,
-            message.chat
-        )
-
-        await _send_with_media(
-            message.chat.id,
-            message.id,
-            text,
-            doc.get("goodbye_media")
-        )
-
-    except Exception as e:
-        print(
-            f"[GREETINGS DEBUG] Goodbye error: "
-            f"{type(e).__name__}: {e}",
-            flush=True
-        )
-
-
-print("[GREETINGS] Welcome / Goodbye system loaded.", flush=True)
