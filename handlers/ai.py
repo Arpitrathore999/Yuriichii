@@ -77,7 +77,7 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     # WordSeek
     "new4", "new5", "new6", "wordhelp", "wordseekhelp",
     "wordtop", "wordleaderboard", "wordstats", "mystats",
-    "wordcancel", "wordhint",
+    "wordcancel", "wordhint", "Autoapprove",
     # WordChain
     "startchain", "joinchain", "leavechain", "fleechain",
     "extendchain", "forcestartchain", "forcejoinchain",
