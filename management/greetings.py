@@ -1,6 +1,6 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  management/greetings.py — Welcome / Goodbye (Join Requests + Auto-Approve Toggle)
+#  management/greetings.py — Welcome / Goodbye (Debug Version)
 # --------------------------------------------------------------------------------
 
 import asyncio
@@ -63,7 +63,7 @@ async def _get(chat_id):
     c = _col()
     default = {
         "chat_id": int(chat_id), "welcome": True, "goodbye": True,
-        "cleanwelcome": False, "autoapprove": False,  # ✅ NEW: Autoapprove default OFF
+        "cleanwelcome": False, "autoapprove": False,
         "welcome_text": DEFAULT_WELCOME,
         "goodbye_text": DEFAULT_GOODBYE, "old_welcome_ids": [],
         "welcome_media": None, "goodbye_media": None,
@@ -74,7 +74,6 @@ async def _get(chat_id):
     if not doc:
         await c.update_one({"chat_id": int(chat_id)}, {"$setOnInsert": default}, upsert=True)
         return default
-    # Purani documents mai autoapprove field na ho toh default False bhejo
     if "autoapprove" not in doc:
         doc["autoapprove"] = False
     return doc
@@ -85,6 +84,7 @@ async def _update(chat_id, **values):
     if c is None:
         return
     await c.update_one({"chat_id": int(chat_id)}, {"$set": values}, upsert=True)
+    print(f"[GREETINGS DEBUG] DB Updated for {chat_id}: {values}", flush=True)
 
 
 # ─── Text / media helpers ─────────────────────────────────────────────────────
@@ -102,17 +102,8 @@ def _fill(text, user, chat):
     return text.replace("\r\n", "\n")
 
 
-def _extract_media(replied):
-    if not replied: return None, None
-    if replied.photo: return "photo", replied.photo.file_id
-    if replied.video: return "video", replied.video.file_id
-    if replied.animation: return "gif", replied.animation.file_id
-    if replied.document: return "document", replied.document.file_id
-    if replied.sticker: return "sticker", replied.sticker.file_id
-    return None, None
-
-
 async def _send_with_media(chat_id, reply_to_id, text, media):
+    print(f"[GREETINGS DEBUG] Attempting to send message in {chat_id}...", flush=True)
     try:
         reply_params = ReplyParameters(message_id=reply_to_id) if reply_to_id else None
     except Exception:
@@ -120,9 +111,12 @@ async def _send_with_media(chat_id, reply_to_id, text, media):
 
     async def _safe_send(func, **kwargs):
         try:
-            return await func(**kwargs)
+            res = await func(**kwargs)
+            print(f"[GREETINGS DEBUG] ✅ Message sent successfully!", flush=True)
+            return res
         except Exception as e:
             err = str(e).lower()
+            print(f"[GREETINGS DEBUG] ❌ Send failed: {type(e).__name__}: {e}", flush=True)
             if "can't parse entities" in err or "bad request" in err:
                 kwargs.pop("parse_mode", None)
                 import re
@@ -133,9 +127,8 @@ async def _send_with_media(chat_id, reply_to_id, text, media):
                 try:
                     return await func(**kwargs)
                 except Exception as e2:
-                    print(f"[greetings fallback err] {type(e2).__name__}: {e2}", flush=True)
+                    print(f"[GREETINGS DEBUG] ❌ Fallback failed: {type(e2).__name__}: {e2}", flush=True)
                     return None
-            print(f"[greetings send err] {type(e).__name__}: {e}", flush=True)
             return None
 
     try:
@@ -179,7 +172,7 @@ async def _send_with_media(chat_id, reply_to_id, text, media):
 
         return await _safe_send(app.send_message, chat_id=chat_id, text=text, parse_mode=ParseMode.HTML, reply_parameters=reply_params)
     except Exception as e:
-        print(f"[send-with-media outer] {type(e).__name__}: {e}", flush=True)
+        print(f"[GREETINGS DEBUG] ❌ Outer error: {type(e).__name__}: {e}", flush=True)
         return None
 
 
@@ -198,13 +191,13 @@ async def greetings_settings(_, message):
     parts = full.split(maxsplit=1)
     args = parts[1].strip() if len(parts) > 1 else ""
 
+    print(f"[GREETINGS DEBUG] Command '{command}' received in {message.chat.id}. Args: {args}", flush=True)
+
     if command in ("welcome", "goodbye", "cleanwelcome", "autoapprove"):
         if not args:
             doc = await _get(message.chat.id)
             state = "ON" if doc.get(command) else "OFF"
-            
-            # Formatting ke liye label
-            label = "Auto-Approve Join Requests" if command == "autoapprove" else command.title()
+            label = "Auto-Approve" if command == "autoapprove" else command.title()
             return await message.reply(f"✦ <b>{label}:</b> {state}")
 
         value = args.lower().strip()
@@ -217,6 +210,7 @@ async def greetings_settings(_, message):
         label = "Auto-Approve" if command == "autoapprove" else command.title()
         return await message.reply(f"✓ <b>{label} {'enabled' if enabled else 'disabled'}.</b>")
 
+    # Baaki settings (setwelcome, setgoodbye) same rahenge...
     if command == "setwelcome":
         mtype, fid = _extract_media(message.reply_to_message)
         if mtype:
@@ -224,7 +218,7 @@ async def greetings_settings(_, message):
             await _update(message.chat.id, welcome_text=caption, welcome_media={"type": mtype, "file_id": fid})
             return await message.reply(f"✓ <b>Welcome media set</b> ({mtype}).")
         if not args:
-            return await message.reply("❌ <b>Uꜱᴀɢᴇ:</b>\n• <code>.setwelcome &lt;text&gt;</code>\n• ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴘʜᴏᴛᴏ/ᴠɪᴅᴇᴏ/ɢɪꜰ ᴡɪᴛʜ <code>.setwelcome</code>")
+            return await message.reply("❌ <b>Uꜱᴀɢᴇ:</b>\n• <code>.setwelcome &lt;text&gt;</code>")
         await _update(message.chat.id, welcome_text=args, welcome_media=None)
         return await message.reply("✓ <b>Welcome message updated.</b>")
 
@@ -239,7 +233,7 @@ async def greetings_settings(_, message):
             await _update(message.chat.id, goodbye_text=caption, goodbye_media={"type": mtype, "file_id": fid})
             return await message.reply(f"✓ <b>Goodbye media set</b> ({mtype}).")
         if not args:
-            return await message.reply("❌ <b>Uꜱᴀɢᴇ:</b>\n• <code>.setgoodbye &lt;text&gt;</code>\n• ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴘʜᴏᴛᴏ/ᴠɪᴅᴇᴏ/ɢɪꜰ ᴡɪᴛʜ <code>.setgoodbye</code>")
+            return await message.reply("❌ <b>Uꜱᴀɢᴇ:</b>\n• <code>.setgoodbye &lt;text&gt;</code>")
         await _update(message.chat.id, goodbye_text=args, goodbye_media=None)
         return await message.reply("✓ <b>Goodbye message updated.</b>")
 
@@ -251,41 +245,48 @@ async def greetings_settings(_, message):
 # ─── Welcome Handler (Normal Join) ────────────────────────────────────────────
 @app.on_message(filters.group & filters.new_chat_members, group=-5)
 async def welcome_members(_, message):
-    doc = await _get(message.chat.id)
-    if not doc.get("welcome", True):
-        return
+    print(f"[GREETINGS DEBUG] 🚨 new_chat_members event in {message.chat.id}!", flush=True)
+    try:
+        doc = await _get(message.chat.id)
+        print(f"[GREETINGS DEBUG] DB Welcome toggle: {doc.get('welcome')}", flush=True)
+        
+        if not doc.get("welcome", True):
+            return
 
-    if doc.get("cleanwelcome"):
-        await _clean_old(message.chat.id)
-
-    new_users = []
-    if message.new_chat_members:
-        for u in message.new_chat_members:
-            if u and not getattr(u, "is_bot", False) and getattr(u, "id", None):
-                new_users.append(u)
-    
-    if not new_users:
-        return
-
-    mentions = " , ".join(_mention(u) for u in new_users)
-    text = _fill(doc.get("welcome_text") or DEFAULT_WELCOME, new_users[0], message.chat)
-    
-    if len(new_users) > 1:
-        text = f"👋 Welcome {mentions} to <b>{html.escape(message.chat.title)}</b>!\n\n" + text
-
-    media = doc.get("welcome_media")
-    sent = await _send_with_media(message.chat.id, message.id, text, media)
-    
-    if sent:
-        await _remember_welcome(message.chat.id, sent.id)
         if doc.get("cleanwelcome"):
-            asyncio.create_task(_expire_welcome(message.chat.id, sent.id))
+            await _clean_old(message.chat.id)
+
+        new_users = []
+        if message.new_chat_members:
+            for u in message.new_chat_members:
+                if u and not getattr(u, "is_bot", False) and getattr(u, "id", None):
+                    new_users.append(u)
+        
+        print(f"[GREETINGS DEBUG] Valid users found: {len(new_users)}", flush=True)
+        if not new_users:
+            return
+
+        mentions = " , ".join(_mention(u) for u in new_users)
+        text = _fill(doc.get("welcome_text") or DEFAULT_WELCOME, new_users[0], message.chat)
+        
+        if len(new_users) > 1:
+            text = f"👋 Welcome {mentions} to <b>{html.escape(message.chat.title)}</b>!\n\n" + text
+
+        media = doc.get("welcome_media")
+        sent = await _send_with_media(message.chat.id, message.id, text, media)
+        
+        if sent:
+            await _remember_welcome(message.chat.id, sent.id)
+            if doc.get("cleanwelcome"):
+                asyncio.create_task(_expire_welcome(message.chat.id, sent.id))
+    except Exception as e:
+        print(f"[GREETINGS DEBUG] ❌ Error in welcome_members: {type(e).__name__}: {e}", flush=True)
 
 
-# ─── ✅ NEW: Welcome Handler (Join Request / Approval System) ─────────────────
+# ─── ✅ Join Request Handler (Approval System) ─────────────────────────────────
 @app.on_chat_join_request(filters.group)
 async def welcome_join_request(_, request: ChatJoinRequest):
-    """Handle groups with 'Approve Members' (Join Request) enabled."""
+    print(f"[GREETINGS DEBUG] 🚨 Join Request received for {request.from_user.id} in {request.chat.id}!", flush=True)
     try:
         doc = await _get(request.chat.id)
         autoapprove = doc.get("autoapprove", False)
@@ -294,17 +295,16 @@ async def welcome_join_request(_, request: ChatJoinRequest):
         if not user or getattr(user, "is_bot", False):
             return
 
-        # 1. Auto-Approve logic
+        print(f"[GREETINGS DEBUG] Auto-approve setting is: {autoapprove}", flush=True)
+
         if autoapprove:
             try:
                 await app.approve_chat_join_request(request.chat.id, user.id)
-                print(f"[GREETINGS] Auto-approved {user.id} in {request.chat.id}", flush=True)
-                # Note: Jab bot approve karega, toh Telegram 'new_chat_members' event bhejega
-                # aur upar wala welcome_members function welcome message bhej dega.
+                print(f"[GREETINGS DEBUG] ✅ Auto-approved {user.id}", flush=True)
             except Exception as e:
-                print(f"[GREETINGS] Auto-approve failed: {type(e).__name__}: {e}", flush=True)
+                print(f"[GREETINGS DEBUG] ❌ Auto-approve failed: {type(e).__name__}: {e}", flush=True)
         else:
-            # 2. Manual Approval (Autoapprove OFF) -> Send DM to user
+            print(f"[GREETINGS DEBUG] Auto-approve is OFF. Sending DM...", flush=True)
             try:
                 await app.send_message(
                     user.id,
@@ -312,28 +312,11 @@ async def welcome_join_request(_, request: ChatJoinRequest):
                     f"Please wait for an admin to approve it.",
                     parse_mode=ParseMode.HTML
                 )
-            except Exception:
-                # User ne bot start nahi kiya hoga ya privacy block hai
-                pass
+            except Exception as e:
+                print(f"[GREETINGS DEBUG] ❌ Could not send DM to user (maybe blocked bot): {e}", flush=True)
 
     except Exception as e:
-        print(f"[GREETINGS JOIN REQUEST ERROR] {type(e).__name__}: {e}", flush=True)
-
-
-# ─── Goodbye Handler ──────────────────────────────────────────────────────────
-@app.on_message(filters.group & filters.left_chat_member, group=-5)
-async def goodbye_member(_, message):
-    doc = await _get(message.chat.id)
-    if not doc.get("goodbye", True):
-        return
-
-    user = message.left_chat_member
-    if not user or getattr(user, "is_bot", False):
-        return
-
-    text = _fill(doc.get("goodbye_text") or DEFAULT_GOODBYE, user, message.chat)
-    media = doc.get("goodbye_media")
-    await _send_with_media(message.chat.id, message.id, text, media)
+        print(f"[GREETINGS DEBUG] ❌ JOIN REQUEST ERROR: {type(e).__name__}: {e}", flush=True)
 
 
 # ─── Cleanup ──────────────────────────────────────────────────────────────────
