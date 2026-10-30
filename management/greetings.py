@@ -1,6 +1,6 @@
 # --------------------------------------------------------------------------------
 #  Elara © 2026
-#  management/greetings.py — Welcome / Goodbye (Debug Version)
+#  management/greetings.py — Welcome / Goodbye (Fixed NameError)
 # --------------------------------------------------------------------------------
 
 import asyncio
@@ -100,6 +100,17 @@ def _fill(text, user, chat):
     for key, value in values.items():
         text = text.replace(key, value)
     return text.replace("\r\n", "\n")
+
+
+# ✅ FIXED: _extract_media function wapas add kar diya
+def _extract_media(replied):
+    if not replied: return None, None
+    if replied.photo: return "photo", replied.photo.file_id
+    if replied.video: return "video", replied.video.file_id
+    if replied.animation: return "gif", replied.animation.file_id
+    if replied.document: return "document", replied.document.file_id
+    if replied.sticker: return "sticker", replied.sticker.file_id
+    return None, None
 
 
 async def _send_with_media(chat_id, reply_to_id, text, media):
@@ -210,7 +221,6 @@ async def greetings_settings(_, message):
         label = "Auto-Approve" if command == "autoapprove" else command.title()
         return await message.reply(f"✓ <b>{label} {'enabled' if enabled else 'disabled'}.</b>")
 
-    # Baaki settings (setwelcome, setgoodbye) same rahenge...
     if command == "setwelcome":
         mtype, fid = _extract_media(message.reply_to_message)
         if mtype:
