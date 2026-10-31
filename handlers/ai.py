@@ -41,7 +41,7 @@ ALL_COMMANDS = SOCIAL_COMMANDS + [
     "welcome", "goodbye", "setwelcome", "setgoodbye",
     "resetwelcome", "resetgoodbye", "cleanwelcome",
     # Locks
-    "lock", "unlock", "locks", "lockwarns", "locktypes",
+    "lock", "unlock", "locks", "lockwarns", "locktypes", "approve", "unapprove", "approved",
     # Pins
     "pin", "unpin", "pinned", "unpinall",
     # Purge
