@@ -16,8 +16,75 @@ PREFIXES = ["/", "!", "."]
 
 
 async def is_approved(chat_id: int, user_id: int) -> bool:
-    """Compatibility hook: no approval module exists in Yuriichii yet."""
-    return False
+    """Return whether a user is exempt from this group's content locks."""
+    col = _col("lock_approvals")
+    if col is None:
+        return False
+    return await col.find_one({"chat_id": int(chat_id), "user_id": int(user_id)}) is not None
+
+
+async def _approval_target(message):
+    """Resolve a user from reply, ID, @username, plain username or Telegram mention."""
+    # 1) Reply to the user's message.
+    replied = message.reply_to_message
+    if replied:
+        if replied.from_user:
+            return replied.from_user
+        # Anonymous-admin/channel messages cannot identify a user.
+
+    # 2) Read the first argument after /approve or /unapprove.
+    args = (message.command or [])[1:]
+    raw = args[0].strip() if args else ""
+
+    # 3) Text mentions (clickable names) in the command itself.
+    # Pyrogram exposes a real User on TEXT_MENTION entities.
+    entities = list(message.entities or []) + list(message.caption_entities or [])
+    for entity in entities:
+        entity_type = getattr(entity, "type", None)
+        if str(entity_type).lower().endswith("text_mention") and getattr(entity, "user", None):
+            return entity.user
+        # Support a clickable tg://user?id=... link used as the argument.
+        url = getattr(entity, "url", None)
+        if url and "tg://user?id=" in url:
+            match = re.search(r"tg://user\\?id=(\\d+)", url)
+            if match:
+                try:
+                    return await app.get_users(int(match.group(1)))
+                except Exception:
+                    pass
+
+    if not raw:
+        return None
+
+    # 4) Numeric Telegram user ID.
+    try:
+        return await app.get_users(int(raw))
+    except (ValueError, TypeError):
+        pass
+    except Exception:
+        return None
+
+    # 5) @username or plain username (with or without @).
+    username = raw.lstrip("@").strip()
+    if username:
+        try:
+            return await app.get_users(username)
+        except Exception:
+            return None
+    return None
+
+
+async def _approval_guard(message):
+    if not await _is_group(message):
+        await message.reply("❌ <b>This command can only be used in groups.</b>")
+        return False
+    if not await _can_manage(message):
+        await message.reply("❌ <b>Only group admins can manage approvals.</b>")
+        return False
+    if _col("lock_approvals") is None:
+        await message.reply("❌ <b>Database is unavailable. Approval could not be saved.</b>")
+        return False
+    return True
 
 LOCK_TYPES = {
     "sticker": "Stickers",
@@ -243,6 +310,68 @@ async def locktypes_command(_, message):
         "• <code>video</code>\n• <code>music</code>\n• <code>files</code>\n• <code>voice msg</code>\n"
         "• <code>video msg</code>\n• <code>link</code>\n• <code>all</code>"
     )
+
+
+@app.on_message(filters.command("approve", prefixes=PREFIXES))
+async def approve_command(_, message):
+    if not await _approval_guard(message):
+        return
+    user = await _approval_target(message)
+    if not user:
+        return await message.reply(
+            "❌ <b>Target not found.</b> Reply to a user's message, or use "
+            "<code>/approve @username</code>, <code>/approve username</code>, "
+            "<code>/approve USER_ID</code>, or mention a user by clickable name."
+        )
+    col = _col("lock_approvals")
+    await col.update_one(
+        {"chat_id": int(message.chat.id), "user_id": int(user.id)},
+        {"$set": {"chat_id": int(message.chat.id), "user_id": int(user.id),
+                  "username": user.username or "", "first_name": user.first_name or ""}},
+        upsert=True,
+    )
+    await message.reply(f"✅ <b>{user.mention} approved.</b> They can now bypass this group's content locks.")
+
+
+@app.on_message(filters.command(["unapprove", "unapproveuser"], prefixes=PREFIXES))
+async def unapprove_command(_, message):
+    if not await _approval_guard(message):
+        return
+    user = await _approval_target(message)
+    if not user:
+        return await message.reply(
+            "❌ <b>Target not found.</b> Reply to a user's message, or use "
+            "<code>/unapprove @username</code>, <code>/unapprove username</code>, "
+            "<code>/unapprove USER_ID</code>, or mention a user by clickable name."
+        )
+    result = await _col("lock_approvals").delete_one(
+        {"chat_id": int(message.chat.id), "user_id": int(user.id)}
+    )
+    if result.deleted_count:
+        await message.reply(f"🚫 <b>{user.mention} approval removed.</b>")
+    else:
+        await message.reply(f"ℹ️ <b>{user.mention} was not approved.</b>")
+
+
+@app.on_message(filters.command(["approved", "approvedlist"], prefixes=PREFIXES))
+async def approved_command(_, message):
+    if not await _is_group(message):
+        return await message.reply("❌ <b>This command can only be used in groups.</b>")
+    col = _col("lock_approvals")
+    if col is None:
+        return await message.reply("❌ <b>Database is unavailable.</b>")
+    cursor = col.find({"chat_id": int(message.chat.id)}).sort("user_id", 1)
+    docs = await cursor.to_list(length=100)
+    if not docs:
+        return await message.reply("📋 <b>No approved users in this group.</b>")
+    lines = []
+    for i, doc in enumerate(docs, 1):
+        name = (doc.get("first_name") or "User").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        username = doc.get("username")
+        suffix = f" (@{username})" if username else ""
+        uid = int(doc["user_id"])
+        lines.append(f'{i}. <a href="tg://user?id={uid}">{name}</a>{suffix} — <code>{uid}</code>')
+    await message.reply("✅ <b>Approved users</b>\n\n" + "\n".join(lines))
 
 
 async def _locked_kind(message):
